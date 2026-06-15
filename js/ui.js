@@ -66,6 +66,12 @@ const ui = {
             btn.onclick = () => game.selectSkill(parseInt(btn.dataset.skill, 10));
         });
 
+        // Tutorial card is dismissible (tap it, or press T) and pointer-enabled.
+        const tutBar = $('tutorial-bar');
+        tutBar.style.pointerEvents = 'auto';
+        tutBar.style.cursor = 'pointer';
+        tutBar.onclick = () => this.toggleTutorial(false);
+
         // Pointer Events unify mouse, touch and pen. Touch taps carry no prior
         // hover, so we sync the cursor position on every down before assigning,
         // and widen the assist radius for fingers (see game.findTarget).
@@ -106,6 +112,7 @@ const ui = {
             else if (e.key === 'Escape') game.selectSkill(null);
             else if (e.key === 'Backspace') { game.rewind(); e.preventDefault(); }
             else if (k === 'd') game.debug = !game.debug;
+            else if (k === 't') this.toggleTutorial();
         };
 
         this.buildMenu();
@@ -178,6 +185,19 @@ const ui = {
             el.classList.remove('show');
             setTimeout(() => el.classList.add('hidden'), 300);
         }, 3200);
+    },
+
+    /**
+     * Show/hide the tutorial card. `force` toggles when undefined; pass `false`
+     * to force-hide (used by the tap handler and the first-assignment auto-hide).
+     * Only re-shows when the current level actually has tutorial text.
+     */
+    toggleTutorial(force) {
+        const bar = document.getElementById('tutorial-bar');
+        if (!bar) return;
+        const wantHidden = force === false ? true : (force === true ? false : !bar.classList.contains('hidden'));
+        if (!wantHidden && !(this.game.level && this.game.level.tut)) return;
+        bar.classList.toggle('hidden', wantHidden);
     },
 
     /** Reload the current level — campaign by index, custom/shared by object. */

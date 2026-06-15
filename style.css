@@ -158,6 +158,18 @@ button:active { transform: translateY(1px); }
     font-size: 14px; filter: drop-shadow(0 0 4px rgba(255, 220, 120, 0.6));
 }
 @keyframes tutIn { from { opacity: 0; transform: translate(-50%, -8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+.tut-dismiss {
+    display: block; margin-top: 4px;
+    font-size: 10px; letter-spacing: 0.5px; color: #7e9a76; text-transform: uppercase;
+}
+
+/* Portrait-phone rotate nudge (shown only by the media query below). */
+#rotate-hint {
+    display: none; flex: 0 0 auto; text-align: center;
+    padding: 5px 10px; font-size: 11px; letter-spacing: 0.5px;
+    color: #cfe8c8; background: linear-gradient(180deg, #16241a, #0e1711);
+    border-bottom: 1px solid var(--border);
+}
 
 /* ---------- Skill toolbar (reserved bottom bar) ---------- */
 #toolbar {
@@ -416,6 +428,12 @@ button:active { transform: translateY(1px); }
     #header-btns button { width: 30px; height: 30px; font-size: 14px; }
     .controls-hint { display: none; } /* keyboard hints are meaningless on touch */
     .lvl-btn { width: 46px; height: 46px; }
+    .tut-dismiss { content: 'tap to hide'; } /* (key hint is desktop-only context) */
+}
+
+/* The rotate nudge only makes sense on a portrait phone. */
+@media (max-width: 560px) and (orientation: portrait) {
+    #rotate-hint { display: block; }
 }
 
 /* Landscape phones are short — keep the board tall by trimming chrome height. */

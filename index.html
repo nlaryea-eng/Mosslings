@@ -10,6 +10,9 @@
 </head>
 <body>
     <div id="game-container">
+        <!-- Portrait-phone nudge: the board is far bigger in landscape. Pure CSS,
+             auto-shows in portrait and vanishes on rotate; never on desktop. -->
+        <div id="rotate-hint">↻ Rotate your device for a bigger board</div>
         <!-- TOP HUD — a reserved bar above the board (no longer overlaps the play field) -->
         <div id="hud-top">
             <div class="hud-zone hud-left">
@@ -48,7 +51,7 @@
             <canvas id="gameCanvas" width="960" height="540"></canvas>
 
             <div id="ui-layer">
-                <div id="tutorial-bar" class="hidden"><span id="lbl-tutorial"></span></div>
+                <div id="tutorial-bar" class="hidden"><span id="lbl-tutorial"></span><span class="tut-dismiss">tap or press T to hide</span></div>
 
                 <div id="editor-ui" class="hidden">
                     <div id="editor-toolbar">

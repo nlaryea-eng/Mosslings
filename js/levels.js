@@ -124,4 +124,17 @@ const LEVELS = [
             { type: T_DIRT, x: 730, y: 460, w: 230, h: 80 },  // sanctuary floor with the exit
         ],
     },
+    {
+        name: 'One-Way Out', totalSpawn: 12, reqSaved: 6, time: 220, spawnRate: 60,
+        par: { time: 150, skills: 6, saved: 12 },
+        theme: 'CAVE',
+        tut: 'TEAL GATES are one-way: walkers pass rightward but can never return — so they pace safely instead of marching off the left cliff. BASH [3] the pillar to reach the exit.',
+        inventory: { [SKILLS.BASH]: 4, [SKILLS.BLOCK]: 3, [SKILLS.BUILD]: 4, [SKILLS.FLOAT]: 2 },
+        spawn: { x: 120, y: 210 }, exit: { x: 820, y: 300 },
+        commands: [
+            { type: T_DIRT, x: 100, y: 300, w: 820, h: 240 },   // main floor x[100..920]; left of x100 is a fatal drop
+            { type: T_DIRT, x: 560, y: 150, w: 60, h: 150 },    // bashable pillar between the colony and the exit
+            { type: T_ONEWAY_R, x: 160, y: 150, w: 6, h: 150 }, // one-way gate: pass right, walled going left
+        ],
+    },
 ];

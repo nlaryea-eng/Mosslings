@@ -584,6 +584,37 @@ test('editor undo history snapshots work', () => {
 });
 
 // ==============================================================
+console.log('\n— One-way membrane campaign level (L9) —');
+// ==============================================================
+test('L9 "One-Way Out": the gate halts the leftward retreat (nobody dies pacing)', () => {
+    const g = new Game();
+    const idx = LEVELS.findIndex(l => l.name === 'One-Way Out');
+    assert(idx >= 0, 'level present');
+    g.loadLevel(idx);
+    for (let i = 0; i < 1000; i++) g.update();   // full spawn (~720) + settle into pacing
+    eq(g.deadCount, 0, 'one-way gate kept everyone off the left cliff');
+    const xs = g.mosslings.filter(m => m.alive()).map(m => m.x);
+    eq(g.aliveCount(), g.level.totalSpawn, 'every mossling survived the pacing phase');
+    assert(Math.min(...xs) >= 160, 'all have crossed the gate and none slipped back left of it');
+});
+test('L9 "One-Way Out": bashing the pillar rescues the required colony', () => {
+    const g = new Game();
+    const idx = LEVELS.findIndex(l => l.name === 'One-Way Out');
+    g.loadLevel(idx);
+    let bashed = 0;
+    for (let i = 0; i < 5000 && g.savedCount < g.level.reqSaved; i++) {
+        // a basher must be assigned ADJACENT to the pillar face (x≈554) — too far
+        // and it finds nothing to dig and reverts to walking.
+        if ((g.inventory[SKILLS.BASH] || 0) > 0 && bashed < 3) {
+            const m = g.mosslings.find(mo => mo.state === STATE.WALK && mo.dir === 1 && mo.x >= 550 && mo.x <= 559);
+            if (m) { g.assignSkill(m, SKILLS.BASH); bashed++; }
+        }
+        g.update();
+    }
+    assert(g.savedCount >= g.level.reqSaved, `solvable: saved ${g.savedCount}/${g.level.reqSaved}`);
+});
+
+// ==============================================================
 console.log('\n— Music & game-feel —');
 // ==============================================================
 test('music engine constructs and no-ops safely without an AudioContext', () => {

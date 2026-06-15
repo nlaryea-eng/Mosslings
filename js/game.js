@@ -259,6 +259,7 @@ class Game {
         if (this.replaying) return; // muted catch-up: no SFX, particles or toolbar churn
         audio.sfxAssign();
         this.particles.spawn(m.x, m.y - 8, '#ffeb3b', 6, { speed: 1.5, life: 25, glow: true });
+        ui.toggleTutorial(false); // they've made their first move — clear the coaching card
         ui.updateToolbar(this, s);
         if (this.inventory[s] <= 0) this.selectSkill(null);
     }
