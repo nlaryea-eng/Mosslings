@@ -248,6 +248,17 @@ class Mossling {
     draw(ctx) {
         if (!this.alive()) return;
         const f = this.frame;
+        // Contact shadow — grounds the creature. Drawn in world space (before
+        // the flip/squash transform) and skipped while airborne.
+        if (this.state !== STATE.FALL && this.state !== STATE.CLIMB) {
+            ctx.save();
+            ctx.globalAlpha = 0.22;
+            ctx.fillStyle = '#000';
+            ctx.beginPath();
+            ctx.ellipse(this.x, this.y + 1.5, 5.5, 2, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
         ctx.save();
         ctx.translate(Math.round(this.x), Math.round(this.y));
         if (this.dir === -1) ctx.scale(-1, 1);

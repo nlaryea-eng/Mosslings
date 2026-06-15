@@ -73,6 +73,7 @@ class Game {
         // freeze-frame count consumed by loop(); save streak escalates the
         // rescue chime + sparkle when rescues land in quick succession.
         this.flash = 0; this.flashColor = '#ffffff'; this.hitStop = 0;
+        this.exitFlash = 0; // portal brightens briefly on each rescue
         this.saveStreak = 0; this.lastSaveStep = -999;
         // Deterministic-replay backbone (Backspace rewind). `simStep` counts
         // actual simulation steps (one per update()), independent of render
@@ -131,6 +132,7 @@ class Game {
         this.saveStreak = gap <= 45 ? this.saveStreak + 1 : 1;
         this.lastSaveStep = this.simStep;
         if (this.replaying) return;
+        this.exitFlash = 1; // portal swells as the mossling enters
         const tier = Math.min(this.saveStreak, 8);
         const athlete = !!this.level.exit.athlete;
         audio.sfxSave(1 + (tier - 1) * 0.09); // chime climbs with the streak
@@ -166,7 +168,7 @@ class Game {
         this.inventory = { ...this.level.inventory };
         this.selectedSkill = null;
         this.ffwd = false; this.nukeArmedAt = 0; this.nuked = false;
-        this.shake = 0; this.flash = 0; this.hitStop = 0;
+        this.shake = 0; this.flash = 0; this.hitStop = 0; this.exitFlash = 0;
         this.saveStreak = 0; this.lastSaveStep = -999;
         this.simStep = 0; this.actionLog = [];   // fresh input history per attempt
         this.terrain.clear(this.level.theme || 'FOREST');
@@ -444,15 +446,17 @@ class Game {
         const C = gold
             ? { glow0: 'rgba(255,206,64,0.55)', glow1: 'rgba(255,206,64,0)', in0: 'rgba(120,70,0,0.85)', in1: 'rgba(255,196,60,0.6)', arch: '#ffe082', spark: '#fff8e1' }
             : { glow0: 'rgba(0,229,255,0.5)', glow1: 'rgba(0,229,255,0)', in0: 'rgba(0,80,110,0.85)', in1: 'rgba(0,229,255,0.55)', arch: '#80deea', spark: '#e0f7fa' };
-        // pulsing glow
+        // pulsing glow — swells briefly each time a mossling is rescued
+        const ef = this.exitFlash;
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
-        ctx.globalAlpha = 0.5 + 0.2 * Math.sin(t);
-        const g = ctx.createRadialGradient(x, y - 13, 2, x, y - 13, 34);
+        ctx.globalAlpha = Math.min(1, 0.5 + 0.2 * Math.sin(t) + ef * 0.5);
+        const rad = 34 + ef * 22;
+        const g = ctx.createRadialGradient(x, y - 13, 2, x, y - 13, rad);
         g.addColorStop(0, C.glow0);
         g.addColorStop(1, C.glow1);
         ctx.fillStyle = g;
-        ctx.fillRect(x - 34, y - 47, 68, 68);
+        ctx.fillRect(x - rad, y - 13 - rad, rad * 2, rad * 2);
         ctx.restore();
         // portal interior
         const ig = ctx.createLinearGradient(x, y - 26, x, y);
@@ -635,6 +639,7 @@ class Game {
             }
         }
         if (this.flash > 0) this.flash = Math.max(0, this.flash - 0.06);
+        if (this.exitFlash > 0) this.exitFlash = Math.max(0, this.exitFlash - 0.05);
         this.updateHud();
         this.draw();
         requestAnimationFrame(tt => this.loop(tt));
