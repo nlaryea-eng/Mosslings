@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mosslings — guide the tiny moss folk home</title>
+    <meta name="description" content="A Lemmings-inspired puzzle platformer. Assign skills to mindless moss creatures and guide them to the portal.">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect x='4' y='5' width='8' height='9' rx='2' fill='%237cb342'/><rect x='6' y='3' width='2' height='3' fill='%232e7d32'/><rect x='9' y='2' width='2' height='4' fill='%232e7d32'/><rect x='6' y='8' width='2' height='2' fill='white'/><rect x='10' y='8' width='2' height='2' fill='white'/></svg>">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="game-container">
+        <!-- TOP HUD — a reserved bar above the board (no longer overlaps the play field) -->
+        <div id="hud-top">
+            <div class="hud-zone hud-left">
+                <span id="lbl-level" class="hud-level">Mosslings</span>
+                <div id="hud-medals" class="hidden">
+                    <span id="hud-medal-gold" class="medal medal-gold" title="Rescue — save the target count">🏆</span>
+                    <span id="hud-medal-silver" class="medal medal-silver" title="Efficiency — stay under the skill par">🥈</span>
+                    <span id="hud-medal-bronze" class="medal medal-bronze" title="Speed — finish under the time par">🥉</span>
+                </div>
+            </div>
+            <div class="hud-zone hud-center">
+                <div class="hud-chip"><span class="chip-label">Saved</span><b><span id="lbl-saved">0</span><i>/<span id="lbl-req">0</span></i></b></div>
+                <div class="hud-chip"><span class="chip-label">Out</span><b id="lbl-alive">0</b></div>
+                <div class="hud-chip"><span class="chip-label">Used</span><b id="lbl-skills">0</b></div>
+                <div class="hud-chip"><span class="chip-label">Time</span><b id="lbl-time">0:00</b></div>
+            </div>
+            <div class="hud-zone hud-right">
+                <div class="rate-ctl">
+                    <span class="chip-label">Rate</span>
+                    <button id="btn-rate-down" title="Slower spawns [-]">−</button>
+                    <b id="lbl-rate">50</b>
+                    <button id="btn-rate-up" title="Faster spawns [+]">+</button>
+                </div>
+                <div id="header-btns">
+                    <button id="btn-ffwd" title="Fast forward [F]">⏩</button>
+                    <button id="btn-pause" title="Pause [Space]">⏸</button>
+                    <button id="btn-restart" title="Restart level [R]">↺</button>
+                    <button id="btn-nuke" title="Nuke — detonate everyone (press twice) [N]">☢</button>
+                    <button id="btn-mute" title="Mute [M]">🔊</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- PLAY AREA — the 16:9 board; HUD and toolbar flank it, never cover it -->
+        <div id="play-area">
+            <canvas id="gameCanvas" width="960" height="540"></canvas>
+
+            <div id="ui-layer">
+                <div id="tutorial-bar" class="hidden"><span id="lbl-tutorial"></span></div>
+
+                <div id="editor-ui" class="hidden">
+                    <div id="editor-toolbar">
+                        <div class="editor-group">
+                            <button class="edit-tool active" data-tool="T_DIRT">Dirt</button>
+                            <button class="edit-tool" data-tool="T_METAL">Metal</button>
+                            <button class="edit-tool" data-tool="T_HAZARD">Lava</button>
+                            <button class="edit-tool" data-tool="T_ONEWAY_R" title="One-way membrane: passable rightward only">1-Way →</button>
+                            <button class="edit-tool" data-tool="T_ONEWAY_L" title="One-way membrane: passable leftward only">← 1-Way</button>
+                            <button class="edit-tool" data-tool="T_AIR">Erase</button>
+                        </div>
+                        <div class="editor-group">
+                            <button class="edit-tool" data-tool="SPAWN">Spawn</button>
+                            <button class="edit-tool" data-tool="EXIT">Exit</button>
+                        </div>
+                        <div class="editor-group">
+                            <span class="editor-label">Brush:</span>
+                            <select id="edit-brush-size">
+                                <option value="small">Small</option>
+                                <option value="medium" selected>Med</option>
+                                <option value="large">Large</option>
+                            </select>
+                            <label class="editor-checkbox"><input type="checkbox" id="edit-snap"> Snap</label>
+                            <button id="btn-edit-undo" title="Undo [Ctrl+Z]">⟲</button>
+                        </div>
+                        <div class="editor-group">
+                            <input type="text" id="edit-name" placeholder="Level Name" value="Custom Level">
+                            <button id="btn-edit-settings" title="Edit level settings (spawn rate, inventory, etc.)">⚙ Settings</button>
+                            <button id="btn-edit-save">Save &amp; Exit</button>
+                            <button id="btn-edit-share" title="Copy a shareable link to this level">🔗 Share</button>
+                            <button id="btn-edit-cancel">Cancel</button>
+                        </div>
+                    </div>
+
+                    <div id="editor-settings" class="hidden">
+                        <h2>Level Settings</h2>
+                        <div class="settings-grid">
+                            <div class="setting">
+                                <label for="edit-spawn-total">Total Mosslings</label>
+                                <input type="number" id="edit-spawn-total" min="1" max="255">
+                            </div>
+                            <div class="setting">
+                                <label for="edit-req-saved">Required Saved</label>
+                                <input type="number" id="edit-req-saved" min="0" max="255">
+                            </div>
+                            <div class="setting">
+                                <label for="edit-time">Time Limit (s)</label>
+                                <input type="number" id="edit-time" min="10" max="999">
+                            </div>
+                            <div class="setting">
+                                <label for="edit-spawn-rate">Spawn Rate (frame interval)</label>
+                                <input type="number" id="edit-spawn-rate" min="15" max="120" title="15 = fastest, 120 = slowest">
+                            </div>
+                            <div class="setting checkbox-setting">
+                                <label for="edit-athlete-exit">Athlete-only Exit</label>
+                                <input type="checkbox" id="edit-athlete-exit">
+                            </div>
+                        </div>
+
+                        <h3>Starting Inventory</h3>
+                        <div id="settings-inventory-grid">
+                            <!-- Filled by JS -->
+                        </div>
+
+                        <div class="settings-btns">
+                            <button id="btn-settings-done" class="big-btn">Apply & Close</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="toast" class="hidden"></div>
+            </div>
+        </div>
+
+        <!-- BOTTOM SKILL TOOLBAR — a reserved bar below the board -->
+        <div id="toolbar">
+            <button class="skill-btn" data-skill="0" title="Blocker — stands firm, turns others around [1]"><span class="key">1</span><span class="icon">🛑</span><span class="label">Block</span><span class="count">0</span></button>
+            <button class="skill-btn" data-skill="1" title="Builder — lays a rising 12-brick bridge [2]"><span class="key">2</span><span class="icon">🧱</span><span class="label">Build</span><span class="count">0</span></button>
+            <button class="skill-btn" data-skill="2" title="Basher — tunnels horizontally through dirt [3]"><span class="key">3</span><span class="icon">👊</span><span class="label">Bash</span><span class="count">0</span></button>
+            <button class="skill-btn" data-skill="3" title="Miner — digs a diagonal stairway down [4]"><span class="key">4</span><span class="icon">⛏️</span><span class="label">Mine</span><span class="count">0</span></button>
+            <button class="skill-btn" data-skill="4" title="Digger — digs straight down [5]"><span class="key">5</span><span class="icon">🕳️</span><span class="label">Dig</span><span class="count">0</span></button>
+            <button class="skill-btn" data-skill="5" title="Floater — umbrella prevents fall deaths, permanent [6]"><span class="key">6</span><span class="icon">🪂</span><span class="label">Float</span><span class="count">0</span></button>
+            <button class="skill-btn" data-skill="6" title="Climber — scales vertical walls, permanent [7]"><span class="key">7</span><span class="icon">🧗</span><span class="label">Climb</span><span class="count">0</span></button>
+            <button class="skill-btn" data-skill="7" title="Exploder — 5s fuse, clears terrain, costs a life [8]"><span class="key">8</span><span class="icon">💥</span><span class="label">Boom</span><span class="count">0</span></button>
+        </div>
+
+        <!-- FULL-CONTAINER MODALS — cover the whole frame (HUD, board and toolbar) -->
+        <div id="message-overlay" class="hidden">
+            <h1 id="msg-title">Title</h1>
+            <p id="msg-text">Text</p>
+            <div id="msg-medals-wrap"></div>
+            <div id="msg-btns">
+                <button id="msg-btn-primary">Next Level</button>
+                <button id="msg-btn-menu">Menu</button>
+            </div>
+        </div>
+
+        <div id="start-screen">
+            <div class="logo">MOSSLINGS</div>
+            <p class="tagline">The moss folk march without thinking.<br>Lend them your wits and lead them to the portal.</p>
+            <div id="level-select-container"></div>
+            <div id="start-btns">
+                <button id="btn-start" class="big-btn">▶ Play</button>
+                <button id="btn-gallery" class="big-btn hidden">My Levels</button>
+                <button id="btn-editor" class="big-btn">Level Editor</button>
+            </div>
+            <p class="controls-hint">1–8 skills · click to assign (works paused) · F fast-forward · ⌫ rewind 5s · ±&hairsp;spawn rate · N nuke ×2 · R restart · Space pause · M mute</p>
+        </div>
+
+        <div id="gallery-screen" class="hidden">
+            <div class="logo">MY LEVELS</div>
+            <div id="gallery-list">
+                <!-- Cards filled by JS -->
+            </div>
+            <div id="gallery-empty" class="hidden">
+                <p>No custom levels yet. Build one in the editor!</p>
+                <button id="btn-gallery-editor" class="big-btn">Open Editor</button>
+            </div>
+            <button id="btn-gallery-back" class="big-btn" style="margin-top: 20px;">Back to Menu</button>
+        </div>
+    </div>
+
+    <script src="js/constants.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/audio.js"></script>
+    <script src="js/particles.js"></script>
+    <script src="js/terrain.js"></script>
+    <script src="js/mossling.js"></script>
+    <script src="js/levels.js"></script>
+    <script src="js/game.js"></script>
+    <script src="js/ui.js"></script>
+</body>
+</html>
