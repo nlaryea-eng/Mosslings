@@ -64,6 +64,7 @@ class Game {
         this.savedCount = 0; this.deadCount = 0; this.skillsUsed = 0;
         this.time = 0; this.spawnCounter = 0; this.spawnTimer = 0; this.spawnRate = 60;
         this.mouseX = -100; this.mouseY = -100;
+        this.lastPointerTouch = false; // widens tap targeting for fat fingers
         this.hoverM = null;
         this.ffwd = false; this.nukeArmedAt = 0; this.nuked = false;
         this.shake = 0; this.hatchFlash = 0; this.tick = 0;
@@ -219,7 +220,7 @@ class Game {
     /** Find the best assignment target near the cursor (prefers valid targets). */
     findTarget() {
         if (this.selectedSkill === null) return null;
-        let target = null, minDist = 22;
+        let target = null, minDist = this.lastPointerTouch ? 34 : 22; // fatter for touch
         for (const m of this.mosslings) {
             if (!this.canAssign(m, this.selectedSkill)) continue;
             const d = Math.hypot(m.x - this.mouseX, (m.y - 6) - this.mouseY);

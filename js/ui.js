@@ -66,16 +66,24 @@ const ui = {
             btn.onclick = () => game.selectSkill(parseInt(btn.dataset.skill, 10));
         });
 
-        game.canvas.onmousemove = e => {
+        // Pointer Events unify mouse, touch and pen. Touch taps carry no prior
+        // hover, so we sync the cursor position on every down before assigning,
+        // and widen the assist radius for fingers (see game.findTarget).
+        const setPointer = (e) => {
             const r = game.canvas.getBoundingClientRect();
             game.mouseX = (e.clientX - r.left) * (W / r.width);
             game.mouseY = (e.clientY - r.top) * (H / r.height);
-            if (game.state === 'EDITOR' && e.buttons === 1) this.applyEdit();
+            game.lastPointerTouch = (e.pointerType === 'touch');
         };
-        game.canvas.onmousedown = e => {
+        game.canvas.onpointermove = e => {
+            setPointer(e);
+            if (game.state === 'EDITOR' && (e.buttons & 1)) this.applyEdit();
+        };
+        game.canvas.onpointerdown = e => {
             if (e.button === 2) return;
+            setPointer(e);
             if (game.state === 'EDITOR') { this.applyEdit(); return; }
-            if (game.state === 'PLAY' || game.state === 'PAUSE') game.tryAssign();
+            if (game.state === 'PLAY' || game.state === 'PAUSE') { game.tryAssign(); e.preventDefault(); }
         };
         game.canvas.oncontextmenu = e => { e.preventDefault(); game.selectSkill(null); };
 

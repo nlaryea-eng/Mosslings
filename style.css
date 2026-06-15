@@ -20,6 +20,7 @@ body {
        yet keeps the top reachable (no clipping) and scrolls when the viewport
        is too short for the full HUD + board + toolbar. */
     display: flex; min-height: 100vh; overflow: auto;
+    overscroll-behavior: none; /* no rubber-band bounce on mobile */
     font-family: var(--font); color: var(--text);
 }
 
@@ -35,10 +36,16 @@ body {
     overflow: hidden;
 }
 
-/* The board: a 16:9 box flanked by the HUD and toolbar — never covered by them. */
+/* The board: a 16:9 box flanked by the HUD and toolbar — never covered by them.
+   max-width is expressed via the *height* budget so the board can never grow
+   taller than the viewport (which would shove the toolbar off-screen on short
+   or landscape-phone displays). ~118px ≈ HUD + toolbar; on tall desktops the
+   cap exceeds the 960px container and has no effect. */
 #play-area {
     position: relative;
     width: 100%;
+    max-width: calc((100dvh - 118px) * 16 / 9);
+    margin: 0 auto;
     aspect-ratio: 16 / 9;
     background: #000;
     flex: 0 0 auto;
@@ -47,6 +54,11 @@ body {
 canvas {
     display: block; width: 100%; height: 100%;
     image-rendering: pixelated;
+    /* Own the gesture: taps assign skills; the browser must not scroll, zoom,
+       or fire a double-tap delay on top of them. */
+    touch-action: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
 }
 
 #ui-layer {
@@ -344,5 +356,54 @@ button:active { transform: translateY(1px); }
 .btn-delete:hover { background: #4a1c1a; border-color: var(--danger); }
 
 #gallery-empty { text-align: center; color: #789078; }
+
+/* ============================================================
+   RESPONSIVE — phones & small tablets
+   The board stays a 16:9 canvas; only the flanking chrome reflows so the
+   HUD and the 8-skill toolbar fit a narrow screen without horizontal scroll.
+   ============================================================ */
+@media (max-width: 720px) {
+    #game-container {
+        width: 100vw;
+        border-radius: 0; border-left: none; border-right: none;
+        margin: auto; /* natural height; page gradient frames it top & bottom */
+    }
+    /* HUD reflows to two rows: title on top, stats + controls below. */
+    #hud-top { flex-wrap: wrap; gap: 6px 8px; padding: 6px 10px; }
+    .hud-left { flex: 1 1 100%; }
+    .hud-center { flex: 1 1 auto; justify-content: flex-start; flex-wrap: wrap; gap: 6px; }
+    .hud-right { flex: 1 1 auto; gap: 8px; }
+    .hud-chip { min-width: 0; padding: 3px 9px; }
+    .rate-ctl { padding: 2px 6px; }
+
+    /* Toolbar: 8 buttons share the width instead of overflowing. */
+    #toolbar { gap: 5px; padding: 7px 6px; }
+    .skill-btn { width: auto; flex: 1 1 0; min-width: 0; height: 56px; }
+    .skill-btn .icon { font-size: 15px; }
+
+    .logo { font-size: 44px; letter-spacing: 6px; }
+    .tagline { font-size: 13px; }
+    #editor-settings { width: 92vw; padding: 16px; }
+    #gallery-list { width: 92vw; grid-template-columns: 1fr; }
+}
+
+/* Phone portrait: drop low-priority chips and skill labels for breathing room. */
+@media (max-width: 460px) {
+    .hud-chip.chip-optional { display: none; }
+    .skill-btn .label { display: none; }
+    .skill-btn .key { font-size: 8px; top: 2px; left: 4px; }
+    #header-btns button { width: 30px; height: 30px; font-size: 14px; }
+    .controls-hint { display: none; } /* keyboard hints are meaningless on touch */
+    .lvl-btn { width: 46px; height: 46px; }
+}
+
+/* Landscape phones are short — keep the board tall by trimming chrome height. */
+@media (max-height: 460px) and (orientation: landscape) {
+    #hud-top { padding: 3px 8px; }
+    .hud-chip { padding: 2px 7px; }
+    .hud-chip b { font-size: 13px; }
+    #toolbar { padding: 4px 6px; }
+    .skill-btn { height: 46px; }
+}
 
 
