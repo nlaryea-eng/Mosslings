@@ -6,22 +6,30 @@ them to the portal before time runs out.
 
 **Zero dependencies, zero build step, zero assets.** Open `index.html` in any
 browser (or serve the folder statically). All graphics are drawn procedurally
-on canvas; all audio is synthesized with Web Audio.
+on canvas; all audio — including the generative ambient score — is synthesized
+with Web Audio. Plays with mouse **or** touch, on desktop **or** phone.
 
 ## Play
 
 | Input | Action |
 |---|---|
 | `1`–`8` | Select a skill |
-| Click | Assign the selected skill to the highlighted mossling (works while paused) |
+| Click / **tap** | Assign the selected skill to the highlighted mossling (works while paused) |
 | Right-click / `Esc` | Deselect skill |
 | `F` | Fast-forward (4×) |
 | `+` / `−` | Spawn rate up / down |
 | `N` ×2 | Nuke — detonate every mossling (ends a stuck level) |
+| `Backspace` / `Ctrl`+`Z` | Rewind 5 seconds (deterministic) |
 | `Space` / `P` | Pause |
 | `R` | Restart level |
+| `T` | Toggle the tutorial card |
 | `M` | Mute |
 | `D` | Debug overlay (FPS, terrain probe, state census) |
+
+**Touch & mobile:** input is unified through Pointer Events — tap a mossling to
+assign (with a wider assist radius for fingers). The HUD and toolbar reflow for
+phones, and the board is bounded by the viewport height so the toolbar is never
+pushed off-screen. Best played in landscape.
 
 **Skills:** Blocker · Builder (12 rising bricks) · Basher (horizontal tunnel) ·
 Miner (1:1 diagonal stairway) · Digger (vertical shaft) · Floater (permanent
@@ -38,12 +46,13 @@ browser game):
 ```
 js/constants.js   shared enums + PHYS tuning table (single source of truth)
 js/audio.js       synthesized SFX, master gain, AudioContext-clock scheduling
+js/music.js       generative ambient score (per-theme pad/bass/melody)
 js/particles.js   particle engine + ambient spore drift
 js/terrain.js     per-pixel collision mask + layered canvas rendering
 js/mossling.js    creature state machine + procedural animated sprite
-js/levels.js      the 8 campaign maps (geometry derived from movement math)
-js/game.js        engine: fixed-timestep loop, skills, HUD, effects
-js/ui.js          DOM bindings, menu, message overlays, level editor, bootstrap
+js/levels.js      the 9 campaign maps (geometry derived from movement math)
+js/game.js        engine: fixed-timestep loop, skills, HUD, juice, effects
+js/ui.js          DOM bindings, menu, overlays, level editor, pointer input
 ```
 
 Design principles:
@@ -59,6 +68,11 @@ Design principles:
 - **Levels are math, not vibes.** Builders rise 1px per 5px run × 12 bricks;
   the fatal-fall limit is 130px; miners descend 1:1. Every required drop in
   `js/levels.js` is derived from those numbers and asserted in CI-style tests.
+- **Presentation is quarantined from the sim.** Music, the "juice" layer
+  (screen flash, freeze-frame hit-stop, save-streak chime, exit glow) and all
+  particles are render-loop or audio-clock state only. `update()` never reads
+  them, so the deterministic 60Hz sim and Backspace rewind are untouched — the
+  one hard rule (no `Math.random`/wall-clock in `update()`) still holds.
 
 ## Tests
 
@@ -66,17 +80,24 @@ Design principles:
 node tests/run-tests.js
 ```
 
-28 tests, no test framework needed. The suite loads the real game scripts
+53 tests, no test framework needed. The suite loads the real game scripts
 into Node with stubbed canvas/DOM and covers:
 
-1. **Terrain semantics** — destructibility rules, world-edge walls
+1. **Terrain semantics** — destructibility rules, world-edge walls, one-way
+   membranes (probe-direction aware, indestructible, never a floor)
 2. **Every skill's physics** — walking, step-up limits, fatal falls, floating,
    blocking, digging, bashing (incl. metal stop + floor preservation), mining
    slope, building, climbing/cresting, exploding, saving, lava
-3. **Level-integrity invariants for all 8 maps** — spawn drop survivable,
+3. **Level-integrity invariants for all 9 maps** — spawn drop survivable,
    spawn/exit in open air, exit on a walkable surface, sane metadata
-4. **End-to-end scripted solve of Level 1** — a builder assigned at the gap
-   edge carries a mossling all the way to the exit
+4. **End-to-end scripted solves** — a builder bridges Level 1's gap; the
+   one-way gate on Level 9 holds the colony off the cliff and a basher tunnels
+   the pillar to rescue the target count
+5. **Deterministic sim & rewind** — identical input → identical state; rewind
+   reconstructs an exact earlier state from the action log
+6. **Presentation isolation** — generative music degrades gracefully with no
+   AudioContext and stays in tune; the save streak is deterministic; hit-stop
+   and flash never advance or stall a sim step
 
 ## Level editor
 
@@ -97,7 +118,23 @@ best-save percentages are also stored locally.
 - Added the genre-essential controls: fast-forward, spawn-rate ±, nuke,
   hover-targeting with state labels, assign-while-paused.
 
+## Enjoyability pass
+
+Layered on top of the mechanically-complete base, all preserving the
+determinism invariant (presentation lives outside `update()`):
+
+- **Generative ambient music** (`js/music.js`) — a per-theme score (detuned pad
+  drone, soft bass pulse, sparse pentatonic melody) scheduled on the audio
+  clock; tension rises as the timer runs low. Covered by the shared mute.
+- **Game feel** — full-screen impact flash + freeze-frame hit-stop on
+  explosions, landing dust, contact shadows, an exit that swells on each
+  rescue, a save-streak chime, and animated win/lose overlays.
+- **Touch & responsive** — Pointer-Events input with finger-friendly targeting;
+  HUD/toolbar reflow for phones; the board can never overflow the viewport.
+- **Onboarding** — dismissible/auto-hiding tutorial card, portrait rotate hint.
+- **New level** — "One-Way Out" introduces the one-way membrane to the campaign.
+
 ## Ideas for later
 
-Ambient music loop · more campaign worlds · shareable custom-level codes ·
-touch controls for mobile · per-level par times.
+More campaign worlds · shareable custom-level codes (live) · per-level par
+times (live) · level-complete confetti · a colourblind-friendly palette toggle.
