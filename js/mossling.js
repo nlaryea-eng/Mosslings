@@ -47,7 +47,7 @@ class Mossling {
                 game.particles.spawn(this.x, this.y - 5, '#ffd54f', 16, { speed: 5, life: 30, glow: true });
                 game.particles.spawn(this.x, this.y - 5, '#5d4037', 14, { speed: 3, gravity: 0.15, life: 60 });
                 audio.sfxExplode();
-                game.shake = 12;
+                game.juice({ flash: 0.5, color: '#ffd166', hitStop: 4, shake: 12 });
                 this.die(game, true);
                 return;
             }
@@ -61,11 +61,7 @@ class Mossling {
         if (Math.abs(this.x - ex) < 14 && this.y > ey - 28 && this.y < ey + 6) {
             if (!exit.athlete || (this.hasFloater && this.hasClimber)) {
                 this.state = STATE.SAVED;
-                game.savedCount++;
-                audio.sfxSave();
-                // pop sparkle burst
-                game.particles.spawn(this.x, this.y - 12, exit.athlete ? '#ffd54f' : '#4dd0e1', 18, { speed: 3.5, life: 55, glow: true });
-                game.particles.spawn(this.x, this.y - 12, '#ffffff', 8, { speed: 2, life: 30, glow: true });
+                game.onSave(this); // savedCount, streak chime + sparkle burst
                 return;
             }
         }
@@ -124,7 +120,11 @@ class Mossling {
                     this.die(game, true);
                     return;
                 }
-                if (fell > 40) this.landTimer = 8;
+                if (fell > 40) {
+                    this.landTimer = 8;
+                    // kick up a little dust on a real landing
+                    game.particles.spawn(this.x, this.y, '#9b8b6a', 5, { speed: 1.3, vy: -0.4, gravity: 0.05, life: 22, size: 2 });
+                }
                 this.state = STATE.WALK;
                 this.vy = 0;
                 return;

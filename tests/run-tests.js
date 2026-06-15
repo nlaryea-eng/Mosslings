@@ -61,7 +61,7 @@ global.localStorage = (() => {
 // Delete existing global.ui before loading ui.js to avoid collisions
 delete global.ui;
 
-for (const f of ['constants.js', 'audio.js', 'particles.js', 'terrain.js', 'mossling.js', 'levels.js', 'game.js', 'utils.js', 'ui.js']) {
+for (const f of ['constants.js', 'audio.js', 'music.js', 'particles.js', 'terrain.js', 'mossling.js', 'levels.js', 'game.js', 'utils.js', 'ui.js']) {
     const file = path.join(__dirname, '..', 'js', f);
     vm.runInThisContext(fs.readFileSync(file, 'utf8'), { filename: file });
 }
@@ -84,8 +84,10 @@ function makeGame() {
         particles: new Particles(),
         mosslings: [],
         savedCount: 0,
-        shake: 0,
+        shake: 0, flash: 0, hitStop: 0, saveStreak: 0, lastSaveStep: -999, simStep: 0,
         level: { exit: { x: -9999, y: -9999 }, spawn: { x: 0, y: 0 } },
+        juice() {},
+        onSave(m) { this.savedCount++; },
     };
 }
 function step(game, m, frames) {
@@ -579,6 +581,45 @@ test('editor undo history snapshots work', () => {
     eq(ui.editCommands.length, 1, 'one command remains after undo');
     eq(ui.editHistory.length, 1, 'one history snapshot remains');
     eq(ui.editCommands[0].x, 100 - 20, 'original command preserved');
+});
+
+// ==============================================================
+console.log('\n— Music & game-feel —');
+// ==============================================================
+test('music engine constructs and no-ops safely without an AudioContext', () => {
+    const m = new MusicEngine(audio);                 // audio has no real ctx in Node
+    eq(m.playing, false, 'starts idle');
+    m.start('VOLCANO');                                // must not throw
+    eq(m.playing, false, 'cannot play without an AudioContext (graceful)');
+    m.setIntensity(99); eq(m.intensity, 1.5, 'intensity clamps to max');
+    m.setIntensity(0);  eq(m.intensity, 0.6, 'intensity clamps to min');
+    m.stop();                                          // must not throw
+    assert(MUSIC_THEMES.FOREST && MUSIC_THEMES.CAVE && MUSIC_THEMES.VOLCANO, 'all three themes defined');
+});
+test('every theme maps a chord root to an in-tune frequency', () => {
+    const m = new MusicEngine(audio);
+    for (const name of Object.keys(MUSIC_THEMES)) {
+        m.cfg = MUSIC_THEMES[name];
+        const f = m._scaleNote(m._chordRootForBar(0), 0);
+        assert(f > 20 && f < 4000, `${name}: ${f}Hz out of audible musical range`);
+    }
+});
+test('save streak is deterministic and rebuilds exactly on rewind', () => {
+    // Two identical runs must agree on streak state (no wall-clock, no Math.random).
+    const a = new Game(); a.loadLevel(0);
+    const b = new Game(); b.loadLevel(0);
+    for (let i = 0; i < 400; i++) { a.update(); b.update(); }
+    eq(a.saveStreak, b.saveStreak, 'streak diverged between identical runs');
+    eq(a.lastSaveStep, b.lastSaveStep, 'lastSaveStep diverged');
+});
+test('hit-stop and flash never advance or stall the deterministic sim', () => {
+    // juice() touches only render fields; update() must ignore them entirely.
+    const g = new Game(); g.loadLevel(1);
+    g.juice({ flash: 0.5, hitStop: 10, shake: 9 });
+    const before = g.simStep;
+    g.update();
+    eq(g.simStep, before + 1, 'update() advanced exactly one step regardless of hitStop');
+    assert(g.hitStop === 10, 'update() did not consume hitStop (that is loop()’s job)');
 });
 
 // ------------------------------------------------------------------

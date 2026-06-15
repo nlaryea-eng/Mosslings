@@ -82,7 +82,7 @@ class AudioEngine {
     sfxSpawn()   { this.tone(500, 'sine', 0.07, 0.05, 300); }
     sfxOhNo()    { this.tone(540, 'square', 0.1, 0.06, -180); }
     sfxExplode() { this.noise(0.45, 0.3, 900); this.tone(90, 'sawtooth', 0.45, 0.25, -50); }
-    sfxSave()    { this.tone(880, 'sine', 0.18, 0.09, 440); }
+    sfxSave(pitch = 1) { this.tone(880 * pitch, 'sine', 0.18, 0.09, 440 * pitch); }
     sfxDie()     { this.tone(220, 'sawtooth', 0.25, 0.08, -120); }
     sfxSplat()   { this.noise(0.12, 0.15, 700); }
     sfxWin() {

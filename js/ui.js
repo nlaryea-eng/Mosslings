@@ -286,6 +286,7 @@ const ui = {
     },
 
     backToMenu() {
+        if (typeof music !== 'undefined' && music) music.stop();
         this.game.state = 'MENU';
         if (this.game.levelIdx < 0) this.game.levelIdx = 0;
         document.getElementById('start-screen').classList.remove('hidden');
@@ -393,6 +394,7 @@ const ui = {
     // --- Level editor -------------------------------------------------------
     startEditor() {
         const game = this.game;
+        if (typeof music !== 'undefined' && music) music.stop();
         game.state = 'EDITOR';
         game.levelIdx = -1;
         game.level = {

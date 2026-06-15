@@ -67,6 +67,12 @@ class Game {
         this.hoverM = null;
         this.ffwd = false; this.nukeArmedAt = 0; this.nuked = false;
         this.shake = 0; this.hatchFlash = 0; this.tick = 0;
+        // --- Game-feel ("juice") — all render-loop state, never read by the
+        // deterministic sim. flash = full-screen tint that decays; hitStop =
+        // freeze-frame count consumed by loop(); save streak escalates the
+        // rescue chime + sparkle when rescues land in quick succession.
+        this.flash = 0; this.flashColor = '#ffffff'; this.hitStop = 0;
+        this.saveStreak = 0; this.lastSaveStep = -999;
         // Deterministic-replay backbone (Backspace rewind). `simStep` counts
         // actual simulation steps (one per update()), independent of render
         // frames and fast-forward — unlike `tick`, which advances once per
@@ -102,6 +108,36 @@ class Game {
         for (const m of this.mosslings) if (m.alive()) n++;
         return n;
     }
+    /**
+     * Fire a feedback pulse. flash/hitStop/shake are render-only and consumed
+     * by loop()/draw() — never by update() — so this can't perturb the
+     * deterministic sim. Suppressed entirely during rewind catch-up.
+     */
+    juice({ flash = 0, color = '#ffffff', hitStop = 0, shake = 0 } = {}) {
+        if (this.replaying) return;
+        if (flash > this.flash) { this.flash = flash; this.flashColor = color; }
+        this.hitStop = Math.max(this.hitStop, hitStop);
+        this.shake = Math.max(this.shake, shake);
+    }
+    /**
+     * A mossling reached the portal. Bookkeeping (savedCount, streak) is
+     * deterministic — streak keys off simStep, not wall-clock — so rewind
+     * reconstructs it exactly. Audio/particles are gated by `replaying`.
+     */
+    onSave(m) {
+        this.savedCount++;
+        const gap = this.simStep - this.lastSaveStep;
+        this.saveStreak = gap <= 45 ? this.saveStreak + 1 : 1;
+        this.lastSaveStep = this.simStep;
+        if (this.replaying) return;
+        const tier = Math.min(this.saveStreak, 8);
+        const athlete = !!this.level.exit.athlete;
+        audio.sfxSave(1 + (tier - 1) * 0.09); // chime climbs with the streak
+        this.particles.spawn(m.x, m.y - 12, athlete ? '#ffd54f' : '#4dd0e1', 12 + tier * 2,
+            { speed: 3 + tier * 0.3, life: 50, glow: true, size: 2 });
+        this.particles.spawn(m.x, m.y - 12, '#ffffff', 6, { speed: 2, life: 28, glow: true });
+        if (tier >= 4) this.juice({ flash: 0.10, color: athlete ? '#ffe082' : '#80deea' });
+    }
     // --- Level lifecycle ---------------------------------------------------
     loadLevel(idx, isCustom = false, silent = false) {
         if (!isCustom && idx >= LEVELS.length) {
@@ -129,7 +165,8 @@ class Game {
         this.inventory = { ...this.level.inventory };
         this.selectedSkill = null;
         this.ffwd = false; this.nukeArmedAt = 0; this.nuked = false;
-        this.shake = 0;
+        this.shake = 0; this.flash = 0; this.hitStop = 0;
+        this.saveStreak = 0; this.lastSaveStep = -999;
         this.simStep = 0; this.actionLog = [];   // fresh input history per attempt
         this.terrain.clear(this.level.theme || 'FOREST');
         for (const c of (this.level.commands || [])) this.terrain.drawRect(c.x, c.y, c.w, c.h, c.type);
@@ -138,7 +175,10 @@ class Game {
         // rewind catch-up loop re-simulates via update(), which no-ops unless
         // the state is PLAY — a PAUSE here would dead-loop the rewind.
         this.state = 'PLAY';
-        if (!silent) ui.onLevelStart(this, isCustom);
+        if (!silent) {
+            if (typeof music !== 'undefined' && music) music.start(this.level.theme || 'FOREST');
+            ui.onLevelStart(this, isCustom);
+        }
     }
     endLevel() {
         this.state = 'OVER';
@@ -353,6 +393,15 @@ class Game {
         }
         if (this.debug) this.drawDebug(ctx);
         ctx.restore();
+        // Full-screen impact flash, drawn outside the shake transform so it
+        // always covers the board edge-to-edge.
+        if (this.flash > 0) {
+            ctx.save();
+            ctx.globalAlpha = Math.min(0.6, this.flash);
+            ctx.fillStyle = this.flashColor;
+            ctx.fillRect(0, 0, W, H);
+            ctx.restore();
+        }
     }
     drawLavaGlow(ctx) {
         const hp = this.terrain.hazardPoints;
@@ -534,6 +583,7 @@ class Game {
         const s = Math.max(0, Math.ceil(this.time / 60));
         this.el['lbl-time'].innerText = Math.floor(s / 60) + ':' + (s % 60).toString().padStart(2, '0');
         this.el['lbl-time'].classList.toggle('time-low', s <= 20 && this.state === 'PLAY');
+        if (typeof music !== 'undefined' && music && music.playing) music.setIntensity(s <= 30 ? 1.4 : (s <= 60 ? 1.15 : 1));
         
         // medal pace tracking
         if (this.level.par) {
@@ -568,13 +618,22 @@ class Game {
         }
         const dt = Math.min(100, t - this.lastT);
         this.lastT = t;
-        this.acc += dt;
-        while (this.acc >= PHYS.SIM_STEP) {
-            const mult = this.ffwd && this.state === 'PLAY' ? 4 : 1;
-            for (let i = 0; i < mult; i++) this.update();
-            this.tick++;
-            this.acc -= PHYS.SIM_STEP;
+        // Hit-stop: a brief freeze-frame for impact. Purely a render-loop
+        // device — it drops accumulated time so the sim genuinely pauses
+        // (no catch-up burst) without ever touching simStep or rewind.
+        if (this.hitStop > 0 && this.state === 'PLAY') {
+            this.hitStop--;
+            this.acc = 0;
+        } else {
+            this.acc += dt;
+            while (this.acc >= PHYS.SIM_STEP) {
+                const mult = this.ffwd && this.state === 'PLAY' ? 4 : 1;
+                for (let i = 0; i < mult; i++) this.update();
+                this.tick++;
+                this.acc -= PHYS.SIM_STEP;
+            }
         }
+        if (this.flash > 0) this.flash = Math.max(0, this.flash - 0.06);
         this.updateHud();
         this.draw();
         requestAnimationFrame(tt => this.loop(tt));
