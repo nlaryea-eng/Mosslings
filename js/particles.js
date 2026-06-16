@@ -6,12 +6,22 @@
  */
 class Particles {
     constructor() { this.list = []; }
+    static MAX = 1400; // active-particle ceiling (see spawn)
     /**
      * spawn(x, y, color, count, opts)
      * opts: { speed, gravity, life, size, glow, vx, vy, spread }
+     *
+     * Hard-capped at MAX active particles: a custom level plus repeated
+     * nukes/explosions could otherwise spike unbounded. When full, the oldest
+     * particles are dropped from the front so new bursts still read clearly.
      */
     spawn(x, y, color, count, opts = {}) {
         const speed = opts.speed ?? 2;
+        // A single burst can't exceed the ceiling either — clamp the count, then
+        // evict oldest to make room. Guarantees list.length <= MAX afterward.
+        count = Math.min(count, Particles.MAX);
+        const overflow = (this.list.length + count) - Particles.MAX;
+        if (overflow > 0) this.list.splice(0, overflow);
         for (let i = 0; i < count; i++) {
             const ang = Math.random() * Math.PI * 2;
             const mag = Math.random() * speed;

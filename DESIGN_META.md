@@ -2,7 +2,10 @@
 
 Design for three meta-game features: level serialization, URL importing, and par medals.
 
-**Status:** §1 Level Serialization and §2 URL Importing are **implemented** in `js/utils.js` and `js/ui.js` (covered by tests). §3 Par Medals remains forward-looking. Two refinements were made during implementation: base64 is URL-*safe* (`+/=` → `-_`, padding stripped) so it survives a query string intact, and the reserved metadata byte now carries exit flags (bit 0 = athlete portal); command types span the full tile range incl. one-way membranes (0–6).
+**Status:** All three features are **implemented** and covered by tests.
+
+- **§1 Level Serialization / §2 URL Importing** live in `js/utils.js` and `js/ui.js`. The shipped binary format is **version `0x02`** (this doc's §1 sketch describes the original `0x01`). Refinements made during implementation: base64 is URL-*safe* (`+/=` → `-_`, padding stripped) so it survives a query string intact; the metadata byte carries flags (bit 0 = athlete portal, bit 1 = par data present); command types span the full tile range incl. one-way membranes (0–6); and `0x02` appends optional par data. The deserializer accepts both `0x01` and `0x02`.
+- **§3 Par Medals** is implemented, but with a different (simpler) data model than the `parTime`/`parSavedPct`/`parSkills` sketch below. Levels carry a `par: { time, skills, saved }` object (`js/levels.js`); `computeMedals(par, stats)` in `js/utils.js` awards three **independent** medals — Rescue/Gold (saved ≥ target), Efficiency/Silver (skills ≤ par), Speed/Bronze (time ≤ par) — and `StorageManager.getMedals/setMedals` (`js/game.js`) persists the best of each tier per level. The §3 pseudocode below is the original sketch, retained for context only; treat the code as source of truth.
 
 ---
 

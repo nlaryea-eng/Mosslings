@@ -74,6 +74,7 @@ class Game {
         // rescue chime + sparkle when rescues land in quick succession.
         this.flash = 0; this.flashColor = '#ffffff'; this.hitStop = 0;
         this.exitFlash = 0; // portal brightens briefly on each rescue
+        this.deniedAt = -999; // render: tick of the last failed assignment (red ring)
         this.saveStreak = 0; this.lastSaveStep = -999;
         // Deterministic-replay backbone (Backspace rewind). `simStep` counts
         // actual simulation steps (one per update()), independent of render
@@ -231,12 +232,23 @@ class Game {
         return target;
     }
     tryAssign() {
-        if (this.selectedSkill === null || (this.inventory[this.selectedSkill] || 0) <= 0) return;
+        if (this.selectedSkill === null) return;
+        if ((this.inventory[this.selectedSkill] || 0) <= 0) { this.denyFeedback(); return; }
         const m = this.findTarget();
-        if (!m) return;
+        if (!m) { this.denyFeedback(); return; } // tapped empty space / invalid target
         const s = this.selectedSkill;
         this.assignSkill(m, s);
         this.actionLog.push({ step: this.simStep, type: 'assign', id: m.id, skill: s });
+    }
+    /**
+     * Tap landed on nothing assignable. Render-only feedback (deny chirp + a
+     * brief red cursor ring) so the player learns the tap was registered but
+     * found no valid target — never silent. Not logged; doesn't touch the sim.
+     */
+    denyFeedback() {
+        audio.sfxDeny();
+        this.deniedAt = this.tick;
+        this.particles.spawn(this.mouseX, this.mouseY, '#ff5252', 5, { speed: 1.3, life: 16 });
     }
     /** Replay entry point — re-target by stable id (cursor isn't available). */
     assignSkillById(id, s) {
@@ -355,20 +367,6 @@ class Game {
         this.particles.update();
         if (this.shake > 0) this.shake--;
         if (this.hatchFlash > 0) this.hatchFlash--;
-        // lava embers & bubbles
-        const hp = this.terrain.hazardPoints;
-        if (hp.length) {
-            if (this.tick % 4 === 0) {
-                const p = hp[(Math.random() * hp.length) | 0];
-                this.particles.spawn(p.x, p.y - 1, Math.random() < 0.5 ? '#ffab40' : '#ff7043', 1,
-                    { speed: 0.5, vy: -0.8, life: 80, size: 2, glow: true });
-            }
-            if (this.tick % 30 === 0) { // large bubble
-                const p = hp[(Math.random() * hp.length) | 0];
-                this.particles.spawn(p.x, p.y - 1, '#ffc107', 1,
-                    { speed: 0.2, vy: -0.4, life: 100, size: 4, glow: true });
-            }
-        }
         const doneSpawning = this.nuked || this.spawnCounter >= this.level.totalSpawn;
         if (this.time <= 0 || (doneSpawning && alive === 0)) this.endLevel();
         this.simStep++; // one completed simulation step
@@ -386,6 +384,7 @@ class Game {
 
         if (this.level && this.state !== 'MENU') {
             this.drawLavaGlow(ctx);
+            if (this.state === 'PLAY') this.emitLavaEmbers();
             this.drawHatch(ctx);
             this.drawExit(ctx);
             for (const m of this.mosslings) m.draw(ctx);
@@ -405,6 +404,25 @@ class Game {
             ctx.fillStyle = this.flashColor;
             ctx.fillRect(0, 0, W, H);
             ctx.restore();
+        }
+    }
+    /**
+     * Lava embers & bubbles — purely decorative, emitted on the render clock
+     * (this.tick) so the Math.random here never enters the deterministic sim
+     * update() path. Skipped during rewind catch-up (draw() doesn't run then).
+     */
+    emitLavaEmbers() {
+        const hp = this.terrain.hazardPoints;
+        if (!hp.length) return;
+        if (this.tick % 4 === 0) {
+            const p = hp[(Math.random() * hp.length) | 0];
+            this.particles.spawn(p.x, p.y - 1, Math.random() < 0.5 ? '#ffab40' : '#ff7043', 1,
+                { speed: 0.5, vy: -0.8, life: 80, size: 2, glow: true });
+        }
+        if (this.tick % 30 === 0) { // large bubble
+            const p = hp[(Math.random() * hp.length) | 0];
+            this.particles.spawn(p.x, p.y - 1, '#ffc107', 1,
+                { speed: 0.2, vy: -0.4, life: 100, size: 4, glow: true });
         }
     }
     drawLavaGlow(ctx) {
@@ -509,6 +527,19 @@ class Game {
     }
     drawCursor(ctx) {
         if (this.state !== 'PLAY' && this.state !== 'PAUSE') return;
+        // Failed-assignment pulse: a red ring that expands and fades over ~15
+        // render frames at the spot the player tapped.
+        const dt = this.tick - this.deniedAt;
+        if (dt >= 0 && dt < 15) {
+            ctx.save();
+            ctx.globalAlpha = 1 - dt / 15;
+            ctx.strokeStyle = '#ff5252';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(this.mouseX, this.mouseY, 6 + dt, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+        }
         this.hoverM = this.findTarget();
         this.canvas.style.cursor = this.hoverM ? 'pointer' : 'crosshair';
         if (this.hoverM) {

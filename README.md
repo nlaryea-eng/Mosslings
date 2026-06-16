@@ -69,10 +69,14 @@ Design principles:
   the fatal-fall limit is 130px; miners descend 1:1. Every required drop in
   `js/levels.js` is derived from those numbers and asserted in CI-style tests.
 - **Presentation is quarantined from the sim.** Music, the "juice" layer
-  (screen flash, freeze-frame hit-stop, save-streak chime, exit glow) and all
-  particles are render-loop or audio-clock state only. `update()` never reads
-  them, so the deterministic 60Hz sim and Backspace rewind are untouched — the
-  one hard rule (no `Math.random`/wall-clock in `update()`) still holds.
+  (screen flash, freeze-frame hit-stop, save-streak chime, exit glow), creature
+  blink and lava embers are render-loop or audio-clock state only — emitted from
+  `draw()`, never `update()`. The hard rule: no `Math.random` or wall-clock ever
+  feeds back into simulation *state*. The only `Math.random` reachable from
+  `update()` is the cosmetic particle *burst* fired when a creature explodes or
+  dies; it writes nothing the sim reads and is silenced entirely during rewind
+  catch-up, so the deterministic 60Hz sim and Backspace rewind replay exactly
+  (proven by the rewind + determinism tests).
 
 ## Tests
 

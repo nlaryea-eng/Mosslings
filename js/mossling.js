@@ -29,14 +29,26 @@ class Mossling {
         this.explodeTimer = 0;
         this.isExploding = false;
         this.blink = 0;
+        this.cosmeticFrame = id * 13; // render-only clock for blink (see updateCosmetics)
     }
     alive() { return this.state !== STATE.DEAD && this.state !== STATE.SAVED; }
+    /**
+     * Render-only cosmetic tick (blink). Driven from draw(), NOT update(), so it
+     * never touches the deterministic sim — no Math.random in the update() path,
+     * and rewind catch-up (which runs update() but not draw()) stays exact.
+     * The blink cadence is derived deterministically from id + a render counter.
+     */
+    updateCosmetics() {
+        this.cosmeticFrame++;
+        if (this.blink > 0) { this.blink--; return; }
+        // ~1-in-167 chance per rendered frame, hashed from id+frame (no RNG).
+        const n = (((this.id + 1) * 2654435761) + this.cosmeticFrame * 40503) >>> 0;
+        if (n % 167 === 0) this.blink = 6;
+    }
     update(game) {
         if (!this.alive()) return;
         this.frame++;
         if (this.landTimer > 0) this.landTimer--;
-        if (this.blink > 0) this.blink--;
-        else if (Math.random() < 0.006) this.blink = 6;
 
         if (this.isExploding) {
             this.explodeTimer--;
@@ -247,6 +259,7 @@ class Mossling {
     // ------------------------------------------------------------------
     draw(ctx) {
         if (!this.alive()) return;
+        this.updateCosmetics(); // render-only blink tick (kept out of the sim)
         const f = this.frame;
         // Contact shadow — grounds the creature. Drawn in world space (before
         // the flip/squash transform) and skipped while airborne.

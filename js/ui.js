@@ -60,6 +60,8 @@ const ui = {
             else if (game.levelIdx === -2) this.backToMenu();
             else game.loadLevel(game.levelIdx);
         };
+        $('msg-btn-retry').onclick = () => this.restartLevel();
+        $('msg-btn-share').onclick = () => this.shareResult();
         $('msg-btn-menu').onclick = () => this.backToMenu();
 
         document.querySelectorAll('.skill-btn').forEach(btn => {
@@ -154,22 +156,50 @@ const ui = {
     },
     shareCustomLevel() {
         const game = this.game;
-        game.level.name = document.getElementById('edit-name').value.trim() || 'Custom Level';
-        game.level.commands = this.editCommands;
+        // The #edit-name input and this.editCommands belong to the editor and are
+        // ALWAYS present in the DOM — even with a stale value when sharing from a
+        // gallery card. Only sync from them while actually editing; otherwise the
+        // gallery level (already on game.level) is the source of truth.
+        if (game.state === 'EDITOR') {
+            const nameInput = document.getElementById('edit-name');
+            game.level.name = (nameInput.value || '').trim() || 'Custom Level';
+            game.level.commands = this.editCommands;
+        }
         const code = serializeLevel(game.level);
         if (!code) { this.toast('Level is too large or invalid to share.', true); return; }
-        const url = location.origin + location.pathname + '?level=' + code;
+
+        // On file:// there is no public origin to hand out, so a "link" would be
+        // a dead local path on anyone else's machine. Share the level CODE
+        // instead and tell the player to host the game for real links.
+        if (location.protocol === 'file:') {
+            this.promptCopy(code);
+            this.toast('Copied level code. Host the game to share a clickable link.');
+            return;
+        }
+        const url = this.shareUrlFor(code);
+        this.copyText(url, '🔗 Share link copied to clipboard!');
+    },
+    /** Build a clean ?level= share URL from the current hosted location. */
+    shareUrlFor(code) {
+        const url = new URL(location.href);
+        url.search = '';
+        url.hash = '';
+        url.searchParams.set('level', code);
+        return url.toString();
+    },
+    /** Copy text via the async Clipboard API, falling back to a manual prompt. */
+    copyText(text, successMsg) {
         if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(url)
-                .then(() => this.toast('🔗 Share link copied to clipboard!'))
-                .catch(() => this.promptCopy(url));
+            navigator.clipboard.writeText(text)
+                .then(() => this.toast(successMsg))
+                .catch(() => this.promptCopy(text));
         } else {
-            this.promptCopy(url);
+            this.promptCopy(text);
         }
     },
     /** Clipboard API is unavailable on file:// in some browsers — fall back to a prompt. */
-    promptCopy(url) {
-        window.prompt('Copy this share link:', url);
+    promptCopy(text) {
+        window.prompt('Copy this:', text);
     },
     toast(msg, isError = false) {
         const el = document.getElementById('toast');
@@ -255,52 +285,74 @@ const ui = {
         list.classList.remove('hidden');
         
         levels.forEach(lvl => {
-            const best = storage.getBest(lvl.name) || 0;
-            const medals = storage.getMedals(lvl.name);
-            let medalHtml = '<div class="lvl-medals">';
-            if (medals.saved) medalHtml += '<span class="medal medal-gold" title="Rescue Gold">🏆</span>';
-            if (medals.skills) medalHtml += '<span class="medal medal-silver" title="Efficiency Silver">🥈</span>';
-            if (medals.time) medalHtml += '<span class="medal medal-bronze" title="Speed Bronze">🥉</span>';
-            medalHtml += '</div>';
-
-            const card = document.createElement('div');
-            card.className = 'gallery-card';
-            card.innerHTML = `
-                <h4>${lvl.name} ${medalHtml}</h4>
-                <div class="card-meta">
-                    <span>${lvl.totalSpawn} mosslings</span>
-                    <span>${lvl.reqSaved} req</span>
-                    <span>${lvl.time}s</span>
-                </div>
-                <div class="card-btns">
-                    <button class="btn-play">▶ Play</button>
-                    <button class="btn-edit">✎ Edit</button>
-                    <button class="btn-share">🔗 Share</button>
-                    <button class="btn-delete">✖ Delete</button>
-                </div>
-            `;
-            card.querySelector('.btn-play').onclick = () => {
-                document.getElementById('gallery-screen').classList.add('hidden');
-                audio.init();
-                this.game.loadLevel(lvl, true);
-            };
-            card.querySelector('.btn-edit').onclick = () => {
-                document.getElementById('gallery-screen').classList.add('hidden');
-                this.editCustomLevel(lvl);
-            };
-            card.querySelector('.btn-share').onclick = () => {
-                this.game.level = lvl; // temporary swap for share
-                this.shareCustomLevel();
-            };
-            card.querySelector('.btn-delete').onclick = () => {
-                if (confirm(`Delete "${lvl.name}"?`)) {
-                    storage.deleteCustomLevel(lvl.name);
-                    this.buildGallery();
-                    this.buildMenu();
-                }
-            };
-            list.appendChild(card);
+            list.appendChild(this.buildGalleryCard(lvl));
         });
+    },
+
+    /**
+     * Build one gallery card with the DOM API. Custom level names are
+     * user-controlled (and travel through shared links/LocalStorage), so they
+     * MUST go through textContent — never string-interpolated into innerHTML —
+     * to close the local XSS/injection vector.
+     */
+    buildGalleryCard(lvl) {
+        const el = (tag, cls) => { const e = document.createElement(tag); if (cls) e.className = cls; return e; };
+        const card = el('div', 'gallery-card');
+
+        const title = el('h4');
+        title.textContent = lvl.name;             // untrusted → textContent
+        const medals = storage.getMedals(lvl.name);
+        const mWrap = el('span', 'lvl-medals');
+        const medal = (on, cls, glyph, title) => {
+            if (!on) return;
+            const s = el('span', 'medal ' + cls);
+            s.textContent = glyph; s.title = title;
+            mWrap.appendChild(s);
+        };
+        medal(medals.saved, 'medal-gold', '🏆', 'Rescue Gold');
+        medal(medals.skills, 'medal-silver', '🥈', 'Efficiency Silver');
+        medal(medals.time, 'medal-bronze', '🥉', 'Speed Bronze');
+        title.appendChild(document.createTextNode(' '));
+        title.appendChild(mWrap);
+        card.appendChild(title);
+
+        const meta = el('div', 'card-meta');
+        for (const text of [`${lvl.totalSpawn} mosslings`, `${lvl.reqSaved} req`, `${lvl.time}s`]) {
+            const span = el('span');
+            span.textContent = text;
+            meta.appendChild(span);
+        }
+        card.appendChild(meta);
+
+        const actions = el('div', 'card-btns');
+        const btn = (cls, label, onClick) => {
+            const b = el('button', cls);
+            b.textContent = label;
+            b.onclick = onClick;
+            actions.appendChild(b);
+        };
+        btn('btn-play', '▶ Play', () => {
+            document.getElementById('gallery-screen').classList.add('hidden');
+            audio.init();
+            this.game.loadLevel(lvl, true);
+        });
+        btn('btn-edit', '✎ Edit', () => {
+            document.getElementById('gallery-screen').classList.add('hidden');
+            this.editCustomLevel(lvl);
+        });
+        btn('btn-share', '🔗 Share', () => {
+            this.game.level = lvl; // temporary swap for share
+            this.shareCustomLevel();
+        });
+        btn('btn-delete', '✖ Delete', () => {
+            if (confirm(`Delete "${lvl.name}"?`)) {
+                storage.deleteCustomLevel(lvl.name);
+                this.buildGallery();
+                this.buildMenu();
+            }
+        });
+        card.appendChild(actions);
+        return card;
     },
 
     editCustomLevel(lvl) {
@@ -381,42 +433,102 @@ const ui = {
 
     showMsg(title, text, win) {
         this.lastWin = win;
+        const game = this.game;
         const o = document.getElementById('message-overlay');
         o.classList.remove('hidden');
         document.getElementById('msg-title').innerText = title;
         document.getElementById('msg-title').className = win ? 'win' : 'fail';
         document.getElementById('msg-text').innerText = text;
 
+        const total = game.level.totalSpawn;
+        const pct = Math.round(game.savedCount / total * 100);
+        const timeTaken = (game.level.time * 60 - game.time) / 60;
+        let medals = { saved: false, skills: false, time: false };
+
         const mWrap = document.getElementById('msg-medals-wrap');
         mWrap.innerHTML = '';
-        if (win && this.game.level.par) {
-            const timeTaken = (this.game.level.time * 60 - this.game.time) / 60;
-            const m = computeMedals(this.game.level.par, {
-                saved: this.game.savedCount,
-                skills: this.game.skillsUsed,
+        if (win && game.level.par) {
+            medals = computeMedals(game.level.par, {
+                saved: game.savedCount,
+                skills: game.skillsUsed,
                 time: timeTaken,
             });
-            const key = this.game.levelIdx >= 0 ? this.game.levelIdx : this.game.level.name;
-            storage.setMedals(key, m);
+            const key = game.levelIdx >= 0 ? game.levelIdx : game.level.name;
+            storage.setMedals(key, medals);
 
-            if (m.saved || m.skills || m.time) {
+            if (medals.saved || medals.skills || medals.time) {
                 let html = '<div class="msg-medals">';
                 const slot = (label, earned, icon, color) => earned ? `
                     <div class="msg-medal-slot">
                         <span class="medal ${color}">${icon}</span>
                         <span class="msg-medal-label">${label}</span>
                     </div>` : '';
-                html += slot('Rescue', m.saved, '🏆', 'medal-gold');
-                html += slot('Efficiency', m.skills, '🥈', 'medal-silver');
-                html += slot('Speed', m.time, '🥉', 'medal-bronze');
+                html += slot('Rescue', medals.saved, '🏆', 'medal-gold');
+                html += slot('Efficiency', medals.skills, '🥈', 'medal-silver');
+                html += slot('Speed', medals.time, '🥉', 'medal-bronze');
                 html += '</div>';
                 mWrap.innerHTML = html;
             }
         }
 
+        // Stash a compact run summary for the "Share result" button.
+        this.lastResult = {
+            name: game.level.name,
+            isCampaign: game.levelIdx >= 0,
+            campaignNum: game.levelIdx + 1,
+            saved: game.savedCount, total, pct,
+            timeStr: this.fmtTime(timeTaken),
+            skills: game.skillsUsed,
+            medalStr: (medals.saved ? '🏆' : '') + (medals.skills ? '🥈' : '') + (medals.time ? '🥉' : ''),
+            win,
+            level: game.level,
+        };
+
+        // "Retry for medals" appears on a win that didn't sweep all three.
+        const allMedals = medals.saved && medals.skills && medals.time;
+        const showRetry = win && game.level.par && !allMedals && game.state !== 'VICTORY';
+        document.getElementById('msg-btn-retry').classList.toggle('hidden', !showRetry);
+
         document.getElementById('msg-btn-primary').innerText =
-            this.game.state === 'VICTORY' ? 'The End' : (win ? 'Next Level ▸' : 'Retry');
+            game.state === 'VICTORY' ? 'The End' : (win ? 'Next Level ▸' : 'Retry');
         if (win) audio.sfxWin(); else audio.sfxLose();
+    },
+    fmtTime(seconds) {
+        const s = Math.max(0, Math.round(seconds));
+        return Math.floor(s / 60) + ':' + (s % 60).toString().padStart(2, '0');
+    },
+    /**
+     * Copy a compact, brag-worthy summary of the run — the game's main viral
+     * hook. Campaign runs link back to the hosted game; custom levels embed a
+     * playable ?level= code so a friend can attempt the exact same puzzle.
+     */
+    shareResult() {
+        const r = this.lastResult;
+        if (!r) return;
+        const label = r.isCampaign ? `Level ${r.campaignNum} "${r.name}"` : `"${r.name}"`;
+        const medalTail = r.medalStr ? ` ${r.medalStr}` : '';
+        const verb = r.win ? 'rescued' : 'reached';
+        let text = `MOSSLINGS — ${label}: ${verb} ${r.saved}/${r.total} (${r.pct}%) in ${r.timeStr}, ${r.skills} skills${medalTail}. Can you save more?`;
+
+        // Append a link the recipient can actually open.
+        if (location.protocol === 'file:') {
+            if (!r.isCampaign) {
+                const code = serializeLevel(r.level);
+                if (code) text += `\nLevel code: ${code}`;
+            }
+            this.copyText(text, '📋 Result copied! Host the game to add a play link.');
+            return;
+        }
+        let url = null;
+        if (r.isCampaign) {
+            const u = new URL(location.href); u.search = ''; u.hash = '';
+            url = u.toString();
+        } else {
+            const code = serializeLevel(r.level);
+            url = code ? this.shareUrlFor(code) : null;
+        }
+        if (url) text += `\n${url}`;
+        this.copyText(text, '🔗 Result + link copied to clipboard!');
     },
 
     // --- Level editor -------------------------------------------------------

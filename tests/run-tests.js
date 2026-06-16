@@ -615,6 +615,55 @@ test('L9 "One-Way Out": bashing the pillar rescues the required colony', () => {
 });
 
 // ==============================================================
+console.log('\n— Full-campaign golden-path solves —');
+// ==============================================================
+/**
+ * Run a campaign level under a per-step strategy until it ends (or a frame
+ * cap). The strategy is called every step with the live Game and may assign
+ * skills via g.assignSkill / g.findTarget-free direct picks. Returns the Game.
+ * This is the maintained "golden path" guard: if a level tweak makes the
+ * intended route unsolvable, the matching test fails loudly.
+ */
+function solveCampaign(name, strategy, maxFrames) {
+    const idx = LEVELS.findIndex(l => l.name === name);
+    assert(idx >= 0, `level "${name}" present`);
+    const g = new Game();
+    g.loadLevel(idx);
+    const cap = maxFrames || 60 * (LEVELS[idx].time + 10);
+    for (let i = 0; i < cap && g.state === 'PLAY'; i++) {
+        strategy(g);
+        g.update();
+    }
+    return g;
+}
+/** Assign a skill to every alive WALK-state mossling that can still take it. */
+function assignToAllWalkers(g, skill, predicate) {
+    if ((g.inventory[skill] || 0) <= 0) return;
+    for (const m of g.mosslings) {
+        if ((g.inventory[skill] || 0) <= 0) break;
+        if (m.state !== STATE.WALK) continue;
+        if (predicate && !predicate(m)) continue;
+        if (!g.canAssign(m, skill)) continue;
+        g.assignSkill(m, skill);
+    }
+}
+
+test('L3 "Sky High": floating every walker off the perch saves the colony', () => {
+    // The 350px drop is fatal unaided; a Floater (permanent) makes it survivable.
+    const g = solveCampaign('Sky High', (g) => {
+        assignToAllWalkers(g, SKILLS.FLOAT, m => !m.hasFloater);
+    });
+    assert(g.savedCount >= g.level.reqSaved, `saved ${g.savedCount}/${g.level.reqSaved}`);
+});
+
+test('L4 "The Wall": giving every walker a Climber scales the sheer face to the exit', () => {
+    const g = solveCampaign('The Wall', (g) => {
+        assignToAllWalkers(g, SKILLS.CLIMB, m => !m.hasClimber);
+    });
+    assert(g.savedCount >= g.level.reqSaved, `saved ${g.savedCount}/${g.level.reqSaved}`);
+});
+
+// ==============================================================
 console.log('\n— Music & game-feel —');
 // ==============================================================
 test('music engine constructs and no-ops safely without an AudioContext', () => {
@@ -642,6 +691,34 @@ test('save streak is deterministic and rebuilds exactly on rewind', () => {
     for (let i = 0; i < 400; i++) { a.update(); b.update(); }
     eq(a.saveStreak, b.saveStreak, 'streak diverged between identical runs');
     eq(a.lastSaveStep, b.lastSaveStep, 'lastSaveStep diverged');
+});
+test('blink is render-only: update() never touches it, updateCosmetics() drives it deterministically', () => {
+    const m = new Mossling(100, 100, 7);
+    const g = makeGame();
+    g.terrain.drawRect(0, 110, 200, 20, T_DIRT); // floor so it doesn't fall away
+    for (let i = 0; i < 500; i++) m.update(g);
+    eq(m.blink, 0, 'update() must never set blink (it left the sim path)');
+    // updateCosmetics is a pure function of id + its own render counter.
+    const a = new Mossling(0, 0, 3), b = new Mossling(0, 0, 3);
+    for (let i = 0; i < 2000; i++) { a.updateCosmetics(); b.updateCosmetics(); }
+    eq(a.blink, b.blink, 'cosmetic blink diverged for identical id');
+    assert(a.cosmeticFrame === 2000 + 3 * 13, 'cosmetic clock advanced once per call');
+});
+test('lava embers no longer spawn from update() (no Math.random in the sim path)', () => {
+    const g = new Game();
+    const idx = LEVELS.findIndex(l => l.name === 'Lava Leap'); // has T_HAZARD
+    g.loadLevel(idx);
+    g.particles.list = [];
+    for (let i = 0; i < 120; i++) g.update();
+    eq(g.particles.list.length, 0, 'update() emitted decorative embers it should not');
+});
+test('Particles caps the active list to avoid unbounded growth', () => {
+    const p = new Particles();
+    for (let i = 0; i < 40; i++) p.spawn(0, 0, '#fff', 100); // 4000 requested across many bursts
+    assert(p.list.length <= Particles.MAX, `over cap: ${p.list.length} > ${Particles.MAX}`);
+    // A single oversized burst must not bypass the ceiling either.
+    p.spawn(0, 0, '#fff', Particles.MAX + 600);
+    assert(p.list.length <= Particles.MAX, `one big burst broke the cap: ${p.list.length} > ${Particles.MAX}`);
 });
 test('hit-stop and flash never advance or stall the deterministic sim', () => {
     // juice() touches only render fields; update() must ignore them entirely.

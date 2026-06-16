@@ -281,8 +281,9 @@ button:active { transform: translateY(1px); }
 
 #msg-title { font-size: 48px; margin: 0 0 14px; font-family: var(--pixel-font); letter-spacing: 4px; }
 #msg-text { font-size: 17px; margin: 0 0 26px; color: #b9ccb4; }
-#msg-btns { display: flex; gap: 16px; }
-#msg-btns button { padding: 10px 24px; font-size: 15px; }
+#msg-btns { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; max-width: 640px; }
+#msg-btns button { padding: 10px 22px; font-size: 15px; }
+#msg-btn-share, #msg-btn-retry { opacity: 0.9; }
 
 .win { color: var(--accent-bright); text-shadow: 0 0 30px rgba(124, 179, 66, 0.7); }
 .fail { color: var(--danger); text-shadow: 0 0 30px rgba(239, 83, 80, 0.5); }
