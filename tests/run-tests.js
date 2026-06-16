@@ -820,11 +820,16 @@ test('desktop (mouse) still commits on the first click — no confirm step', () 
 // ==============================================================
 console.log('\n— Retro UI assets —');
 // ==============================================================
-test('skill icon map covers every toolbar skill with inline 16px SVG', () => {
+test('skill icon map covers every toolbar skill with inline 24px SVG art', () => {
     for (let i = 0; i < SKILL_NAMES.length; i++) {
         const svg = SKILL_ICONS[i];
         assert(typeof svg === 'string' && svg.includes('<svg'), `${SKILL_NAMES[i]} icon missing`);
-        assert(svg.includes('viewBox="0 0 16 16"'), `${SKILL_NAMES[i]} icon not on 16x16 grid`);
+        assert(svg.includes('viewBox="0 0 24 24"'), `${SKILL_NAMES[i]} icon not on the 24x24 art grid`);
+        assert(!/\p{Extended_Pictographic}/u.test(svg), `${SKILL_NAMES[i]} icon leaked emoji`);
+        // 3-tone recipe: must carry more than one fill so the silhouette keeps
+        // internal contrast through the disabled grayscale pass (not a flat blob).
+        const fills = new Set((svg.match(/fill="[^"]+"/g) || []));
+        assert(fills.size >= 3, `${SKILL_NAMES[i]} icon is too flat (${fills.size} fills) — needs outline/fill/highlight`);
     }
 });
 test('control and medal icon map covers non-emoji gameplay UI', () => {

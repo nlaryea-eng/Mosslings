@@ -161,10 +161,13 @@ button:active { transform: translateY(1px); }
 #header-btns .pixel-icon,
 .rate-ctl .pixel-icon { width: 18px; height: 18px; }
 .skill-btn .icon {
-    width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
+    width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;
     color: #d4eac2; line-height: 1; pointer-events: none;
 }
 .skill-btn .pixel-icon { width: 22px; height: 22px; }
+/* Skill badges are authored on a 24x24 grid — render 1:1 so the chunky pixel
+   art stays crisp (overrides the generic .pixel-icon size for skill icons). */
+.skill-btn .skill-icon { width: 24px; height: 24px; }
 .skill-btn[data-skill="0"] .icon { color: #ff8a80; }
 .skill-btn[data-skill="1"] .icon { color: #ffd166; }
 .skill-btn[data-skill="2"] .icon { color: #ffab91; }
@@ -235,7 +238,9 @@ button:active { transform: translateY(1px); }
     box-shadow: 0 0 14px rgba(124, 179, 66, 0.45), inset 0 0 8px rgba(124, 179, 66, 0.2);
 }
 .skill-btn.active .count { color: var(--gold); }
-.skill-btn:disabled { opacity: 0.3; cursor: not-allowed; filter: grayscale(1); }
+/* Disabled = clearly inactive but still legible: keep partial color and enough
+   opacity that the new 3-tone badges read as shapes, not grey smudges. */
+.skill-btn:disabled { opacity: 0.45; cursor: not-allowed; filter: grayscale(0.55); }
 .skill-btn.pulse { animation: skillPulse 0.2s ease-out; }
 @keyframes skillPulse {
     0% { transform: scale(1); background: var(--accent-bright); }
