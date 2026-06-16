@@ -45,6 +45,7 @@ const fakeCanvas = {
 global.document = {
     createElement: () => ({ ...makeEl(), width: 0, height: 0, getContext: () => makeCtx() }),
     getElementById: (id) => (id === 'gameCanvas' ? fakeCanvas : makeEl()),
+    querySelector: () => makeEl(),
     querySelectorAll: () => [makeEl()],
 };
 global.window = global;
@@ -976,6 +977,92 @@ test('hit-stop and flash never advance or stall the deterministic sim', () => {
     g.update();
     eq(g.simStep, before + 1, 'update() advanced exactly one step regardless of hitStop');
     assert(g.hitStop === 10, 'update() did not consume hitStop (that is loop()’s job)');
+});
+
+console.log('\n— Muting & progressive disclosure —');
+// ==============================================================
+test('muted music never builds a bus or starts the scheduler', () => {
+    const fakeAudio = { ctx: makeFakeAudioContext(), available: true, master: makeAudioNode(), muted: true, init() {} };
+    const m = new MusicEngine(fakeAudio);
+    const oldSet = global.setInterval;
+    let intervals = 0;
+    global.setInterval = () => { intervals++; return 88; };
+    try {
+        m.start('FOREST');
+        eq(m.playing, false, 'start() must bail while muted');
+        eq(intervals, 0, 'muted start() must not spin up a scheduler');
+        eq(m.bus, null, 'muted start() must not build the audio bus');
+        // Unmuting and re-starting brings it back cleanly.
+        fakeAudio.muted = false;
+        m.start('FOREST');
+        eq(m.playing, true, 'unmuted start() runs');
+        eq(intervals, 1, 'exactly one scheduler after unmute');
+    } finally { global.setInterval = oldSet; m.playing = false; }
+});
+test('a running score stops the instant the audio engine is muted', () => {
+    const a = new AudioEngine();
+    a.muted = false;
+    let stopped = false;
+    a.onMuteChange = (muted) => { if (muted) stopped = true; };  // mirrors music.js wiring
+    a.setMuted(true);
+    assert(stopped, 'setMuted(true) must notify the music engine to stop');
+});
+test('advanced controls (rate/nuke) are gated for the first two campaign levels', () => {
+    const g = new Game();
+    localStorage.setItem('mosslings_unlocked', '0');
+    g.levelIdx = 0;  assert(!g.advancedControlsVisible(), 'Level 1 (fresh) hides advanced controls');
+    g.levelIdx = 1;  assert(!g.advancedControlsVisible(), 'Level 2 (fresh) still hides them');
+    g.levelIdx = -2; assert(g.advancedControlsVisible(), 'custom/shared levels keep full controls');
+    g.levelIdx = -1; assert(g.advancedControlsVisible(), 'editor keeps full controls');
+    localStorage.setItem('mosslings_unlocked', '2');
+    g.levelIdx = 2;  assert(g.advancedControlsVisible(), 'controls return once Level 2 is cleared');
+    localStorage.removeItem('mosslings_unlocked'); // leave storage clean for later tests
+});
+
+console.log('\n— Shared-level import robustness (fuzz) —');
+// ==============================================================
+test('deserializeLevel rejects non-string / oversized input without throwing', () => {
+    const bad = ['', '!', null, undefined, 12345, {}, [], 'x'.repeat(SHARE_MAX_CHARS + 1)];
+    for (const b of bad) {
+        let r, threw = false;
+        try { r = deserializeLevel(b); } catch (e) { threw = true; }
+        assert(!threw, `threw on input ${String(b).slice(0, 12)}`);
+        eq(r, null, `expected null for ${String(b).slice(0, 12)}`);
+    }
+});
+test('deserializeLevel survives 6000 random base64url payloads (never throws)', () => {
+    const alpha = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+    let seed = 0x1234567;
+    const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+    for (let i = 0; i < 6000; i++) {
+        const len = 1 + (rnd() * 200 | 0);
+        let s = '';
+        for (let j = 0; j < len; j++) s += alpha[(rnd() * alpha.length) | 0];
+        let out, threw = false;
+        try { out = deserializeLevel(s); } catch (e) { threw = true; }
+        assert(!threw, `threw on random payload "${s.slice(0, 16)}…"`);
+        assert(out === null || (out && typeof out.name === 'string' && Array.isArray(out.commands)),
+            `returned a malformed object for "${s.slice(0, 16)}…"`);
+    }
+});
+test('deserializeLevel rejects a header that lies about its command count', () => {
+    // Hand-build a valid v2 header, then claim 255 commands with no payload.
+    const buf = [LEVEL_FORMAT_VERSION, 0x68, 0x69, 0x00]; // "hi" + terminator
+    buf.push(10, 5);                 // totalSpawn, reqSaved
+    buf.push(0, 60);                 // time (u16)
+    buf.push(60);                    // spawnRate
+    buf.push(0);                     // flags (no par)
+    for (let i = 0; i < 8; i++) buf.push(0, 0); // spawn.x/y, exit.x/y (u16 each)
+    for (let i = 0; i < 8; i++) buf.push(3);    // inventory ×8
+    buf.push(255);                   // cmdCount = 255, but zero commands follow
+    let bin = '';
+    for (const b of buf) bin += String.fromCharCode(b);
+    const code = (typeof btoa !== 'undefined' ? btoa(bin) : Buffer.from(bin, 'binary').toString('base64'))
+        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    let r, threw = false;
+    try { r = deserializeLevel(code); } catch (e) { threw = true; }
+    assert(!threw, 'truncated-command header must not throw');
+    eq(r, null, 'a command count exceeding the buffer must be rejected');
 });
 
 // ------------------------------------------------------------------

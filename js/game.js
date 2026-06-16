@@ -219,6 +219,17 @@ class Game {
         else if (this.state === 'PAUSE') this.state = 'PLAY';
         ui.refreshButtons(this);
     }
+    /**
+     * Progressive disclosure: the "advanced" HUD controls (spawn-rate ± and the
+     * Nuke button) stay hidden for a new player's first two campaign levels so
+     * the early toolbar reads as calm and learnable, then return on Level 3.
+     * Custom/shared/editor levels always show the full set. The keyboard
+     * shortcuts (N, +/-) keep working regardless — power users lose nothing.
+     */
+    advancedControlsVisible() {
+        if (this.levelIdx < 0) return true;          // custom (-2) / editor (-1)
+        return storage.getUnlocked() >= 2;           // campaign: revealed after clearing L2
+    }
     // --- Skills --------------------------------------------------------------
     canAssign(m, s) {
         if (!m.alive()) return false;

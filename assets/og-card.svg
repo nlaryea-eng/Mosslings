@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630" font-family="'Courier New', monospace">
+  <!-- MOSSLINGS social/share card. Procedural, matches the in-game palette
+       (style.css variables). 1200×630 is the standard Open Graph size. -->
+  <defs>
+    <radialGradient id="sky" cx="50%" cy="38%" r="80%">
+      <stop offset="0%" stop-color="#10221a"/>
+      <stop offset="100%" stop-color="#07090e"/>
+    </radialGradient>
+    <radialGradient id="portal" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#4dd0e1" stop-opacity="0.9"/>
+      <stop offset="60%" stop-color="#0a5b66" stop-opacity="0.7"/>
+      <stop offset="100%" stop-color="#4dd0e1" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#sky)"/>
+
+  <!-- drifting spores -->
+  <g fill="#9ccc65" opacity="0.5">
+    <circle cx="180" cy="120" r="3"/><circle cx="420" cy="80" r="2"/>
+    <circle cx="980" cy="150" r="3"/><circle cx="1080" cy="90" r="2"/>
+    <circle cx="700" cy="60" r="2"/><circle cx="300" cy="200" r="2"/>
+    <circle cx="900" cy="240" r="2"/>
+  </g>
+
+  <!-- ground -->
+  <rect x="0" y="470" width="1200" height="160" fill="#1d2a1f"/>
+  <rect x="0" y="470" width="1200" height="10" fill="#7cb342"/>
+  <g fill="#9ccc65" opacity="0.8">
+    <rect x="60" y="464" width="6" height="8"/><rect x="140" y="466" width="5" height="6"/>
+    <rect x="240" y="463" width="6" height="9"/><rect x="360" y="466" width="5" height="6"/>
+    <rect x="820" y="464" width="6" height="8"/><rect x="940" y="466" width="5" height="6"/>
+    <rect x="1060" y="463" width="6" height="9"/>
+  </g>
+
+  <!-- portal on the right -->
+  <circle cx="980" cy="430" r="120" fill="url(#portal)"/>
+  <path d="M 940 510 L 940 440 Q 980 392 1020 440 L 1020 510 Z" fill="#0a5b66" stroke="#80deea" stroke-width="4"/>
+
+  <!-- a little colony of mosslings marching toward the portal -->
+  <g>
+    <g transform="translate(360,440)">
+      <rect x="-12" y="-2" width="24" height="26" rx="6" fill="#7cb342"/>
+      <rect x="-9" y="-12" width="4" height="10" fill="#2e7d32"/>
+      <rect x="3" y="-15" width="4" height="13" fill="#2e7d32"/>
+      <rect x="-8" y="6" width="5" height="5" fill="#fff"/><rect x="3" y="6" width="5" height="5" fill="#fff"/>
+      <rect x="-7" y="8" width="2" height="2" fill="#07090e"/><rect x="4" y="8" width="2" height="2" fill="#07090e"/>
+    </g>
+    <g transform="translate(470,440)">
+      <rect x="-12" y="-2" width="24" height="26" rx="6" fill="#7cb342"/>
+      <rect x="-9" y="-12" width="4" height="10" fill="#2e7d32"/>
+      <rect x="3" y="-15" width="4" height="13" fill="#2e7d32"/>
+      <rect x="-8" y="6" width="5" height="5" fill="#fff"/><rect x="3" y="6" width="5" height="5" fill="#fff"/>
+      <rect x="-7" y="8" width="2" height="2" fill="#07090e"/><rect x="4" y="8" width="2" height="2" fill="#07090e"/>
+    </g>
+    <g transform="translate(580,440)">
+      <rect x="-12" y="-2" width="24" height="26" rx="6" fill="#9ccc65"/>
+      <rect x="-9" y="-12" width="4" height="10" fill="#2e7d32"/>
+      <rect x="3" y="-15" width="4" height="13" fill="#2e7d32"/>
+      <rect x="-8" y="6" width="5" height="5" fill="#fff"/><rect x="3" y="6" width="5" height="5" fill="#fff"/>
+      <rect x="-7" y="8" width="2" height="2" fill="#07090e"/><rect x="4" y="8" width="2" height="2" fill="#07090e"/>
+    </g>
+  </g>
+
+  <!-- wordmark -->
+  <text x="90" y="250" font-size="118" font-weight="bold" letter-spacing="6" fill="#9ccc65">MOSSLINGS</text>
+  <text x="96" y="320" font-size="34" fill="#e8f0e8" opacity="0.9">A Lemmings-inspired puzzle. Guide the moss folk home.</text>
+  <text x="96" y="372" font-size="28" fill="#4dd0e1" opacity="0.85">Build · Bash · Mine · Float · Climb · Boom</text>
+</svg>

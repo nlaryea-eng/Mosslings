@@ -4,10 +4,12 @@ A Lemmings-inspired puzzle platformer for the browser. The moss folk march
 mindlessly off cliffs and into lava — assign them skills and guide enough of
 them to the portal before time runs out.
 
-**Zero dependencies, zero build step, zero assets.** Open `index.html` in any
-browser (or serve the folder statically). All graphics are drawn procedurally
-on canvas; all audio — including the generative ambient score — is synthesized
-with Web Audio. Plays with mouse **or** touch, on desktop **or** phone.
+**Zero dependencies, zero build step.** Open `index.html` in any browser (or
+serve the folder statically). All graphics are drawn procedurally on canvas and
+all audio — including the generative ambient score — is synthesized with Web
+Audio; the only bundled assets are one local pixel font (`assets/fonts/`) and a
+static Open Graph share card (`assets/og-card.svg`). Plays with mouse **or**
+touch, on desktop **or** phone.
 
 ## Play
 
@@ -45,6 +47,7 @@ browser game):
 
 ```
 js/constants.js   shared enums + PHYS tuning table (single source of truth)
+js/icons.js       inline pixel-SVG glyphs for the toolbar/HUD (no emoji fonts)
 js/audio.js       synthesized SFX, master gain, AudioContext-clock scheduling
 js/music.js       generative ambient score (per-theme pad/bass/melody)
 js/particles.js   particle engine + ambient spore drift
@@ -53,6 +56,7 @@ js/mossling.js    creature state machine + procedural animated sprite
 js/levels.js      the 9 campaign maps (geometry derived from movement math)
 js/game.js        engine: fixed-timestep loop, skills, HUD, juice, effects
 js/ui.js          DOM bindings, menu, overlays, level editor, pointer input
+js/utils.js       level (de)serialization for sharing + pure medal logic
 ```
 
 Design principles:
@@ -84,7 +88,7 @@ Design principles:
 node tests/run-tests.js
 ```
 
-53 tests, no test framework needed. The suite loads the real game scripts
+80 tests, no test framework needed. The suite loads the real game scripts
 into Node with stubbed canvas/DOM and covers:
 
 1. **Terrain semantics** — destructibility rules, world-edge walls, one-way
@@ -102,6 +106,13 @@ into Node with stubbed canvas/DOM and covers:
 6. **Presentation isolation** — generative music degrades gracefully with no
    AudioContext and stays in tune; the save streak is deterministic; hit-stop
    and flash never advance or stall a sim step
+7. **Muting & progressive disclosure** — a muted score never builds a bus or
+   spins up its scheduler (no wasted CPU into a silent bus), and unmuting
+   restarts it cleanly; advanced HUD controls are gated for the first two
+   campaign levels
+8. **Shared-level import robustness** — `deserializeLevel` is fuzzed with
+   thousands of random/truncated/oversized payloads and must always return
+   `null` or a well-formed level — never throw
 
 ## Level editor
 
@@ -138,7 +149,32 @@ determinism invariant (presentation lives outside `update()`):
 - **Onboarding** — dismissible/auto-hiding tutorial card, portrait rotate hint.
 - **New level** — "One-Way Out" introduces the one-way membrane to the campaign.
 
+## Progressive disclosure
+
+The toolbar is intentionally calm for a new player: on a brand-new save the menu
+collapses to a single **Start Playing** button, and the **advanced HUD controls
+(spawn-rate ± and Nuke) stay hidden until Level 3** — they return automatically
+once Level 2 is cleared, and are always present on custom/shared/editor levels.
+The keyboard shortcuts (`N`, `+`/`−`) keep working throughout, so power users
+lose nothing.
+
+## Known limitations
+
+Honest gaps, not bugs — most need a human, not more code:
+
+- **Music mix is unverified by ear.** The score is technically isolated and
+  in-tune (and now never runs while muted), but it has not had a long-loop
+  listening pass on real laptop/phone speakers. It may need simplifying.
+- **Icon/glyph readability is unproven on real devices.** Tests check the icon
+  map is *complete*, not that 16px glyphs are *distinguishable* on a phone.
+- **The Open Graph card is a bundled SVG, not a hosted raster.** Social
+  scrapers generally want an absolute `https` URL (and some prefer PNG/JPG over
+  SVG); swap `assets/og-card.svg` for an absolute card URL when you deploy.
+- **No hosted leaderboard** and **no automated browser/screenshot regression**
+  layer yet — the suite is Node-only with a stubbed DOM/canvas.
+
 ## Ideas for later
 
-More campaign worlds · shareable custom-level codes (live) · per-level par
-times (live) · level-complete confetti · a colourblind-friendly palette toggle.
+More campaign worlds · level-complete confetti · a colourblind-friendly palette
+toggle · ghost/replay export (the deterministic action log already supports it)
+· extracting the editor + result/share code out of `ui.js` as it grows.

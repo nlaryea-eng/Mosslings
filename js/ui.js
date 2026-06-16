@@ -443,6 +443,7 @@ const ui = {
         this.flashNuke(false);
         this.refreshButtons(game);
         this.refreshMuteButton();
+        this.applyControlVisibility(game);
         this.updateToolbar(game);
         // First-run onboarding: pre-arm Builder and lead with one action.
         if (game.onboarding) {
@@ -461,6 +462,16 @@ const ui = {
     refreshButtons(game) {
         this.refreshPauseIcon();
         document.getElementById('btn-ffwd').classList.toggle('active', game.ffwd);
+    },
+
+    /** Hide/show the advanced HUD controls (spawn-rate, nuke) per the game's
+     *  progressive-disclosure rule. See Game.advancedControlsVisible(). */
+    applyControlVisibility(game) {
+        const show = game.advancedControlsVisible();
+        const rate = document.querySelector('.rate-ctl');
+        if (rate) rate.classList.toggle('hidden', !show);
+        const nuke = document.getElementById('btn-nuke');
+        if (nuke) nuke.classList.toggle('hidden', !show);
     },
 
     flashNuke(armed) {

@@ -43,6 +43,10 @@ class AudioEngine {
         this.muted = !!muted;
         this._applyMasterGain();
         this._storeMuted();
+        // Let the music engine (loaded after this one) react to mute changes
+        // from ANY entry point — button, `M` key, etc. — so a muted score never
+        // keeps a scheduler alive synthesizing into a silent bus.
+        if (typeof this.onMuteChange === 'function') this.onMuteChange(this.muted);
         return this.muted;
     }
     toggleMute() {

@@ -76,6 +76,10 @@ class MusicEngine {
     /** Start is idempotent: repeated calls never create overlapping loops. */
     start(theme) {
         if (!this.audio.ctx || !this.audio.available) return;
+        // Muted: do not build a bus or spin up the 25ms scheduler — synthesizing
+        // notes into a master gain pinned at 0 is pure wasted CPU (esp. on phones).
+        // The score restarts cleanly on unmute (see armAudioForPlay / onMuteChange).
+        if (this.audio.muted) return;
         if (this.audio.ctx.state === 'suspended' && this.audio.ctx.resume) this.audio.ctx.resume();
         this.theme = theme && MUSIC_THEMES[theme] ? theme : 'FOREST';
         this.cfg = MUSIC_THEMES[this.theme];
@@ -120,7 +124,7 @@ class MusicEngine {
     }
 
     _scheduler() {
-        if (!this.playing || !this.audio.ctx) return;
+        if (!this.playing || !this.audio.ctx || this.audio.muted) return;
         const stepDur = 60 / this.cfg.bpm / 4;
         const horizon = this.audio.ctx.currentTime + 0.14;
         while (this.nextStepTime < horizon) {
@@ -213,6 +217,12 @@ class MusicEngine {
 }
 
 const music = typeof audio !== 'undefined' ? new MusicEngine(audio) : null;
+
+// Stop the score the instant the player mutes (from the button OR the `M` key);
+// the start() guard above keeps it from coming back until unmute re-arms it.
+if (music && typeof audio !== 'undefined' && audio) {
+    audio.onMuteChange = (muted) => { if (muted) music.stop(0); };
+}
 
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = { MusicEngine, MUSIC_THEMES, MUSIC_LOOP };
