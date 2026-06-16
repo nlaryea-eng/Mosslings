@@ -836,7 +836,15 @@ test('control and medal icon map covers non-emoji gameplay UI', () => {
     for (const key of ['play', 'pause', 'fastForward', 'reset', 'hazard', 'soundOn', 'soundOff', 'trophy', 'medalSilver', 'medalBronze']) {
         const svg = UI_ICONS[key];
         assert(typeof svg === 'string' && svg.includes('<svg'), `${key} icon missing`);
-        assert(!/[🏆🥈🥉🔊🔇⏩⏸☢]/u.test(svg), `${key} icon leaked emoji`);
+        assert(!/\p{Extended_Pictographic}/u.test(svg), `${key} icon leaked emoji`);
+    }
+});
+test('medal icons use the 24x24 3-tone pixel-art recipe (like skill badges)', () => {
+    for (const key of ['trophy', 'medalSilver', 'medalBronze']) {
+        const svg = UI_ICONS[key];
+        assert(svg.includes('viewBox="0 0 24 24"'), `${key} not on the 24x24 art grid`);
+        const fills = new Set(svg.match(/fill="[^"]+"/g) || []);
+        assert(fills.size >= 3, `${key} medal is too flat (${fills.size} fills) — needs outline/fill/highlight`);
     }
 });
 

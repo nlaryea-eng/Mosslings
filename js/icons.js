@@ -6,6 +6,9 @@
  */
 const pixelSvg = (body, cls = '') =>
     `<svg class="pixel-icon ${cls}" viewBox="0 0 16 16" aria-hidden="true" focusable="false" shape-rendering="crispEdges">${body}</svg>`;
+// Roomier 24x24 grid for art that needs internal detail (skill badges, medals).
+const pixelSvg24 = (body, cls = '') =>
+    `<svg class="pixel-icon ${cls}" viewBox="0 0 24 24" aria-hidden="true" focusable="false" shape-rendering="crispEdges">${body}</svg>`;
 
 const r = (x, y, w, h, fill = 'currentColor') =>
     `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${fill}"/>`;
@@ -18,9 +21,30 @@ const UI_ICONS = {
     hazard: pixelSvg(r(7, 1, 2, 3) + r(4, 4, 8, 2) + r(3, 6, 10, 3) + r(5, 9, 6, 2) + r(7, 11, 2, 4), 'ui-icon'),
     soundOn: pixelSvg(r(2, 6, 3, 4) + r(5, 4, 2, 8) + r(8, 5, 2, 6) + r(11, 4, 1, 8) + r(13, 3, 1, 10), 'ui-icon'),
     soundOff: pixelSvg(r(2, 6, 3, 4) + r(5, 4, 2, 8) + r(9, 5, 2, 2, '#ef5350') + r(11, 7, 2, 2, '#ef5350') + r(9, 9, 2, 2, '#ef5350') + r(13, 3, 1, 10, '#ef5350'), 'ui-icon'),
-    trophy: pixelSvg(r(5, 2, 6, 2) + r(4, 4, 8, 3) + r(3, 5, 2, 3) + r(11, 5, 2, 3) + r(6, 7, 4, 3) + r(7, 10, 2, 2) + r(5, 12, 6, 2), 'ui-icon'),
-    medalSilver: pixelSvg(r(4, 2, 2, 4) + r(10, 2, 2, 4) + r(5, 5, 6, 2) + r(4, 7, 8, 6) + r(6, 9, 4, 2, '#ffffff'), 'ui-icon'),
-    medalBronze: pixelSvg(r(3, 2, 3, 4) + r(10, 2, 3, 4) + r(5, 5, 6, 2) + r(4, 7, 8, 6) + r(7, 8, 2, 4, '#ffe0b2'), 'ui-icon'),
+    // Medals share the skill-badge recipe (dark outline / metal fill / highlight)
+    // on the 24x24 grid. They differ by SHAPE + ribbon colour, not metal alone:
+    // Rescue = a gold trophy cup; Efficiency = blue-ribbon silver star; Speed =
+    // green-ribbon bronze chevron. Baked colours survive the .failed grayscale.
+    trophy: pixelSvg24(
+        r(6, 3, 12, 2, '#5e4a0a') + r(6, 5, 12, 5, '#5e4a0a') + r(8, 10, 8, 2, '#5e4a0a') + r(10, 12, 4, 1, '#5e4a0a') +
+        r(3, 4, 3, 2, '#5e4a0a') + r(3, 6, 2, 3, '#5e4a0a') + r(3, 8, 3, 2, '#5e4a0a') +
+        r(18, 4, 3, 2, '#5e4a0a') + r(19, 6, 2, 3, '#5e4a0a') + r(18, 8, 3, 2, '#5e4a0a') +
+        r(10, 13, 4, 2, '#5e4a0a') + r(8, 15, 8, 2, '#5e4a0a') + r(6, 18, 12, 3, '#5e4a0a') +
+        r(7, 5, 10, 4, '#ffd23f') + r(9, 9, 6, 2, '#ffd23f') + r(11, 11, 2, 1, '#ffd23f') +
+        r(4, 5, 1, 4, '#ffd23f') + r(19, 5, 1, 4, '#ffd23f') + r(11, 13, 2, 2, '#d4a017') +
+        r(9, 16, 6, 1, '#ffd23f') + r(8, 19, 8, 1, '#d4a017') +
+        r(7, 5, 7, 1, '#fff3b0') + r(8, 6, 2, 3, '#fff3b0') + r(8, 19, 3, 1, '#fff3b0'), 'ui-icon medal-art'),
+    medalSilver: pixelSvg24(
+        r(7, 2, 3, 8, '#2a3a66') + r(8, 3, 1, 7, '#5b7fd6') + r(14, 2, 3, 8, '#2a3a66') + r(15, 3, 1, 7, '#5b7fd6') +
+        r(9, 9, 6, 1, '#5a5f66') + r(7, 10, 10, 1, '#5a5f66') + r(6, 11, 12, 8, '#5a5f66') + r(7, 19, 10, 1, '#5a5f66') + r(9, 20, 6, 1, '#5a5f66') +
+        r(10, 10, 4, 1, '#c9d2d8') + r(8, 11, 8, 1, '#c9d2d8') + r(7, 12, 10, 6, '#c9d2d8') + r(8, 18, 8, 1, '#c9d2d8') + r(10, 19, 4, 1, '#c9d2d8') +
+        r(8, 12, 3, 2, '#ffffff') + r(11, 11, 2, 6, '#7a828a') + r(9, 13, 6, 2, '#7a828a') + r(11, 13, 2, 2, '#ffffff'), 'ui-icon medal-art'),
+    medalBronze: pixelSvg24(
+        r(7, 2, 3, 8, '#1b4d1f') + r(8, 3, 1, 7, '#4caf50') + r(14, 2, 3, 8, '#1b4d1f') + r(15, 3, 1, 7, '#4caf50') +
+        r(9, 9, 6, 1, '#5e3210') + r(7, 10, 10, 1, '#5e3210') + r(6, 11, 12, 8, '#5e3210') + r(7, 19, 10, 1, '#5e3210') + r(9, 20, 6, 1, '#5e3210') +
+        r(10, 10, 4, 1, '#cd7f32') + r(8, 11, 8, 1, '#cd7f32') + r(7, 12, 10, 6, '#cd7f32') + r(8, 18, 8, 1, '#cd7f32') + r(10, 19, 4, 1, '#cd7f32') +
+        r(8, 12, 3, 2, '#f0b072') +
+        r(11, 12, 2, 2, '#ffe0bf') + r(9, 14, 2, 2, '#ffe0bf') + r(13, 14, 2, 2, '#ffe0bf') + r(7, 16, 2, 2, '#ffe0bf') + r(15, 16, 2, 2, '#ffe0bf'), 'ui-icon medal-art'),
     share: pixelSvg(r(3, 3, 4, 4) + r(10, 2, 4, 4) + r(10, 10, 4, 4) + r(7, 5, 3, 2) + r(7, 9, 3, 2), 'ui-icon'),
     edit: pixelSvg(r(3, 11, 3, 2) + r(5, 9, 2, 2) + r(7, 7, 2, 2) + r(9, 5, 2, 2) + r(11, 3, 2, 2), 'ui-icon'),
     close: pixelSvg(r(3, 3, 2, 2) + r(5, 5, 2, 2) + r(7, 7, 2, 2) + r(9, 9, 2, 2) + r(11, 11, 2, 2) + r(11, 3, 2, 2) + r(9, 5, 2, 2) + r(5, 9, 2, 2) + r(3, 11, 2, 2), 'ui-icon'),

@@ -28,15 +28,29 @@ pixel badges. Carried out the brief in
   | Climb | ladder: two rails + rungs | `#1b4d1f / #66bb6a / #c8e6c9` |
   | Boom | round bomb + sparking fuse | `#5e1e0a / #f4511e / #ffeb3b` |
 
+The three **medals** were brought onto the same system (24×24, 3-tone, baked
+colours via `pixelSvg24`). They differ by **shape + ribbon colour**, not metal
+alone, so they don't collapse into "same disc, different tint":
+
+  | Medal | Silhouette | Metal / ribbon |
+  |---|---|---|
+  | Rescue (gold) | trophy cup w/ handles + base | gold, no ribbon |
+  | Efficiency (silver) | disc + star emblem | silver, blue ribbon |
+  | Speed (bronze) | disc + forward chevron | bronze, green ribbon |
+
+The medals render everywhere they did before (HUD pace, level-select, gallery,
+result overlay) — same `UI_ICONS` keys, so all call sites updated at once. The
+other control glyphs (`play`, `pause`, `reset`, etc.) stay on the 16×16 grid.
+
 ## Files changed
 
-- `js/icons.js` — new `skillSvg`/`_skill` helpers + the 8 redrawn `SKILL_ICONS`.
-  `UI_ICONS` (controls/medals) are untouched and stay on the 16×16 grid, so the
-  result-card medals keep using the shared icon system.
+- `js/icons.js` — new `skillSvg`/`_skill`/`pixelSvg24` helpers, the 8 redrawn
+  `SKILL_ICONS`, and the 3 redrawn medal icons in `UI_ICONS`.
 - `style.css` — skill icons render at 24px (`.skill-btn .skill-icon`); disabled
   state softened to `opacity:0.45; grayscale(0.55)` for legibility.
 - `tests/run-tests.js` — skill-icon test now asserts the 24×24 grid, an emoji
-  sweep, and a ≥3-fill (3-tone) check so a future flat glyph fails CI.
+  sweep, and a ≥3-fill (3-tone) check so a future flat glyph fails CI; a new
+  test enforces the same 24×24 + 3-tone recipe on the three medals.
 
 ## Adding a 9th skill icon later
 
