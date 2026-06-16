@@ -8,19 +8,19 @@
  */
 const MUSIC_THEMES = {
     FOREST: {
-        bpm: 122, root: 57, scale: [0, 2, 3, 5, 7, 9, 10], prog: [0, 3, 5, 4],
-        cutoff: 1650, chordWave: 'triangle', bassWave: 'sawtooth', motifWave: 'sine',
-        padVol: 0.022, chordVol: 0.035, bassVol: 0.065, motifVol: 0.026,
+        bpm: 124, root: 57, scale: [0, 2, 4, 5, 7, 9, 11], prog: [0, 3, 4, 5],
+        cutoff: 1950, chordWave: 'triangle', bassWave: 'sawtooth', motifWave: 'sine',
+        padVol: 0.022, chordVol: 0.04, bassVol: 0.068, motifVol: 0.032,
     },
     CAVE: {
-        bpm: 120, root: 53, scale: [0, 2, 3, 5, 7, 8, 10], prog: [0, 5, 3, 4],
-        cutoff: 1250, chordWave: 'sine', bassWave: 'triangle', motifWave: 'triangle',
-        padVol: 0.026, chordVol: 0.032, bassVol: 0.06, motifVol: 0.02,
+        bpm: 122, root: 53, scale: [0, 2, 4, 5, 7, 9, 10], prog: [0, 4, 5, 3],
+        cutoff: 1500, chordWave: 'sine', bassWave: 'triangle', motifWave: 'triangle',
+        padVol: 0.024, chordVol: 0.034, bassVol: 0.062, motifVol: 0.024,
     },
     VOLCANO: {
-        bpm: 124, root: 55, scale: [0, 1, 3, 5, 7, 8, 10], prog: [0, 4, 5, 1],
-        cutoff: 1450, chordWave: 'triangle', bassWave: 'sawtooth', motifWave: 'square',
-        padVol: 0.02, chordVol: 0.03, bassVol: 0.068, motifVol: 0.018,
+        bpm: 126, root: 55, scale: [0, 2, 3, 5, 7, 9, 10], prog: [0, 4, 5, 3],
+        cutoff: 1700, chordWave: 'triangle', bassWave: 'sawtooth', motifWave: 'square',
+        padVol: 0.02, chordVol: 0.033, bassVol: 0.07, motifVol: 0.022,
     },
 };
 
@@ -29,11 +29,11 @@ const MUSIC_LOOP = {
     // intrusive under puzzle play and easy to retune.
     kick:   [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0],
     clap:   [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0],
-    hats:   [0,0.55,0,0.35, 0,0.65,0,0.35, 0,0.55,0,0.35, 0,0.7,0,0.4],
-    perc:   [0,0,0.35,0, 0,0,0,0.25, 0,0,0.35,0, 0.25,0,0,0],
-    bass:   [0,null,0,null, 3,null,0,null, 5,null,4,null, 3,null,5,null],
-    chords: [0,null,null,null, null,null,2,null, null,null,null,null, 4,null,null,5],
-    motif:  [null,null,7,null, null,9,null,null, null,null,10,null, 9,null,7,null],
+    hats:   [0,0.7,0,0.42, 0,0.78,0,0.45, 0,0.68,0,0.42, 0,0.82,0,0.5],
+    perc:   [0,0,0.35,0, 0,0.28,0,0.25, 0,0,0.4,0, 0.3,0,0,0.28],
+    bass:   [0,null,0,null, 4,null,0,null, 5,null,4,null, 2,null,5,null],
+    chords: [0,null,null,null, null,2,null,null, null,null,4,null, null,5,null,null],
+    motif:  [null,null,7,null, 9,null,null,10, null,null,11,null, 9,null,7,null],
 };
 
 class MusicEngine {
