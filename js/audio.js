@@ -74,24 +74,37 @@ class AudioEngine {
     }
     // --- Named SFX ---
     sfxSelect()  { this.tone(620, 'sine', 0.08, 0.07); }
-    sfxAssign()  { this.tone(760, 'square', 0.09, 0.05, 240); }
-    sfxDeny()    { this.tone(180, 'square', 0.1, 0.05, -40); }
+    // Crisper arcade "blip" — a square click with a quick upward chirp on top.
+    sfxAssign()  { this.tone(660, 'square', 0.05, 0.05, 320); this.tone(1320, 'square', 0.04, 0.025, 0, 0.02); }
+    // Harsher, lower "nope" — two detuned square thuds.
+    sfxDeny()    { this.tone(150, 'square', 0.09, 0.06, -40); this.tone(112, 'square', 0.1, 0.05, -30, 0.04); }
     sfxDig()     { this.noise(0.06, 0.12, 1800); }
     sfxBuild()   { this.tone(420 + Math.random() * 60, 'triangle', 0.06, 0.06); }
     sfxShrug()   { this.tone(330, 'triangle', 0.12, 0.06, -80); }
     sfxSpawn()   { this.tone(500, 'sine', 0.07, 0.05, 300); }
     sfxOhNo()    { this.tone(540, 'square', 0.1, 0.06, -180); }
     sfxExplode() { this.noise(0.45, 0.3, 900); this.tone(90, 'sawtooth', 0.45, 0.25, -50); }
-    sfxSave(pitch = 1) { this.tone(880 * pitch, 'sine', 0.18, 0.09, 440 * pitch); }
+    // Rescue chime — a bright bell tone plus a sparkle harmonic that climbs with the streak.
+    sfxSave(pitch = 1) { this.tone(880 * pitch, 'sine', 0.18, 0.09, 440 * pitch); this.tone(1760 * pitch, 'sine', 0.10, 0.03, 0, 0.03); }
     sfxDie()     { this.tone(220, 'sawtooth', 0.25, 0.08, -120); }
     sfxSplat()   { this.noise(0.12, 0.15, 700); }
     sfxWin() {
+        // Brighter fanfare: a triad arpeggio with a shimmer octave on the final note.
         const seq = [523, 659, 784, 1047];
-        seq.forEach((f, i) => this.tone(f, 'sine', i === seq.length - 1 ? 0.4 : 0.12, 0.1, 0, i * 0.12));
+        seq.forEach((f, i) => this.tone(f, 'square', i === seq.length - 1 ? 0.4 : 0.1, 0.07, 0, i * 0.10));
+        seq.forEach((f, i) => this.tone(f, 'sine', i === seq.length - 1 ? 0.45 : 0.12, 0.06, 0, i * 0.10));
+        this.tone(2093, 'sine', 0.5, 0.04, 0, 0.30); // high shimmer
     }
     sfxLose() {
         const seq = [392, 330, 262];
         seq.forEach((f, i) => this.tone(f, 'triangle', 0.2, 0.09, 0, i * 0.18));
+        this.tone(196, 'sawtooth', 0.5, 0.06, -40, 0.36); // low descending tail
+    }
+    /** Medal stamp sting — a short bright two-note "ding-ding" per stamped medal. */
+    sfxMedal(tier = 0) {
+        const base = [1047, 1319, 1568][tier % 3];
+        this.tone(base, 'square', 0.07, 0.06, 0);
+        this.tone(base * 1.5, 'sine', 0.16, 0.06, 0, 0.06);
     }
 }
 const audio = new AudioEngine();

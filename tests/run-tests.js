@@ -633,9 +633,12 @@ function solveCampaign(name, strategy, maxFrames) {
     for (let i = 0; i < cap && g.state === 'PLAY'; i++) {
         strategy(g);
         g.update();
+        if (g.savedCount >= g.level.reqSaved) break; // target met — no need to run out the clock
     }
     return g;
 }
+const onShelf = (m, yy) => Math.abs(m.y - yy) < 6;
+const invHas = (g, s) => (g.inventory[s] || 0) > 0;
 /** Assign a skill to every alive WALK-state mossling that can still take it. */
 function assignToAllWalkers(g, skill, predicate) {
     if ((g.inventory[skill] || 0) <= 0) return;
@@ -661,6 +664,156 @@ test('L4 "The Wall": giving every walker a Climber scales the sheer face to the 
         assignToAllWalkers(g, SKILLS.CLIMB, m => !m.hasClimber);
     });
     assert(g.savedCount >= g.level.reqSaved, `saved ${g.savedCount}/${g.level.reqSaved}`);
+});
+
+test('L2 "Going Down": staggered dig-holes form a stair the colony reuses', () => {
+    const g = solveCampaign('Going Down', (g) => {
+        for (const m of g.mosslings) {
+            if (m.state !== STATE.WALK || m.dir !== 1 || !invHas(g, SKILLS.DIG)) continue;
+            if (onShelf(m, 150) && m.x >= 346 && m.x <= 356) g.assignSkill(m, SKILLS.DIG);
+            else if (onShelf(m, 260) && m.x >= 446 && m.x <= 456) g.assignSkill(m, SKILLS.DIG);
+            else if (onShelf(m, 370) && m.x >= 546 && m.x <= 556) g.assignSkill(m, SKILLS.DIG);
+        }
+    });
+    assert(g.savedCount >= g.level.reqSaved, `saved ${g.savedCount}/${g.level.reqSaved}, dead ${g.deadCount}`);
+});
+
+test('L5 "Diagonal Dig": two mined ramps (one each) carry the colony down the cliffs', () => {
+    let r1 = false, r2 = false;
+    const g = solveCampaign('Diagonal Dig', (g) => {
+        for (const m of g.mosslings) {
+            if (m.state !== STATE.WALK || m.dir !== 1) continue;
+            if (!r1 && onShelf(m, 150) && m.x >= 198 && m.x <= 208) { g.assignSkill(m, SKILLS.MINE); r1 = true; }
+            else if (!r2 && onShelf(m, 310) && m.x >= 498 && m.x <= 508) { g.assignSkill(m, SKILLS.MINE); r2 = true; }
+        }
+    });
+    assert(g.savedCount >= g.level.reqSaved, `saved ${g.savedCount}/${g.level.reqSaved}, dead ${g.deadCount}`);
+    eq(g.deadCount, 0, 'mined ramps keep everyone off the fatal cliffs');
+});
+
+test('L6 "Hard Rock": one pioneer chain-builds a ramp over the steel wall', () => {
+    let pid = null;
+    const g = solveCampaign('Hard Rock', (g) => {
+        if (pid === null) {
+            const lead = g.mosslings.find(m => m.state === STATE.WALK && m.dir === 1 && m.x >= 416);
+            if (lead) pid = lead.id;
+        }
+        const p = g.mosslings.find(m => m.id === pid);
+        if (!p) return;
+        if ((p.state === STATE.WALK || p.state === STATE.SHRUG) && p.x < 615 && p.y > 104 && invHas(g, SKILLS.BUILD)) {
+            if (p.state === STATE.WALK && p.dir !== 1) return;
+            g.assignSkill(p, SKILLS.BUILD);
+        }
+    });
+    assert(g.savedCount >= g.level.reqSaved, `saved ${g.savedCount}/${g.level.reqSaved}, dead ${g.deadCount}`);
+});
+
+test('L7 "Lava Leap": one pioneer arcs a bridge over the ridge and lava moat', () => {
+    let pid = null;
+    const g = solveCampaign('Lava Leap', (g) => {
+        if (pid === null) {
+            const lead = g.mosslings.find(m => m.state === STATE.WALK && m.dir === 1 && m.x >= 196 && m.x <= 210);
+            if (lead) pid = lead.id;
+        }
+        const p = g.mosslings.find(m => m.id === pid);
+        if (!p) return;
+        if ((p.state === STATE.WALK || p.state === STATE.SHRUG) && p.x < 665 && p.dir === 1 && invHas(g, SKILLS.BUILD)) g.assignSkill(p, SKILLS.BUILD);
+    });
+    assert(g.savedCount >= g.level.reqSaved, `saved ${g.savedCount}/${g.level.reqSaved}, dead ${g.deadCount}`);
+    eq(g.deadCount, 0, 'nobody touched the lava');
+});
+
+test('L8 "Mossling Master": athletes (Climber+Floater) scale the tower to the golden gate', () => {
+    const g = solveCampaign('Mossling Master', (g) => {
+        for (const m of g.mosslings) {
+            if (m.state !== STATE.WALK) continue;
+            if (!m.hasClimber && invHas(g, SKILLS.CLIMB)) g.assignSkill(m, SKILLS.CLIMB);
+            if (!m.hasFloater && invHas(g, SKILLS.FLOAT)) g.assignSkill(m, SKILLS.FLOAT);
+        }
+    });
+    assert(g.savedCount >= g.level.reqSaved, `saved ${g.savedCount}/${g.level.reqSaved}, dead ${g.deadCount}`);
+});
+
+// ==============================================================
+console.log('\n— First-run onboarding —');
+// ==============================================================
+test('onboarding arms only on a fresh campaign Level 1', () => {
+    global.localStorage.removeItem('mosslings_unlocked');
+    const g = new Game(); g.loadLevel(0);
+    assert(g.onboarding, 'should onboard a new player on L1');
+    g.loadLevel(1);
+    assert(!g.onboarding, 'never onboards on later levels');
+    storage.setUnlocked(1);
+    const h = new Game(); h.loadLevel(0);
+    assert(!h.onboarding, 'no onboarding once L1 is cleared');
+    global.localStorage.removeItem('mosslings_unlocked'); // reset for other tests
+});
+test('onboardTarget picks a rightward walker in the build window, and Builder clears the beat', () => {
+    global.localStorage.removeItem('mosslings_unlocked');
+    const g = new Game(); g.loadLevel(0);
+    g.mosslings = [
+        Object.assign(new Mossling(440, 200, 0), { state: STATE.WALK, dir: 1 }),
+        Object.assign(new Mossling(440, 200, 1), { state: STATE.WALK, dir: -1 }), // wrong way
+        Object.assign(new Mossling(100, 200, 2), { state: STATE.WALK, dir: 1 }),  // too far
+    ];
+    const t = g.onboardTarget();
+    assert(t && t.id === 0, 'picked the rightward walker at the gap edge');
+    g.assignSkill(t, SKILLS.BUILD);
+    assert(g.onboardDone && !g.onboarding, 'first Builder assign ends onboarding');
+    global.localStorage.removeItem('mosslings_unlocked');
+});
+
+// ==============================================================
+console.log('\n— Touch targeting (two-stage tap confirm) —');
+// ==============================================================
+test('touch: first tap arms+pauses a pending target, second tap commits it', () => {
+    const g = new Game(); g.loadLevel(1);
+    for (let i = 0; i < 120; i++) g.update();      // let a mossling spawn and walk
+    const m = g.mosslings.find(x => x.state === STATE.WALK);
+    assert(m, 'a walker exists');
+    g.lastPointerTouch = true;
+    g.selectSkill(SKILLS.FLOAT);
+    g.mouseX = m.x; g.mouseY = m.y - 6;
+    g.tryAssign();                                  // first tap → arm + pause
+    eq(g.pendingTarget, m, 'first tap armed the pending target');
+    eq(g.state, 'PAUSE', 'first touch tap freezes time');
+    eq(g.skillsUsed, 0, 'nothing committed on the first tap');
+    g.tryAssign();                                  // second tap → commit
+    eq(g.skillsUsed, 1, 'second tap committed the assignment');
+    assert(m.hasFloater, 'the floater landed on the armed mossling');
+    assert(g.pendingTarget === null && g.state === 'PLAY', 'commit clears pending and resumes');
+});
+test('touch: tapping empty space clears the pending target and resumes', () => {
+    const g = new Game(); g.loadLevel(1);
+    for (let i = 0; i < 120; i++) g.update();
+    const m = g.mosslings.find(x => x.state === STATE.WALK);
+    g.lastPointerTouch = true;
+    g.selectSkill(SKILLS.FLOAT);
+    g.mouseX = m.x; g.mouseY = m.y - 6; g.tryAssign(); // arm
+    eq(g.state, 'PAUSE');
+    g.mouseX = -50; g.mouseY = -50; g.tryAssign();     // tap far away → cancel
+    assert(g.pendingTarget === null && g.state === 'PLAY', 'empty tap cancels and resumes');
+    eq(g.skillsUsed, 0, 'nothing was committed');
+});
+test('drawPendingTarget (magnifier + confirm prompt) renders without throwing', () => {
+    const g = new Game(); g.loadLevel(1);
+    for (let i = 0; i < 120; i++) g.update();
+    const m = g.mosslings.find(x => x.state === STATE.WALK);
+    g.lastPointerTouch = true; g.selectSkill(SKILLS.BUILD);
+    g.mouseX = m.x; g.mouseY = m.y - 6; g.tryAssign();   // arm
+    assert(g.pendingTarget === m, 'armed');
+    g.draw();                                            // exercises drawPendingTarget (clip/scale/zoom)
+    assert(true, 'no throw');
+});
+test('desktop (mouse) still commits on the first click — no confirm step', () => {
+    const g = new Game(); g.loadLevel(1);
+    for (let i = 0; i < 120; i++) g.update();
+    const m = g.mosslings.find(x => x.state === STATE.WALK);
+    g.lastPointerTouch = false;
+    g.selectSkill(SKILLS.FLOAT);
+    g.mouseX = m.x; g.mouseY = m.y - 6; g.tryAssign();
+    eq(g.skillsUsed, 1, 'mouse click commits immediately');
+    assert(g.pendingTarget === null, 'no pending target on desktop');
 });
 
 // ==============================================================

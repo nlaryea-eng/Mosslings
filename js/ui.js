@@ -241,6 +241,12 @@ const ui = {
         const c = document.getElementById('level-select-container');
         c.innerHTML = '';
         const unlocked = storage.getUnlocked();
+        // First run = Level 1 not yet cleared. Collapse the menu to a single
+        // dominant Play button (see #start-screen.first-run CSS) so a new player
+        // has exactly one obvious action. Level select + Editor return after L1.
+        const firstRun = unlocked === 0;
+        document.getElementById('start-screen').classList.toggle('first-run', firstRun);
+        document.getElementById('btn-start').innerText = firstRun ? '▶ Start Playing' : '▶ Play';
         for (let i = 0; i < LEVELS.length; i++) {
             const b = document.createElement('button');
             b.className = 'lvl-btn' + (i === this.game.levelIdx ? ' selected' : '');
@@ -404,6 +410,18 @@ const ui = {
         this.flashNuke(false);
         this.refreshButtons(game);
         this.updateToolbar(game);
+        // First-run onboarding: pre-arm Builder and lead with one action.
+        if (game.onboarding) {
+            game.selectSkill(SKILLS.BUILD);
+            this.setTutorial('Mosslings march on their own. We picked BUILDER for you — watch for the glowing one.');
+        }
+    },
+    /** Show the coaching card with explicit text (onboarding + guidance). */
+    setTutorial(text) {
+        const bar = document.getElementById('tutorial-bar');
+        if (!bar) return;
+        document.getElementById('lbl-tutorial').innerText = text;
+        bar.classList.remove('hidden');
     },
 
     refreshButtons(game) {
@@ -445,6 +463,14 @@ const ui = {
         const timeTaken = (game.level.time * 60 - game.time) / 60;
         let medals = { saved: false, skills: false, time: false };
 
+        // Visual stat row — the in-game version of the shareable result.
+        const stat = (label, value) => `<div class="stat"><b>${value}</b><span>${label}</span></div>`;
+        document.getElementById('msg-stats').innerHTML =
+            stat('Saved', `${game.savedCount}/${total}`) +
+            stat('Rescued', `${pct}%`) +
+            stat('Time', this.fmtTime(timeTaken)) +
+            stat('Skills', game.skillsUsed);
+
         const mWrap = document.getElementById('msg-medals-wrap');
         mWrap.innerHTML = '';
         if (win && game.level.par) {
@@ -456,8 +482,9 @@ const ui = {
             const key = game.levelIdx >= 0 ? game.levelIdx : game.level.name;
             storage.setMedals(key, medals);
 
+            let html = '';
             if (medals.saved || medals.skills || medals.time) {
-                let html = '<div class="msg-medals">';
+                html += '<div class="msg-medals">';
                 const slot = (label, earned, icon, color) => earned ? `
                     <div class="msg-medal-slot">
                         <span class="medal ${color}">${icon}</span>
@@ -467,8 +494,18 @@ const ui = {
                 html += slot('Efficiency', medals.skills, '🥈', 'medal-silver');
                 html += slot('Speed', medals.time, '🥉', 'medal-bronze');
                 html += '</div>';
-                mWrap.innerHTML = html;
             }
+            // Near-miss deltas — the concrete "why replay" hook.
+            const par = game.level.par;
+            const misses = [];
+            if (!medals.saved) misses.push(`🏆 Rescue missed by ${par.saved - game.savedCount}`);
+            if (!medals.skills) misses.push(`🥈 Efficiency missed by ${game.skillsUsed - par.skills} skill${game.skillsUsed - par.skills === 1 ? '' : 's'}`);
+            if (!medals.time) misses.push(`🥉 Speed missed by ${Math.max(1, Math.ceil(timeTaken - par.time))}s`);
+            if (misses.length) {
+                html += '<div class="msg-misses">' +
+                    misses.map(m => `<span>${m}</span>`).join('') + '</div>';
+            }
+            mWrap.innerHTML = html;
         }
 
         // Stash a compact run summary for the "Share result" button.
@@ -492,6 +529,13 @@ const ui = {
         document.getElementById('msg-btn-primary').innerText =
             game.state === 'VICTORY' ? 'The End' : (win ? 'Next Level ▸' : 'Retry');
         if (win) audio.sfxWin(); else audio.sfxLose();
+
+        // Fire a stamp sting as each earned medal slams in (matches the CSS
+        // .msg-medal-slot stagger: 0.30s / 0.55s / 0.80s).
+        if (win) {
+            const earned = [medals.saved, medals.skills, medals.time].filter(Boolean);
+            earned.forEach((_, i) => setTimeout(() => audio.sfxMedal(i), 300 + i * 250));
+        }
     },
     fmtTime(seconds) {
         const s = Math.max(0, Math.round(seconds));
@@ -508,7 +552,12 @@ const ui = {
         const label = r.isCampaign ? `Level ${r.campaignNum} "${r.name}"` : `"${r.name}"`;
         const medalTail = r.medalStr ? ` ${r.medalStr}` : '';
         const verb = r.win ? 'rescued' : 'reached';
-        let text = `MOSSLINGS — ${label}: ${verb} ${r.saved}/${r.total} (${r.pct}%) in ${r.timeStr}, ${r.skills} skills${medalTail}. Can you save more?`;
+        // "Challenge a friend" framing — strongest on a clean win, still inviting
+        // on a near miss (so close losses also become share moments).
+        const challenge = r.win
+            ? (r.medalStr.length >= 3 ? '🏅 Swept all 3 medals — can you?' : 'Think you can beat my run?')
+            : `So close — ${r.saved}/${r.total} saved. Can you do better?`;
+        let text = `MOSSLINGS — ${label}: ${verb} ${r.saved}/${r.total} (${r.pct}%) in ${r.timeStr}, ${r.skills} skills${medalTail}. ${challenge}`;
 
         // Append a link the recipient can actually open.
         if (location.protocol === 'file:') {

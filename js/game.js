@@ -66,6 +66,10 @@ class Game {
         this.mouseX = -100; this.mouseY = -100;
         this.lastPointerTouch = false; // widens tap targeting for fat fingers
         this.hoverM = null;
+        // Touch targeting: first tap freezes time + previews the nearest valid
+        // mossling (pendingTarget); a second tap confirms. Render-only state —
+        // never logged, so rewind/replay are untouched.
+        this.pendingTarget = null; this.pausedForTouch = false;
         this.ffwd = false; this.nukeArmedAt = 0; this.nuked = false;
         this.shake = 0; this.hatchFlash = 0; this.tick = 0;
         // --- Game-feel ("juice") — all render-loop state, never read by the
@@ -83,6 +87,10 @@ class Game {
         // state-altering input is recorded against simStep so the run can be
         // re-simulated exactly. See rewind().
         this.simStep = 0; this.actionLog = []; this.replaying = false;
+        // First-run onboarding (Level 1 only, until cleared). Render-driven
+        // coaching: pre-selects Builder, auto-pauses once when a mossling nears
+        // the gap, and arrows the player to the right tap. No sim coupling.
+        this.onboarding = false; this.onboardDone = false; this.onboardPausedOnce = false;
         this.debug = false;
         this.fps = 0; this.lastFpsUpdate = 0; this.frameCount = 0;
         this.lastT = 0; this.acc = 0;
@@ -168,10 +176,14 @@ class Game {
         this.time = this.level.time * 60;
         this.inventory = { ...this.level.inventory };
         this.selectedSkill = null;
+        this.pendingTarget = null; this.pausedForTouch = false;
         this.ffwd = false; this.nukeArmedAt = 0; this.nuked = false;
         this.shake = 0; this.flash = 0; this.hitStop = 0; this.exitFlash = 0;
         this.saveStreak = 0; this.lastSaveStep = -999;
         this.simStep = 0; this.actionLog = [];   // fresh input history per attempt
+        // Onboard a brand-new player on (and only on) campaign Level 1.
+        this.onboarding = !isCustom && idx === 0 && storage.getUnlocked() === 0;
+        this.onboardDone = false; this.onboardPausedOnce = false;
         this.terrain.clear(this.level.theme || 'FOREST');
         for (const c of (this.level.commands || [])) this.terrain.drawRect(c.x, c.y, c.w, c.h, c.type);
         this.terrain.finalize();
@@ -216,6 +228,7 @@ class Game {
     }
     selectSkill(s) {
         if (s !== null && (this.inventory[s] || 0) <= 0) { audio.sfxDeny(); return; }
+        if (s !== this.selectedSkill) this.clearPending(); // switching skills drops a pending touch target
         this.selectedSkill = s;
         if (s !== null) audio.sfxSelect();
         ui.updateToolbar(this);
@@ -235,10 +248,32 @@ class Game {
         if (this.selectedSkill === null) return;
         if ((this.inventory[this.selectedSkill] || 0) <= 0) { this.denyFeedback(); return; }
         const m = this.findTarget();
+        // Touch: two-stage tap-to-pause confirm (precise on phones). Desktop has
+        // live hover targeting, so it commits immediately.
+        if (this.lastPointerTouch) {
+            if (m && m === this.pendingTarget) { this.commitAssign(m); this.clearPending(); }
+            else if (m) { this.setPending(m); } // (re)select + preview, freeze time
+            else { this.clearPending(); this.denyFeedback(); }
+            return;
+        }
         if (!m) { this.denyFeedback(); return; } // tapped empty space / invalid target
+        this.commitAssign(m);
+    }
+    commitAssign(m) {
         const s = this.selectedSkill;
         this.assignSkill(m, s);
         this.actionLog.push({ step: this.simStep, type: 'assign', id: m.id, skill: s });
+    }
+    /** Touch: arm a pending target and freeze time so a moving cluster holds still. */
+    setPending(m) {
+        this.pendingTarget = m;
+        if (this.state === 'PLAY') { this.pausedForTouch = true; this.state = 'PAUSE'; ui.refreshButtons(this); }
+        audio.sfxSelect();
+    }
+    /** Drop the pending target and resume if we paused for it. */
+    clearPending() {
+        this.pendingTarget = null;
+        if (this.pausedForTouch) { this.pausedForTouch = false; if (this.state === 'PAUSE') { this.state = 'PLAY'; ui.refreshButtons(this); } }
     }
     /**
      * Tap landed on nothing assignable. Render-only feedback (deny chirp + a
@@ -271,6 +306,16 @@ class Game {
         if (this.replaying) return; // muted catch-up: no SFX, particles or toolbar churn
         audio.sfxAssign();
         this.particles.spawn(m.x, m.y - 8, '#ffeb3b', 6, { speed: 1.5, life: 25, glow: true });
+        // Onboarding success beat: first Builder assign clears the coaching,
+        // unpauses, and celebrates — then gets out of the way.
+        if (this.onboarding && !this.onboardDone && s === SKILLS.BUILD) {
+            this.onboardDone = true;
+            this.onboarding = false;
+            if (this.state === 'PAUSE') { this.state = 'PLAY'; ui.refreshButtons(this); }
+            this.juice({ flash: 0.18, color: '#9ccc65' });
+            ui.toast('🌉 Bridge going up! Now guide the rest of the colony home.');
+            audio.sfxSave(1.2);
+        }
         ui.toggleTutorial(false); // they've made their first move — clear the coaching card
         ui.updateToolbar(this, s);
         if (this.inventory[s] <= 0) this.selectSkill(null);
@@ -389,6 +434,8 @@ class Game {
             this.drawExit(ctx);
             for (const m of this.mosslings) m.draw(ctx);
             this.particles.draw(ctx);
+            this.drawOnboarding(ctx);
+            this.drawPendingTarget(ctx);
             this.drawCursor(ctx);
         }
         if (this.state === 'EDITOR') {
@@ -524,6 +571,99 @@ class Game {
             ctx.fillRect(x + Math.cos(a) * 15 - 1, y - 13 + Math.sin(a * 0.7) * 18 - 1, 2, 2);
         }
         ctx.globalAlpha = 1;
+    }
+    /** The mossling the onboarding flow should point at: a rightward walker in
+     *  the build-here window just before Level 1's gap (~x450). */
+    onboardTarget() {
+        let best = null, bestD = Infinity;
+        for (const m of this.mosslings) {
+            if (m.state !== STATE.WALK || m.dir !== 1) continue;
+            if (m.x < 426 || m.x > 452) continue;
+            const d = 452 - m.x;
+            if (d < bestD) { bestD = d; best = m; }
+        }
+        return best;
+    }
+    /**
+     * Render-only onboarding overlay (Level 1, new players). The first time a
+     * mossling reaches the build window we auto-pause — teaching assign-while-
+     * paused — and arrow the player to it. Cleared on the first Builder assign.
+     */
+    drawOnboarding(ctx) {
+        if (!this.onboarding || this.onboardDone) return;
+        const m = this.onboardTarget();
+        if (m && !this.onboardPausedOnce && this.state === 'PLAY') {
+            this.state = 'PAUSE';
+            this.onboardPausedOnce = true;
+            ui.refreshButtons(this);
+            ui.setTutorial('Builder is ready (paused). Tap the glowing mossling to bridge the gap.');
+        }
+        if (!m) return;
+        const t = this.tick * 0.15;
+        ctx.save();
+        ctx.strokeStyle = '#ffeb3b';
+        ctx.lineWidth = 2.5;
+        ctx.globalAlpha = 0.6 + 0.4 * Math.sin(t);
+        ctx.beginPath();
+        ctx.arc(m.x, m.y - 6, 16, 0, Math.PI * 2);
+        ctx.stroke();
+        // bouncing downward arrow above the target
+        const ay = m.y - 42 + Math.sin(t) * 4;
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#ffeb3b';
+        ctx.beginPath();
+        ctx.moveTo(m.x, ay + 13);
+        ctx.lineTo(m.x - 8, ay);
+        ctx.lineTo(m.x + 8, ay);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+    }
+    /**
+     * Touch targeting preview: a bold double-ring + skill ghost + magnifier
+     * bubble over the armed mossling, with a "tap to confirm" prompt. Makes the
+     * intended creature unmistakable on a small phone screen before committing.
+     */
+    drawPendingTarget(ctx) {
+        const m = this.pendingTarget;
+        if (!m || !m.alive()) { if (m) this.clearPending(); return; }
+        this.drawSkillGhost(ctx, m);
+        const t = this.tick * 0.2;
+        ctx.save();
+        ctx.strokeStyle = '#ffeb3b';
+        ctx.lineWidth = 2.5;
+        ctx.globalAlpha = 0.9;
+        ctx.beginPath(); ctx.arc(m.x, m.y - 6, 14 + Math.sin(t) * 2, 0, Math.PI * 2); ctx.stroke();
+        ctx.globalAlpha = 0.35;
+        ctx.beginPath(); ctx.arc(m.x, m.y - 6, 23 + Math.sin(t) * 3, 0, Math.PI * 2); ctx.stroke();
+        // Magnifier bubble — a 3x zoom of the creature, floated just above it so
+        // a fingertip never hides the thing it is selecting.
+        const mr = 26, mx = Math.max(mr + 2, Math.min(W - mr - 2, m.x)), my = m.y - 64;
+        if (my > mr) {
+            ctx.globalAlpha = 1;
+            ctx.save();
+            ctx.beginPath(); ctx.arc(mx, my, mr, 0, Math.PI * 2); ctx.closePath();
+            ctx.fillStyle = 'rgba(8,12,9,0.92)'; ctx.fill();
+            ctx.clip();
+            const zoom = 3;
+            ctx.translate(mx, my);
+            ctx.scale(zoom, zoom);
+            ctx.translate(-m.x, -(m.y - 6));
+            m.draw(ctx);
+            ctx.restore();
+            ctx.strokeStyle = '#ffeb3b'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(mx, my, mr, 0, Math.PI * 2); ctx.stroke();
+        }
+        // confirm prompt
+        ctx.globalAlpha = 1;
+        ctx.font = 'bold 10px monospace';
+        const label = 'TAP TO CONFIRM';
+        const tw = ctx.measureText(label).width;
+        ctx.fillStyle = 'rgba(0,0,0,0.8)';
+        ctx.fillRect(m.x - tw / 2 - 4, m.y + 12, tw + 8, 14);
+        ctx.fillStyle = '#ffeb3b';
+        ctx.fillText(label, m.x - tw / 2, m.y + 22);
+        ctx.restore();
     }
     drawCursor(ctx) {
         if (this.state !== 'PLAY' && this.state !== 'PAUSE') return;

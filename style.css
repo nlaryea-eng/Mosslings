@@ -234,6 +234,24 @@ button:active { transform: translateY(1px); }
 }
 .tagline { font-size: 15px; text-align: center; line-height: 1.5; color: #a8c5a0; margin: 10px 0 26px; }
 .controls-hint { font-size: 11px; color: #5d705d; margin-top: 24px; letter-spacing: 0.5px; }
+.first-run-hint { font-size: 13px; color: #8fb07f; margin-top: 18px; letter-spacing: 0.5px; }
+
+/* First-run view: strip everything but a single dominant Play button so a brand
+   new player has exactly one obvious thing to do (see ui.buildMenu). Level
+   select, Editor, My Levels and the keyboard cheat-sheet return once Level 1
+   is cleared (storage.getUnlocked() >= 1). */
+#start-screen.first-run #level-select-container,
+#start-screen.first-run #btn-editor,
+#start-screen.first-run #btn-gallery,
+#start-screen.first-run .controls-hint { display: none; }
+#start-screen:not(.first-run) .first-run-hint { display: none; }
+#start-screen.first-run #btn-start {
+    padding: 16px 46px; font-size: 20px;
+    animation: playPulse 2s ease-in-out infinite;
+}
+@keyframes playPulse {
+    50% { box-shadow: 0 0 30px rgba(124, 179, 66, 0.6); transform: scale(1.04); }
+}
 
 #start-btns { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
 .big-btn {
@@ -367,6 +385,33 @@ button:active { transform: translateY(1px); }
 .msg-medals { margin-bottom: 20px; display: flex; gap: 12px; align-items: center; background: rgba(255,255,255,0.05); padding: 8px 16px; border-radius: 20px; }
 .msg-medal-slot { display: flex; flex-direction: column; align-items: center; gap: 2px; }
 #msg-medal-label { font-size: 9px; color: #8ba88b; text-transform: uppercase; }
+/* Each earned medal slams in like a stamp, staggered, with a brief flash. */
+#message-overlay:not(.hidden) .msg-medal-slot { animation: medalStamp 0.4s cubic-bezier(0.2, 1.6, 0.4, 1) both; }
+#message-overlay:not(.hidden) .msg-medal-slot:nth-child(1) { animation-delay: 0.30s; }
+#message-overlay:not(.hidden) .msg-medal-slot:nth-child(2) { animation-delay: 0.55s; }
+#message-overlay:not(.hidden) .msg-medal-slot:nth-child(3) { animation-delay: 0.80s; }
+#message-overlay:not(.hidden) .msg-medal-slot .medal { animation: medalGlint 0.5s ease-out both; animation-delay: inherit; }
+@keyframes medalStamp {
+    0%   { transform: scale(2.4) rotate(-18deg); opacity: 0; }
+    60%  { transform: scale(0.86) rotate(4deg); opacity: 1; }
+    100% { transform: scale(1) rotate(0); opacity: 1; }
+}
+@keyframes medalGlint {
+    0%, 50% { filter: brightness(1); }
+    60% { filter: brightness(2.4) drop-shadow(0 0 10px rgba(255,255,255,0.9)); }
+    100% { filter: brightness(1); }
+}
+.msg-misses { display: flex; flex-wrap: wrap; gap: 8px 18px; justify-content: center; margin: -8px 0 20px; }
+.msg-misses span { font-size: 12px; color: #c9a25b; opacity: 0.92; }
+#msg-stats { display: flex; gap: 10px; justify-content: center; margin: 0 0 20px; flex-wrap: wrap; }
+#msg-stats:empty { display: none; }
+.stat {
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    min-width: 72px; padding: 8px 12px; border-radius: 8px;
+    background: rgba(124, 179, 66, 0.08); border: 1px solid rgba(124, 179, 66, 0.18);
+}
+.stat b { font-size: 20px; color: var(--accent-bright); font-family: var(--pixel-font); }
+.stat span { font-size: 9px; color: #8ba88b; text-transform: uppercase; letter-spacing: 1px; }
 
 /* ---------- Gallery ---------- */
 #gallery-screen {

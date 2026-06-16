@@ -5,6 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Mosslings — guide the tiny moss folk home</title>
     <meta name="description" content="A Lemmings-inspired puzzle platformer. Assign skills to mindless moss creatures and guide them to the portal.">
+    <!-- Open Graph / Twitter cards so shared level + result links unfurl nicely in chats. -->
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Mosslings — a tiny moss-folk puzzle">
+    <meta property="og:description" content="Guide mindless moss creatures home with builders, bashers, floaters and more. Can you save the whole colony?">
+    <meta property="og:image" content="https://raw.githubusercontent.com/placeholder/mosslings/main/og-card.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Mosslings — a tiny moss-folk puzzle">
+    <meta name="twitter:description" content="Guide mindless moss creatures home. Can you save the whole colony?">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect x='4' y='5' width='8' height='9' rx='2' fill='%237cb342'/><rect x='6' y='3' width='2' height='3' fill='%232e7d32'/><rect x='9' y='2' width='2' height='4' fill='%232e7d32'/><rect x='6' y='8' width='2' height='2' fill='white'/><rect x='10' y='8' width='2' height='2' fill='white'/></svg>">
     <link rel="stylesheet" href="style.css">
 </head>
@@ -142,6 +150,7 @@
         <div id="message-overlay" class="hidden">
             <h1 id="msg-title">Title</h1>
             <p id="msg-text">Text</p>
+            <div id="msg-stats"></div>
             <div id="msg-medals-wrap"></div>
             <div id="msg-btns">
                 <button id="msg-btn-primary">Next Level</button>
@@ -160,6 +169,7 @@
                 <button id="btn-gallery" class="big-btn hidden">My Levels</button>
                 <button id="btn-editor" class="big-btn">Level Editor</button>
             </div>
+            <p class="first-run-hint">One rule: guide the moss folk to the portal. We'll show you how.</p>
             <p class="controls-hint">1–8 skills · click to assign (works paused) · F fast-forward · ⌫ rewind 5s · ±&hairsp;spawn rate · N nuke ×2 · R restart · Space pause · M mute</p>
         </div>
 
