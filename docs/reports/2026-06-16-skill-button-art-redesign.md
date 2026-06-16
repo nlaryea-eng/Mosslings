@@ -11,9 +11,16 @@ pixel badges. Carried out the brief in
   metaphors and is the main thing that changed.
 - **No new dependencies / no raster.** Still inline SVG `<rect>` art built from
   the existing `r(x,y,w,h,fill)` helper in `js/icons.js`; works from `file://`.
-- **3-tone recipe per badge:** a dark **outline**, a mid **fill** (the skill's
-  hue), and a light **highlight**. The luminance contrast survives the disabled
-  `grayscale()` pass, so disabled buttons read as shapes, not grey smudges.
+- **4-tone recipe per badge:** a dark **outline**, a **shadow**, a mid **fill**
+  (the skill's hue), and a light **highlight**. The luminance contrast survives
+  the disabled `grayscale()` pass (so disabled buttons read as shapes, not grey
+  smudges) and the shadow tone gives each badge a sense of volume.
+- **Detail pass (follow-up):** every badge was thickened with internal detail —
+  Block got a face + fists, Build got brick mortar + step shadow, Bash got
+  separated fingers, **Mine became a chunky double-bladed pickaxe** (was a thin
+  diagonal mark), **Dig became a broad bottom-weighted spade**, the bomb/umbrella
+  /ladder gained shading, and the medal star/chevron emblems were enlarged so
+  they read. Mine/Dig were the thinnest silhouettes; they now carry real mass.
 - **One dominant silhouette per badge** — read shape first, color second, label
   last. Silhouettes are deliberately distinct:
 
