@@ -833,10 +833,19 @@ test('skill icon map covers every toolbar skill with inline 24px SVG art', () =>
     }
 });
 test('control and medal icon map covers non-emoji gameplay UI', () => {
-    for (const key of ['play', 'pause', 'fastForward', 'reset', 'hazard', 'soundOn', 'soundOff', 'trophy', 'medalSilver', 'medalBronze']) {
+    for (const key of ['play', 'pause', 'fastForward', 'reset', 'hazard', 'lock', 'soundOn', 'soundOff', 'plus', 'minus', 'trophy', 'medalSilver', 'medalBronze']) {
         const svg = UI_ICONS[key];
         assert(typeof svg === 'string' && svg.includes('<svg'), `${key} icon missing`);
         assert(!/\p{Extended_Pictographic}/u.test(svg), `${key} icon leaked emoji`);
+    }
+});
+test('top-bar control icons use the 24x24 multi-tone pixel-art recipe', () => {
+    for (const key of ['play', 'pause', 'fastForward', 'reset', 'hazard', 'lock', 'soundOn', 'soundOff', 'plus', 'minus']) {
+        const svg = UI_ICONS[key];
+        assert(svg.includes('viewBox="0 0 24 24"'), `${key} control icon not on the 24x24 art grid`);
+        assert(svg.includes('ui-art'), `${key} control icon missing ui-art sizing class`);
+        const fills = new Set(svg.match(/fill="[^"]+"/g) || []);
+        assert(fills.size >= 3, `${key} control icon is too flat (${fills.size} fills)`);
     }
 });
 test('medal icons use the 24x24 3-tone pixel-art recipe (like skill badges)', () => {
@@ -846,6 +855,19 @@ test('medal icons use the 24x24 3-tone pixel-art recipe (like skill badges)', ()
         const fills = new Set(svg.match(/fill="[^"]+"/g) || []);
         assert(fills.size >= 3, `${key} medal is too flat (${fills.size} fills) — needs outline/fill/highlight`);
     }
+});
+test('level-select medal strip has a class selector and miniature SVG sizing', () => {
+    const uiSrc = fs.readFileSync(path.join(__dirname, '..', 'js', 'ui.js'), 'utf8');
+    const css = fs.readFileSync(path.join(__dirname, '..', 'style.css'), 'utf8');
+    const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+    assert(uiSrc.includes('class="lvl-medals"'), 'level-select markup must emit class="lvl-medals"');
+    assert(!/#lvl-medals\b/.test(css), 'level medal strip CSS must target the emitted class, not #lvl-medals');
+    assert(/\.lvl-medals\s*\{[^}]*display:\s*flex/.test(css), 'level medal strip needs its own flex layout');
+    assert(/\.lvl-medals \.pixel-icon\s*\{[^}]*width:\s*10px;[^}]*height:\s*10px;/.test(css), 'level medals must be miniaturized inside 60px cards');
+    assert(uiSrc.includes('aria-disabled'), 'locked level cards need an aria-disabled state');
+    assert(uiSrc.includes('gallery-medals'), 'gallery cards need a separate medal sizing contract');
+    assert(css.includes('button:focus-visible'), 'keyboard focus must be visible');
+    assert(!html.includes('user-scalable=no'), 'page-level zoom must not be globally disabled');
 });
 
 // ==============================================================

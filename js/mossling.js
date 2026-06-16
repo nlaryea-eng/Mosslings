@@ -291,63 +291,96 @@ class Mossling {
         const digBob = (this.state === STATE.DIG) ? ((f >> 2) & 1) : 0;
         const bob = walkBob + blockBob + digBob;
 
-        // legs
-        ctx.fillStyle = '#33691e';
+        const outline = '#09280d';
+        const deep = '#1f5b22';
+        const shadow = '#4f8f32';
+        const fill = '#7cb342';
+        const light = '#b7e37c';
+
+        // legs and feet: outlined first, then colored pixels so they read at phone scale.
+        ctx.fillStyle = outline;
         if (this.state === STATE.WALK) {
             const step = (f >> 3) & 1;
-            ctx.fillRect(-3, -2, 2, 2 + (step ? 0 : -1) + 1);
-            ctx.fillRect(1, -2, 2, 2 + (step ? -1 : 0) + 1);
+            ctx.fillRect(-4, -3, 3, 4 + (step ? 0 : -1));
+            ctx.fillRect(1, -3, 3, 4 + (step ? -1 : 0));
+            ctx.fillStyle = shadow;
+            ctx.fillRect(-3, -2, 2, 2 + (step ? 0 : -1));
+            ctx.fillRect(2, -2, 1, 2 + (step ? -1 : 0));
         } else if (this.state === STATE.BLOCK) {
-            ctx.fillRect(-4, -2, 2, 2); ctx.fillRect(2, -2, 2, 2); // wide stance
+            ctx.fillRect(-6, -3, 4, 3); ctx.fillRect(2, -3, 4, 3); // wide stance
+            ctx.fillStyle = shadow;
+            ctx.fillRect(-5, -2, 2, 1); ctx.fillRect(3, -2, 2, 1);
         } else {
-            ctx.fillRect(-3, -2, 2, 2); ctx.fillRect(1, -2, 2, 2);
+            ctx.fillRect(-4, -3, 3, 3); ctx.fillRect(1, -3, 3, 3);
+            ctx.fillStyle = shadow;
+            ctx.fillRect(-3, -2, 1, 1); ctx.fillRect(2, -2, 1, 1);
         }
 
-        // body (rounded blob via layered rects)
+        // Body: small, but built like the newer button glyphs: outline, shadow,
+        // fill, and highlight. The right edge is deliberately darker so the
+        // creature has volume instead of a flat green smudge.
         const by = -10 + bob; // body top
-        ctx.fillStyle = '#0a3d0e';                       // high-contrast outline silhouette
-        ctx.fillRect(-4, by - 1, 8, 9);
-        ctx.fillRect(-5, by + 1, 10, 5);
-        ctx.fillStyle = '#7cb342';                       // main body
+        ctx.fillStyle = outline;
+        ctx.fillRect(-4, by - 2, 8, 2);
+        ctx.fillRect(-5, by, 10, 8);
+        ctx.fillRect(-4, by + 8, 8, 2);
+        ctx.fillStyle = shadow;
+        ctx.fillRect(-3, by - 1, 7, 2);
+        ctx.fillRect(-4, by + 1, 8, 7);
+        ctx.fillStyle = fill;
         ctx.fillRect(-3, by, 6, 8);
-        ctx.fillRect(-4, by + 1, 8, 5);
-        ctx.fillStyle = '#9ccc65';                       // belly highlight
-        ctx.fillRect(-2, by + 3, 4, 4);
+        ctx.fillRect(-4, by + 2, 6, 4);
+        ctx.fillStyle = deep;
+        ctx.fillRect(2, by + 1, 2, 7);
+        ctx.fillRect(-3, by + 7, 6, 1);
+        ctx.fillStyle = light;
+        ctx.fillRect(-3, by + 1, 3, 1);
+        ctx.fillRect(-2, by + 3, 3, 3);
+        ctx.fillRect(-1, by + 6, 2, 1);
 
         // moss tuft hair
-        ctx.fillStyle = '#2e7d32';
-        ctx.fillRect(-3, by - 2, 2, 2); ctx.fillRect(0, by - 3, 2, 3); ctx.fillRect(2, by - 2, 2, 2);
+        ctx.fillStyle = outline;
+        ctx.fillRect(-4, by - 3, 2, 2); ctx.fillRect(-1, by - 4, 3, 3); ctx.fillRect(2, by - 3, 2, 2);
+        ctx.fillStyle = deep;
+        ctx.fillRect(-3, by - 3, 1, 1); ctx.fillRect(0, by - 4, 1, 2); ctx.fillRect(3, by - 3, 1, 1);
+        ctx.fillStyle = light;
+        ctx.fillRect(0, by - 4, 1, 1);
 
         // procedural accessory — a tiny deterministic flourish per variant
         switch (this.variant) {
             case 1: // leaf sprig
-                ctx.fillStyle = '#aed581';
-                ctx.fillRect(1, by - 5, 1, 2); ctx.fillRect(2, by - 6, 2, 1);
+                ctx.fillStyle = outline; ctx.fillRect(1, by - 6, 1, 3); ctx.fillRect(2, by - 7, 3, 2);
+                ctx.fillStyle = '#aed581'; ctx.fillRect(2, by - 6, 1, 2); ctx.fillRect(3, by - 7, 1, 1);
                 break;
             case 2: // little mushroom-cap hat
-                ctx.fillStyle = '#8d6e63'; ctx.fillRect(-1, by - 4, 2, 2);
-                ctx.fillStyle = '#e57373'; ctx.fillRect(-3, by - 5, 6, 2);
+                ctx.fillStyle = outline; ctx.fillRect(-2, by - 5, 4, 2); ctx.fillRect(-4, by - 7, 8, 3);
+                ctx.fillStyle = '#8d6e63'; ctx.fillRect(-1, by - 5, 2, 2);
+                ctx.fillStyle = '#e57373'; ctx.fillRect(-3, by - 6, 6, 2);
                 ctx.fillStyle = '#ffcdd2'; ctx.fillRect(-2, by - 5, 1, 1); ctx.fillRect(1, by - 5, 1, 1);
                 break;
             case 3: // red berry
+                ctx.fillStyle = outline; ctx.fillRect(-3, by - 6, 4, 4);
                 ctx.fillStyle = '#ef5350'; ctx.fillRect(-2, by - 5, 2, 2);
+                ctx.fillStyle = '#ffb3a7'; ctx.fillRect(-2, by - 5, 1, 1);
                 break;
             case 4: // pale flower
+                ctx.fillStyle = outline; ctx.fillRect(-1, by - 6, 4, 4);
                 ctx.fillStyle = '#fff59d'; ctx.fillRect(0, by - 5, 2, 2);
                 ctx.fillStyle = '#fbc02d'; ctx.fillRect(0, by - 5, 1, 1);
                 break;
         }
 
-        // face — eyes look in walk direction
+        // Face: larger white pixels, dark brow, and a leading-side cheek.
         if (this.blink > 0) {
-            ctx.fillStyle = '#1b5e20';
-            ctx.fillRect(0, by + 2, 2, 1); ctx.fillRect(3, by + 2, 1, 1);
+            ctx.fillStyle = outline;
+            ctx.fillRect(-1, by + 2, 2, 1); ctx.fillRect(2, by + 2, 2, 1);
         } else {
+            ctx.fillStyle = outline;
+            ctx.fillRect(-2, by + 1, 3, 3); ctx.fillRect(2, by + 1, 3, 3);
             ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, by + 1, 2, 2); ctx.fillRect(3, by + 1, 1, 2);
+            ctx.fillRect(-1, by + 1, 2, 2); ctx.fillRect(3, by + 1, 1, 2);
             ctx.fillStyle = '#000000';
-            ctx.fillRect(1, by + 2, 1, 1); ctx.fillRect(3, by + 2, 1, 1);
-            // direction cue: pink blush on leading side
+            ctx.fillRect(0, by + 2, 1, 1); ctx.fillRect(3, by + 2, 1, 1);
             ctx.fillStyle = 'rgba(255,138,128,0.55)';
             ctx.fillRect(4, by + 3, 1, 1);
         }
@@ -357,16 +390,26 @@ class Mossling {
 
         // overlays that must not be mirrored/squashed
         if (this.hasFloater && this.state === STATE.FALL) {
-            ctx.strokeStyle = '#f48fb1'; ctx.lineWidth = 1.5;
-            ctx.beginPath(); ctx.arc(this.x, this.y - 16, 9, Math.PI, 0); ctx.stroke();
-            ctx.fillStyle = 'rgba(244,143,177,0.45)';
-            ctx.beginPath(); ctx.arc(this.x, this.y - 16, 9, Math.PI, 0); ctx.fill();
-            ctx.strokeStyle = '#ad6a8a';
-            ctx.beginPath(); ctx.moveTo(this.x, this.y - 16); ctx.lineTo(this.x, this.y - 9); ctx.stroke();
+            const x = Math.round(this.x), y = Math.round(this.y);
+            ctx.fillStyle = '#0d4750';
+            ctx.fillRect(x - 10, y - 20, 20, 2);
+            ctx.fillRect(x - 8, y - 22, 16, 2);
+            ctx.fillRect(x - 5, y - 24, 10, 2);
+            ctx.fillRect(x - 1, y - 20, 2, 12);
+            ctx.fillStyle = '#34c0d4';
+            ctx.fillRect(x - 9, y - 19, 18, 1);
+            ctx.fillRect(x - 7, y - 21, 14, 1);
+            ctx.fillRect(x - 4, y - 23, 8, 1);
+            ctx.fillStyle = '#b3eef5';
+            ctx.fillRect(x - 7, y - 21, 4, 1);
+            ctx.fillRect(x - 3, y - 23, 3, 1);
         }
         if (this.hasClimber && this.state !== STATE.CLIMB) {
-            ctx.fillStyle = '#ffb74d'; // tiny helmet dot marks permanent climbers
-            ctx.fillRect(Math.round(this.x) - 1, Math.round(this.y) - 14, 3, 1);
+            const x = Math.round(this.x), y = Math.round(this.y);
+            ctx.fillStyle = '#5e3a10'; // tiny helmet marks permanent climbers
+            ctx.fillRect(x - 3, y - 15, 6, 2);
+            ctx.fillStyle = '#ffd166';
+            ctx.fillRect(x - 2, y - 15, 4, 1);
         }
         if (this.isExploding) {
             const sec = Math.ceil(this.explodeTimer / 60);
@@ -385,72 +428,115 @@ class Mossling {
     }
     /** Per-state accessories, drawn in mirrored local space (feet at origin). */
     drawPose(ctx, by, f) {
+        const outline = '#09280d';
+        const fill = '#7cb342';
+        const light = '#b7e37c';
         switch (this.state) {
             case STATE.BLOCK: {
-                ctx.fillStyle = '#7cb342';                  // arms out
-                ctx.fillRect(-7, by + 2, 3, 2); ctx.fillRect(4, by + 2, 3, 2);
+                ctx.fillStyle = outline;                    // arms out with fists
+                ctx.fillRect(-8, by + 1, 4, 4); ctx.fillRect(4, by + 1, 4, 4);
+                ctx.fillStyle = '#ef5350';
+                ctx.fillRect(-7, by + 2, 2, 2); ctx.fillRect(5, by + 2, 2, 2);
                 ctx.fillStyle = '#e53935';                  // headband
-                ctx.fillRect(-3, by - 1, 7, 1);
+                ctx.fillRect(-4, by - 1, 8, 1);
+                ctx.fillStyle = '#ffcdd2';
+                ctx.fillRect(-3, by - 1, 2, 1);
                 break;
             }
             case STATE.BUILD: {
                 const swing = (f % PHYS.BUILD_PERIOD) < PHYS.BUILD_PERIOD / 2;
-                // Oversized hammer + brick stack reads at 10-14px phone scale.
-                ctx.fillStyle = '#1b2a14';
-                ctx.fillRect(3, by + (swing ? 0 : 3), 5, 3);
-                ctx.fillRect(7, swing ? by - 4 : by + 2, 2, 6);
-                ctx.fillStyle = '#9ccc65';
-                ctx.fillRect(4, by + (swing ? 1 : 4), 3, 2);
+                // Oversized hammer + brick stair reads at 10-14px phone scale.
+                ctx.fillStyle = outline;
+                ctx.fillRect(2, by + (swing ? 0 : 3), 6, 4);
+                ctx.fillRect(7, swing ? by - 5 : by + 1, 2, 8);
+                ctx.fillRect(6, swing ? by - 6 : by, 6, 3);
+                ctx.fillStyle = light;
+                ctx.fillRect(3, by + (swing ? 1 : 4), 4, 2);
                 ctx.fillStyle = '#d7a13a';
-                ctx.fillRect(7, swing ? by - 5 : by + 1, 4, 2); // hammer head
+                ctx.fillRect(7, swing ? by - 5 : by + 1, 4, 2);
+                ctx.fillStyle = outline;
+                ctx.fillRect(4, by + 6, 9, 4);
+                ctx.fillRect(9, by + 3, 5, 4);
                 ctx.fillStyle = '#ffd166';
-                ctx.fillRect(5, by + 6, 7, 2);
-                ctx.fillRect(9, by + 4, 4, 2);
+                ctx.fillRect(5, by + 7, 7, 2);
+                ctx.fillRect(10, by + 4, 3, 2);
+                ctx.fillStyle = '#9f6a20';
+                ctx.fillRect(8, by + 7, 1, 2);
+                ctx.fillRect(10, by + 5, 3, 1);
                 break;
             }
             case STATE.BASH: {
                 const punch = (f >> 2) & 1;
                 // Big outlined glove creates a distinct "punching forward" silhouette.
-                ctx.fillStyle = '#1b2a14';
-                ctx.fillRect(2, by + 1 + punch, punch ? 9 : 6, 5);
-                ctx.fillStyle = '#9ccc65';
-                ctx.fillRect(3, by + 2 + punch, punch ? 5 : 3, 2);
+                ctx.fillStyle = outline;
+                ctx.fillRect(2, by + punch, punch ? 10 : 7, 6);
+                ctx.fillStyle = light;
+                ctx.fillRect(3, by + 1 + punch, punch ? 5 : 3, 2);
                 ctx.fillStyle = '#ff7043';
                 ctx.fillRect(punch ? 8 : 6, by + 1 + punch, 4, 4);
+                ctx.fillStyle = '#5e2a14';
                 ctx.fillRect(punch ? 11 : 9, by + 2 + punch, 2, 2);
+                ctx.fillStyle = '#ffc6ad';
+                ctx.fillRect(punch ? 8 : 6, by + 1 + punch, 2, 1);
                 break;
             }
             case STATE.MINE: {
                 const up = (f % PHYS.MINE_PERIOD) < PHYS.MINE_PERIOD / 2;
-                ctx.strokeStyle = '#8d6e63'; ctx.lineWidth = 1;
-                ctx.beginPath();
-                ctx.moveTo(2, by + 3);
-                ctx.lineTo(up ? 7 : 8, up ? by - 3 : by + 7);
-                ctx.stroke();
-                ctx.fillStyle = '#b0bec5';                   // pick head
-                ctx.fillRect(up ? 6 : 7, up ? by - 4 : by + 6, 3, 2);
+                ctx.fillStyle = '#3a2410';                   // chunky handle
+                if (up) {
+                    ctx.fillRect(2, by + 2, 2, 3);
+                    ctx.fillRect(4, by, 2, 3);
+                    ctx.fillRect(6, by - 2, 2, 3);
+                    ctx.fillStyle = '#1a2a52';
+                    ctx.fillRect(5, by - 5, 7, 3);
+                    ctx.fillStyle = '#9fc3ff';
+                    ctx.fillRect(6, by - 4, 5, 1);
+                } else {
+                    ctx.fillRect(2, by + 2, 2, 3);
+                    ctx.fillRect(4, by + 4, 2, 3);
+                    ctx.fillRect(6, by + 6, 2, 3);
+                    ctx.fillStyle = '#1a2a52';
+                    ctx.fillRect(6, by + 6, 7, 3);
+                    ctx.fillStyle = '#9fc3ff';
+                    ctx.fillRect(7, by + 7, 5, 1);
+                }
                 break;
             }
             case STATE.DIG: {
-                ctx.fillStyle = '#7cb342';                   // both arms down
-                ctx.fillRect(-5, by + 5, 2, 3); ctx.fillRect(3, by + 5, 2, 3);
+                ctx.fillStyle = outline;                     // broad spade silhouette
+                ctx.fillRect(-5, by + 4, 2, 4); ctx.fillRect(3, by + 4, 2, 4);
+                ctx.fillRect(-2, by + 5, 4, 5);
+                ctx.fillStyle = fill;
+                ctx.fillRect(-4, by + 5, 1, 2); ctx.fillRect(4, by + 5, 1, 2);
+                ctx.fillStyle = '#aeb9c0';
+                ctx.fillRect(-1, by + 6, 2, 3);
+                ctx.fillStyle = '#44505a';
+                ctx.fillRect(-2, by + 8, 4, 2);
                 break;
             }
             case STATE.CLIMB: {
                 const reach = (f >> 2) & 1;
-                ctx.fillStyle = '#7cb342';
-                ctx.fillRect(3, by - (reach ? 2 : 0), 2, 3); // alternating grip
-                ctx.fillRect(3, by + (reach ? 5 : 3), 2, 3);
+                ctx.fillStyle = outline;
+                ctx.fillRect(4, by - 4, 2, 13);              // wall-side dark limb line
+                ctx.fillStyle = light;
+                ctx.fillRect(3, by - (reach ? 3 : 0), 2, 4); // alternating grip
+                ctx.fillRect(3, by + (reach ? 5 : 3), 2, 4);
+                ctx.fillStyle = '#66bb6a';
+                ctx.fillRect(5, by - 2, 1, 10);
                 break;
             }
             case STATE.FALL: {
-                ctx.fillStyle = '#7cb342';                   // arms flailing up
-                ctx.fillRect(-6, by - 1, 2, 3); ctx.fillRect(4, by - 1, 2, 3);
+                ctx.fillStyle = outline;                     // arms flailing up
+                ctx.fillRect(-7, by - 2, 3, 4); ctx.fillRect(4, by - 2, 3, 4);
+                ctx.fillStyle = light;
+                ctx.fillRect(-6, by - 1, 1, 2); ctx.fillRect(5, by - 1, 1, 2);
                 break;
             }
             case STATE.SHRUG: {
-                ctx.fillStyle = '#7cb342';
-                ctx.fillRect(-6, by, 2, 2); ctx.fillRect(4, by, 2, 2);
+                ctx.fillStyle = outline;
+                ctx.fillRect(-7, by, 3, 3); ctx.fillRect(4, by, 3, 3);
+                ctx.fillStyle = light;
+                ctx.fillRect(-6, by + 1, 1, 1); ctx.fillRect(5, by + 1, 1, 1);
                 ctx.fillStyle = '#fff';
                 ctx.font = '8px monospace';
                 ctx.fillText('?', 4, by - 4);

@@ -135,6 +135,8 @@ const ui = {
         setIconHtml(document.getElementById('btn-ffwd'), UI_ICONS.fastForward, 'Fast forward');
         setIconHtml(document.getElementById('btn-restart'), UI_ICONS.reset, 'Restart level');
         setIconHtml(document.getElementById('btn-nuke'), UI_ICONS.hazard, 'Nuke');
+        setIconHtml(document.getElementById('btn-rate-down'), UI_ICONS.minus, 'Slower spawns');
+        setIconHtml(document.getElementById('btn-rate-up'), UI_ICONS.plus, 'Faster spawns');
         setIconHtml(document.getElementById('hud-medal-gold'), UI_ICONS.trophy, 'Rescue medal pace');
         setIconHtml(document.getElementById('hud-medal-silver'), UI_ICONS.medalSilver, 'Efficiency medal pace');
         setIconHtml(document.getElementById('hud-medal-bronze'), UI_ICONS.medalBronze, 'Speed medal pace');
@@ -282,21 +284,54 @@ const ui = {
         document.getElementById('btn-start').innerText = firstRun ? 'Start Playing' : 'Play';
         for (let i = 0; i < LEVELS.length; i++) {
             const b = document.createElement('button');
-            b.className = 'lvl-btn' + (i === this.game.levelIdx ? ' selected' : '');
-            b.disabled = i > unlocked;
+            const locked = i > unlocked;
             const best = storage.getBest(i);
             const medals = storage.getMedals(i);
-            let medalHtml = '<div class="lvl-medals">';
-            if (medals.saved) medalHtml += `<span class="medal medal-gold" title="Rescue Medal (100% saved)">${UI_ICONS.trophy}</span>`;
-            if (medals.skills) medalHtml += `<span class="medal medal-silver" title="Efficiency Medal (low skills)">${UI_ICONS.medalSilver}</span>`;
-            if (medals.time) medalHtml += `<span class="medal medal-bronze" title="Speed Medal (fast completion)">${UI_ICONS.medalBronze}</span>`;
-            medalHtml += '</div>';
+            const medalBits = [];
+            const medalNames = [];
+            if (!locked && medals.saved) {
+                medalBits.push(`<span class="medal medal-gold" title="Rescue Medal (100% saved)">${UI_ICONS.trophy}</span>`);
+                medalNames.push('rescue medal');
+            }
+            if (!locked && medals.skills) {
+                medalBits.push(`<span class="medal medal-silver" title="Efficiency Medal (low skills)">${UI_ICONS.medalSilver}</span>`);
+                medalNames.push('efficiency medal');
+            }
+            if (!locked && medals.time) {
+                medalBits.push(`<span class="medal medal-bronze" title="Speed Medal (fast completion)">${UI_ICONS.medalBronze}</span>`);
+                medalNames.push('speed medal');
+            }
+            b.className = [
+                'lvl-btn',
+                i === this.game.levelIdx ? 'selected' : '',
+                locked ? 'is-locked' : '',
+                !locked && best !== null ? 'has-best' : '',
+                medalBits.length ? 'has-medals' : ''
+            ].filter(Boolean).join(' ');
+            if (b.setAttribute) b.setAttribute('aria-disabled', locked ? 'true' : 'false');
+            else b.ariaDisabled = locked ? 'true' : 'false';
 
             b.innerHTML = `<span class="lvl-num">${i + 1}</span>` +
-                (best !== null ? `<span class="lvl-best">${best}%</span>` : '') +
-                medalHtml;
+                `<span class="lvl-best${locked || best === null ? ' empty' : ''}">${!locked && best !== null ? `${best}%` : ''}</span>` +
+                (locked
+                    ? `<span class="lvl-lock">${UI_ICONS.lock}</span>`
+                    : `<span class="lvl-medals">${medalBits.join('')}</span>`);
             b.title = i <= unlocked ? LEVELS[i].name : 'Locked';
-            b.onclick = () => { this.game.levelIdx = i; this.buildMenu(); };
+            const progress = locked
+                ? 'Locked'
+                : [
+                    best !== null ? `best ${best}% rescued` : 'not yet cleared',
+                    medalNames.length ? `earned ${medalNames.join(', ')}` : 'no medals earned'
+                ].join(', ');
+            const selected = i === this.game.levelIdx ? ', selected' : '';
+            const aria = `Level ${i + 1}: ${LEVELS[i].name}, ${progress}${selected}`;
+            if (b.setAttribute) b.setAttribute('aria-label', aria);
+            else b.ariaLabel = aria;
+            b.onclick = () => {
+                if (locked) return;
+                this.game.levelIdx = i;
+                this.buildMenu();
+            };
             c.appendChild(b);
         }
         document.getElementById('btn-gallery').classList.toggle('hidden', storage.getCustomLevels().length === 0);
@@ -341,7 +376,7 @@ const ui = {
         const title = el('h4');
         title.textContent = lvl.name;             // untrusted → textContent
         const medals = storage.getMedals(lvl.name);
-        const mWrap = el('span', 'lvl-medals');
+        const mWrap = el('span', 'gallery-medals');
         const medal = (on, cls, svg, title) => {
             if (!on) return;
             const s = el('span', 'medal ' + cls);
@@ -551,6 +586,14 @@ const ui = {
             if (misses.length) {
                 html += '<div class="msg-misses">' +
                     misses.map(m => `<span>${m}</span>`).join('') + '</div>';
+            }
+            if (!storage.load('medalLegendSeen', false)) {
+                html += '<div class="msg-medal-legend" aria-label="Medal guide">' +
+                    `<span>${UI_ICONS.trophy}<b>Rescue</b> all saved</span>` +
+                    `<span>${UI_ICONS.medalSilver}<b>Efficiency</b> low skills</span>` +
+                    `<span>${UI_ICONS.medalBronze}<b>Speed</b> fast clear</span>` +
+                    '</div>';
+                storage.save('medalLegendSeen', true);
             }
             mWrap.innerHTML = html;
         }
