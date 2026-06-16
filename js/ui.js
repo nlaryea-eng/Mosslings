@@ -16,13 +16,15 @@ const ui = {
     init(game) {
         this.game = game;
         const $ = (id) => document.getElementById(id);
+        this.installIcons();
+        this.refreshMuteButton();
 
         $('btn-gallery').onclick = () => this.openGallery();
         $('btn-gallery-back').onclick = () => { $('gallery-screen').classList.add('hidden'); this.backToMenu(); };
         $('btn-gallery-editor').onclick = () => { $('gallery-screen').classList.add('hidden'); this.startEditor(); };
 
         $('btn-editor').onclick = () => { audio.init(); this.startEditor(); };
-        $('btn-start').onclick = () => { audio.init(); game.loadLevel(game.levelIdx); };
+        $('btn-start').onclick = () => { this.armAudioForPlay(); game.loadLevel(game.levelIdx); };
         $('btn-edit-save').onclick = () => this.saveCustomLevel();
         $('btn-edit-settings').onclick = () => this.openEditorSettings();
         $('btn-edit-share').onclick = () => this.shareCustomLevel();
@@ -52,7 +54,9 @@ const ui = {
         $('btn-rate-down').onclick = () => game.adjustRate(-1);
         $('btn-mute').onclick = () => {
             audio.init();
-            $('btn-mute').innerText = audio.toggleMute() ? '🔇' : '🔊';
+            audio.toggleMute();
+            if (!audio.muted) this.armAudioForPlay();
+            this.refreshMuteButton();
         };
         $('msg-btn-primary').onclick = () => {
             if (game.state === 'VICTORY') this.backToMenu();
@@ -65,7 +69,7 @@ const ui = {
         $('msg-btn-menu').onclick = () => this.backToMenu();
 
         document.querySelectorAll('.skill-btn').forEach(btn => {
-            btn.onclick = () => game.selectSkill(parseInt(btn.dataset.skill, 10));
+            btn.onclick = () => { this.armAudioForPlay(); game.selectSkill(parseInt(btn.dataset.skill, 10)); };
         });
 
         // Tutorial card is dismissible (tap it, or press T) and pointer-enabled.
@@ -89,6 +93,7 @@ const ui = {
         };
         game.canvas.onpointerdown = e => {
             if (e.button === 2) return;
+            this.armAudioForPlay();
             setPointer(e);
             if (game.state === 'EDITOR') { this.applyEdit(); return; }
             if (game.state === 'PLAY' || game.state === 'PAUSE') { game.tryAssign(); e.preventDefault(); }
@@ -97,6 +102,7 @@ const ui = {
 
         window.onkeydown = e => {
             if (e.target.tagName === 'INPUT') return;
+            this.armAudioForPlay();
             const k = e.key.toLowerCase();
             if (e.key >= '1' && e.key <= '8') game.selectSkill(parseInt(e.key, 10) - 1);
             else if (k === 'z' && (e.ctrlKey || e.metaKey)) {
@@ -121,6 +127,32 @@ const ui = {
         this.tryImportSharedLevel();
     },
 
+    installIcons() {
+        document.querySelectorAll('.skill-btn').forEach(btn => {
+            const s = parseInt(btn.dataset.skill, 10);
+            setIconHtml(btn.querySelector('.icon'), SKILL_ICONS[s], SKILL_NAMES[s]);
+        });
+        setIconHtml(document.getElementById('btn-ffwd'), UI_ICONS.fastForward, 'Fast forward');
+        setIconHtml(document.getElementById('btn-restart'), UI_ICONS.reset, 'Restart level');
+        setIconHtml(document.getElementById('btn-nuke'), UI_ICONS.hazard, 'Nuke');
+        setIconHtml(document.getElementById('hud-medal-gold'), UI_ICONS.trophy, 'Rescue medal pace');
+        setIconHtml(document.getElementById('hud-medal-silver'), UI_ICONS.medalSilver, 'Efficiency medal pace');
+        setIconHtml(document.getElementById('hud-medal-bronze'), UI_ICONS.medalBronze, 'Speed medal pace');
+        this.refreshPauseIcon();
+    },
+    refreshPauseIcon() {
+        const paused = this.game && this.game.state === 'PAUSE';
+        setIconHtml(document.getElementById('btn-pause'), paused ? UI_ICONS.play : UI_ICONS.pause, paused ? 'Resume' : 'Pause');
+    },
+    refreshMuteButton() {
+        setIconHtml(document.getElementById('btn-mute'), audio.muted ? UI_ICONS.soundOff : UI_ICONS.soundOn, audio.muted ? 'Unmute' : 'Mute');
+    },
+    armAudioForPlay() {
+        audio.init();
+        if (!this.game || (this.game.state !== 'PLAY' && this.game.state !== 'PAUSE')) return;
+        if (typeof music !== 'undefined' && music) music.start(this.game.level.theme || 'FOREST');
+    },
+
     // --- Level sharing ------------------------------------------------------
     /** On load, a ?level=… (or #level=…) param plays a shared level straight away. */
     tryImportSharedLevel() {
@@ -143,7 +175,8 @@ const ui = {
         }
 
         // Skip the menu — drop the player straight into the shared puzzle.
-        audio.init();
+        // Audio waits for the player's first input so shared links do not trip
+        // autoplay restrictions.
         this.game.loadLevel(level, true);
         this.toast(`Playing shared level: ${level.name}`);
         history.replaceState(null, '', location.pathname);
@@ -177,7 +210,7 @@ const ui = {
             return;
         }
         const url = this.shareUrlFor(code);
-        this.copyText(url, '🔗 Share link copied to clipboard!');
+        this.copyText(url, 'Share link copied to clipboard!');
     },
     /** Build a clean ?level= share URL from the current hosted location. */
     shareUrlFor(code) {
@@ -246,7 +279,7 @@ const ui = {
         // has exactly one obvious action. Level select + Editor return after L1.
         const firstRun = unlocked === 0;
         document.getElementById('start-screen').classList.toggle('first-run', firstRun);
-        document.getElementById('btn-start').innerText = firstRun ? '▶ Start Playing' : '▶ Play';
+        document.getElementById('btn-start').innerText = firstRun ? 'Start Playing' : 'Play';
         for (let i = 0; i < LEVELS.length; i++) {
             const b = document.createElement('button');
             b.className = 'lvl-btn' + (i === this.game.levelIdx ? ' selected' : '');
@@ -254,9 +287,9 @@ const ui = {
             const best = storage.getBest(i);
             const medals = storage.getMedals(i);
             let medalHtml = '<div class="lvl-medals">';
-            if (medals.saved) medalHtml += '<span class="medal medal-gold" title="Rescue Medal (100% saved)">🏆</span>';
-            if (medals.skills) medalHtml += '<span class="medal medal-silver" title="Efficiency Medal (low skills)">🥈</span>';
-            if (medals.time) medalHtml += '<span class="medal medal-bronze" title="Speed Medal (fast completion)">🥉</span>';
+            if (medals.saved) medalHtml += `<span class="medal medal-gold" title="Rescue Medal (100% saved)">${UI_ICONS.trophy}</span>`;
+            if (medals.skills) medalHtml += `<span class="medal medal-silver" title="Efficiency Medal (low skills)">${UI_ICONS.medalSilver}</span>`;
+            if (medals.time) medalHtml += `<span class="medal medal-bronze" title="Speed Medal (fast completion)">${UI_ICONS.medalBronze}</span>`;
             medalHtml += '</div>';
 
             b.innerHTML = `<span class="lvl-num">${i + 1}</span>` +
@@ -309,15 +342,15 @@ const ui = {
         title.textContent = lvl.name;             // untrusted → textContent
         const medals = storage.getMedals(lvl.name);
         const mWrap = el('span', 'lvl-medals');
-        const medal = (on, cls, glyph, title) => {
+        const medal = (on, cls, svg, title) => {
             if (!on) return;
             const s = el('span', 'medal ' + cls);
-            s.textContent = glyph; s.title = title;
+            s.innerHTML = svg; s.title = title;
             mWrap.appendChild(s);
         };
-        medal(medals.saved, 'medal-gold', '🏆', 'Rescue Gold');
-        medal(medals.skills, 'medal-silver', '🥈', 'Efficiency Silver');
-        medal(medals.time, 'medal-bronze', '🥉', 'Speed Bronze');
+        medal(medals.saved, 'medal-gold', UI_ICONS.trophy, 'Rescue Gold');
+        medal(medals.skills, 'medal-silver', UI_ICONS.medalSilver, 'Efficiency Silver');
+        medal(medals.time, 'medal-bronze', UI_ICONS.medalBronze, 'Speed Bronze');
         title.appendChild(document.createTextNode(' '));
         title.appendChild(mWrap);
         card.appendChild(title);
@@ -337,20 +370,20 @@ const ui = {
             b.onclick = onClick;
             actions.appendChild(b);
         };
-        btn('btn-play', '▶ Play', () => {
+        btn('btn-play', 'Play', () => {
             document.getElementById('gallery-screen').classList.add('hidden');
             audio.init();
             this.game.loadLevel(lvl, true);
         });
-        btn('btn-edit', '✎ Edit', () => {
+        btn('btn-edit', 'Edit', () => {
             document.getElementById('gallery-screen').classList.add('hidden');
             this.editCustomLevel(lvl);
         });
-        btn('btn-share', '🔗 Share', () => {
+        btn('btn-share', 'Share', () => {
             this.game.level = lvl; // temporary swap for share
             this.shareCustomLevel();
         });
-        btn('btn-delete', '✖ Delete', () => {
+        btn('btn-delete', 'Delete', () => {
             if (confirm(`Delete "${lvl.name}"?`)) {
                 storage.deleteCustomLevel(lvl.name);
                 this.buildGallery();
@@ -409,6 +442,7 @@ const ui = {
         document.getElementById('toolbar').classList.remove('hidden');
         this.flashNuke(false);
         this.refreshButtons(game);
+        this.refreshMuteButton();
         this.updateToolbar(game);
         // First-run onboarding: pre-arm Builder and lead with one action.
         if (game.onboarding) {
@@ -425,14 +459,15 @@ const ui = {
     },
 
     refreshButtons(game) {
-        document.getElementById('btn-pause').innerText = game.state === 'PAUSE' ? '▶' : '⏸';
+        this.refreshPauseIcon();
         document.getElementById('btn-ffwd').classList.toggle('active', game.ffwd);
     },
 
     flashNuke(armed) {
         const b = document.getElementById('btn-nuke');
         b.classList.toggle('armed', armed);
-        b.innerText = armed ? 'SURE?' : '☢';
+        if (armed) b.innerText = 'SURE?';
+        else setIconHtml(b, UI_ICONS.hazard, 'Nuke');
     },
 
     updateToolbar(game, pulsedSkill = null) {
@@ -454,6 +489,7 @@ const ui = {
         const game = this.game;
         const o = document.getElementById('message-overlay');
         o.classList.remove('hidden');
+        if (typeof music !== 'undefined' && music) music.duck(true);
         document.getElementById('msg-title').innerText = title;
         document.getElementById('msg-title').className = win ? 'win' : 'fail';
         document.getElementById('msg-text').innerText = text;
@@ -490,17 +526,17 @@ const ui = {
                         <span class="medal ${color}">${icon}</span>
                         <span class="msg-medal-label">${label}</span>
                     </div>` : '';
-                html += slot('Rescue', medals.saved, '🏆', 'medal-gold');
-                html += slot('Efficiency', medals.skills, '🥈', 'medal-silver');
-                html += slot('Speed', medals.time, '🥉', 'medal-bronze');
+                html += slot('Rescue', medals.saved, UI_ICONS.trophy, 'medal-gold');
+                html += slot('Efficiency', medals.skills, UI_ICONS.medalSilver, 'medal-silver');
+                html += slot('Speed', medals.time, UI_ICONS.medalBronze, 'medal-bronze');
                 html += '</div>';
             }
             // Near-miss deltas — the concrete "why replay" hook.
             const par = game.level.par;
             const misses = [];
-            if (!medals.saved) misses.push(`🏆 Rescue missed by ${par.saved - game.savedCount}`);
-            if (!medals.skills) misses.push(`🥈 Efficiency missed by ${game.skillsUsed - par.skills} skill${game.skillsUsed - par.skills === 1 ? '' : 's'}`);
-            if (!medals.time) misses.push(`🥉 Speed missed by ${Math.max(1, Math.ceil(timeTaken - par.time))}s`);
+            if (!medals.saved) misses.push(`Rescue missed by ${par.saved - game.savedCount}`);
+            if (!medals.skills) misses.push(`Efficiency missed by ${game.skillsUsed - par.skills} skill${game.skillsUsed - par.skills === 1 ? '' : 's'}`);
+            if (!medals.time) misses.push(`Speed missed by ${Math.max(1, Math.ceil(timeTaken - par.time))}s`);
             if (misses.length) {
                 html += '<div class="msg-misses">' +
                     misses.map(m => `<span>${m}</span>`).join('') + '</div>';
@@ -516,7 +552,12 @@ const ui = {
             saved: game.savedCount, total, pct,
             timeStr: this.fmtTime(timeTaken),
             skills: game.skillsUsed,
-            medalStr: (medals.saved ? '🏆' : '') + (medals.skills ? '🥈' : '') + (medals.time ? '🥉' : ''),
+            medalCount: [medals.saved, medals.skills, medals.time].filter(Boolean).length,
+            medalStr: [
+                medals.saved ? 'Rescue' : '',
+                medals.skills ? 'Efficiency' : '',
+                medals.time ? 'Speed' : '',
+            ].filter(Boolean).join('+'),
             win,
             level: game.level,
         };
@@ -527,7 +568,7 @@ const ui = {
         document.getElementById('msg-btn-retry').classList.toggle('hidden', !showRetry);
 
         document.getElementById('msg-btn-primary').innerText =
-            game.state === 'VICTORY' ? 'The End' : (win ? 'Next Level ▸' : 'Retry');
+            game.state === 'VICTORY' ? 'The End' : (win ? 'Next Level' : 'Retry');
         if (win) audio.sfxWin(); else audio.sfxLose();
 
         // Fire a stamp sting as each earned medal slams in (matches the CSS
@@ -550,13 +591,13 @@ const ui = {
         const r = this.lastResult;
         if (!r) return;
         const label = r.isCampaign ? `Level ${r.campaignNum} "${r.name}"` : `"${r.name}"`;
-        const medalTail = r.medalStr ? ` ${r.medalStr}` : '';
+        const medalTail = r.medalStr ? ` medals: ${r.medalStr}` : '';
         const verb = r.win ? 'rescued' : 'reached';
         // "Challenge a friend" framing — strongest on a clean win, still inviting
         // on a near miss (so close losses also become share moments).
         const challenge = r.win
-            ? (r.medalStr.length >= 3 ? '🏅 Swept all 3 medals — can you?' : 'Think you can beat my run?')
-            : `So close — ${r.saved}/${r.total} saved. Can you do better?`;
+            ? (r.medalCount >= 3 ? 'Swept all 3 medals. Can you?' : 'Think you can beat my run?')
+            : `So close: ${r.saved}/${r.total} saved. Can you do better?`;
         let text = `MOSSLINGS — ${label}: ${verb} ${r.saved}/${r.total} (${r.pct}%) in ${r.timeStr}, ${r.skills} skills${medalTail}. ${challenge}`;
 
         // Append a link the recipient can actually open.
@@ -565,7 +606,7 @@ const ui = {
                 const code = serializeLevel(r.level);
                 if (code) text += `\nLevel code: ${code}`;
             }
-            this.copyText(text, '📋 Result copied! Host the game to add a play link.');
+            this.copyText(text, 'Result copied. Host the game to add a play link.');
             return;
         }
         let url = null;
@@ -577,7 +618,7 @@ const ui = {
             url = code ? this.shareUrlFor(code) : null;
         }
         if (url) text += `\n${url}`;
-        this.copyText(text, '🔗 Result + link copied to clipboard!');
+        this.copyText(text, 'Result + link copied to clipboard!');
     },
 
     // --- Level editor -------------------------------------------------------

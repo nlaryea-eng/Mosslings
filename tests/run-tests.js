@@ -61,7 +61,7 @@ global.localStorage = (() => {
 // Delete existing global.ui before loading ui.js to avoid collisions
 delete global.ui;
 
-for (const f of ['constants.js', 'audio.js', 'music.js', 'particles.js', 'terrain.js', 'mossling.js', 'levels.js', 'game.js', 'utils.js', 'ui.js']) {
+for (const f of ['constants.js', 'icons.js', 'audio.js', 'music.js', 'particles.js', 'terrain.js', 'mossling.js', 'levels.js', 'game.js', 'utils.js', 'ui.js']) {
     const file = path.join(__dirname, '..', 'js', f);
     vm.runInThisContext(fs.readFileSync(file, 'utf8'), { filename: file });
 }
@@ -817,8 +817,65 @@ test('desktop (mouse) still commits on the first click — no confirm step', () 
 });
 
 // ==============================================================
+console.log('\n— Retro UI assets —');
+// ==============================================================
+test('skill icon map covers every toolbar skill with inline 16px SVG', () => {
+    for (let i = 0; i < SKILL_NAMES.length; i++) {
+        const svg = SKILL_ICONS[i];
+        assert(typeof svg === 'string' && svg.includes('<svg'), `${SKILL_NAMES[i]} icon missing`);
+        assert(svg.includes('viewBox="0 0 16 16"'), `${SKILL_NAMES[i]} icon not on 16x16 grid`);
+    }
+});
+test('control and medal icon map covers non-emoji gameplay UI', () => {
+    for (const key of ['play', 'pause', 'fastForward', 'reset', 'hazard', 'soundOn', 'soundOff', 'trophy', 'medalSilver', 'medalBronze']) {
+        const svg = UI_ICONS[key];
+        assert(typeof svg === 'string' && svg.includes('<svg'), `${key} icon missing`);
+        assert(!/[🏆🥈🥉🔊🔇⏩⏸☢]/u.test(svg), `${key} icon leaked emoji`);
+    }
+});
+
+// ==============================================================
 console.log('\n— Music & game-feel —');
 // ==============================================================
+function makeAudioParam(v = 0) {
+    return {
+        value: v,
+        setValueAtTime(x) { this.value = x; },
+        linearRampToValueAtTime(x) { this.value = x; },
+        exponentialRampToValueAtTime(x) { this.value = x; },
+        setTargetAtTime(x) { this.value = x; },
+        cancelScheduledValues() {},
+    };
+}
+function makeAudioNode() {
+    const node = {
+        gain: makeAudioParam(),
+        frequency: makeAudioParam(440),
+        Q: makeAudioParam(0),
+        detune: makeAudioParam(0),
+        type: 'sine',
+        connect(dest) { return dest || node; },
+        start() {},
+        stop() {},
+    };
+    return node;
+}
+function makeFakeAudioContext() {
+    return {
+        currentTime: 10,
+        sampleRate: 8000,
+        state: 'running',
+        destination: makeAudioNode(),
+        resume() {},
+        createGain: makeAudioNode,
+        createBiquadFilter: makeAudioNode,
+        createOscillator: makeAudioNode,
+        createBufferSource: makeAudioNode,
+        createBuffer(channels, len) {
+            return { getChannelData: () => new Float32Array(len) };
+        },
+    };
+}
 test('music engine constructs and no-ops safely without an AudioContext', () => {
     const m = new MusicEngine(audio);                 // audio has no real ctx in Node
     eq(m.playing, false, 'starts idle');
@@ -835,6 +892,44 @@ test('every theme maps a chord root to an in-tune frequency', () => {
         m.cfg = MUSIC_THEMES[name];
         const f = m._scaleNote(m._chordRootForBar(0), 0);
         assert(f > 20 && f < 4000, `${name}: ${f}Hz out of audible musical range`);
+    }
+});
+test('mute preference persists through AudioEngine instances', () => {
+    localStorage.removeItem('mosslings.audioMuted');
+    const a = new AudioEngine();
+    eq(a.muted, false, 'fresh engine starts unmuted');
+    a.setMuted(true);
+    eq(localStorage.getItem('mosslings.audioMuted'), '1', 'mute flag written');
+    const b = new AudioEngine();
+    eq(b.muted, true, 'new engine reads stored mute flag');
+    b.setMuted(false);
+    eq(localStorage.getItem('mosslings.audioMuted'), '0', 'unmute flag written');
+});
+test('music start is autoplay-safe and waits for an existing AudioContext', () => {
+    const fakeAudio = { ctx: null, available: true, master: null, initCalls: 0, init() { this.initCalls++; } };
+    const m = new MusicEngine(fakeAudio);
+    m.start('FOREST');
+    eq(fakeAudio.initCalls, 0, 'music.start must not create AudioContext by itself');
+    eq(m.playing, false, 'music does not play without a user-armed context');
+});
+test('music start is idempotent and does not stack scheduler loops', () => {
+    const fakeAudio = { ctx: makeFakeAudioContext(), available: true, master: makeAudioNode(), init() {} };
+    const m = new MusicEngine(fakeAudio);
+    const oldSet = global.setInterval;
+    const oldClear = global.clearInterval;
+    let intervals = 0, clears = 0;
+    global.setInterval = () => { intervals++; return 77; };
+    global.clearInterval = () => { clears++; };
+    try {
+        m.start('FOREST');
+        m.start('VOLCANO');
+        eq(intervals, 1, 'second start created a duplicate scheduler');
+        eq(m.theme, 'VOLCANO', 'second start may retheme the existing loop');
+        m.stop(0);
+        eq(clears, 1, 'stop clears the one scheduler');
+    } finally {
+        global.setInterval = oldSet;
+        global.clearInterval = oldClear;
     }
 });
 test('save streak is deterministic and rebuilds exactly on rewind', () => {

@@ -7,11 +7,23 @@
  */
 class AudioEngine {
     constructor() {
+        this.storageKey = 'mosslings.audioMuted';
         this.ctx = null;
         this.master = null;
-        this.muted = false;
+        this.muted = this._loadMuted();
         this.available = true;
         this._silent = false; // hard-muted during deterministic rewind catch-up
+    }
+    _loadMuted() {
+        try { return localStorage.getItem('mosslings.audioMuted') === '1'; }
+        catch (e) { return false; }
+    }
+    _storeMuted() {
+        try { localStorage.setItem(this.storageKey, this.muted ? '1' : '0'); }
+        catch (e) {}
+    }
+    _applyMasterGain() {
+        if (this.master) this.master.gain.value = this.muted ? 0 : 0.9;
     }
     init() {
         if (this.ctx || !this.available) return;
@@ -20,17 +32,21 @@ class AudioEngine {
             if (!AC) { this.available = false; return; }
             this.ctx = new AC();
             this.master = this.ctx.createGain();
-            this.master.gain.value = 0.9;
+            this._applyMasterGain();
             this.master.connect(this.ctx.destination);
         } catch (e) {
             console.warn('Web Audio not available', e);
             this.available = false;
         }
     }
-    toggleMute() {
-        this.muted = !this.muted;
-        if (this.master) this.master.gain.value = this.muted ? 0 : 0.9;
+    setMuted(muted) {
+        this.muted = !!muted;
+        this._applyMasterGain();
+        this._storeMuted();
         return this.muted;
+    }
+    toggleMute() {
+        return this.setMuted(!this.muted);
     }
     ready() {
         if (!this.ctx || this.muted || this._silent) return false;

@@ -395,16 +395,29 @@ class Mossling {
             }
             case STATE.BUILD: {
                 const swing = (f % PHYS.BUILD_PERIOD) < PHYS.BUILD_PERIOD / 2;
-                ctx.fillStyle = '#7cb342';
-                ctx.fillRect(3, by + (swing ? 1 : 4), 3, 2); // hammering arm
-                ctx.fillStyle = '#e0c068';
-                ctx.fillRect(5, swing ? by + 5 : -2, 3, 2);  // brick
+                // Oversized hammer + brick stack reads at 10-14px phone scale.
+                ctx.fillStyle = '#1b2a14';
+                ctx.fillRect(3, by + (swing ? 0 : 3), 5, 3);
+                ctx.fillRect(7, swing ? by - 4 : by + 2, 2, 6);
+                ctx.fillStyle = '#9ccc65';
+                ctx.fillRect(4, by + (swing ? 1 : 4), 3, 2);
+                ctx.fillStyle = '#d7a13a';
+                ctx.fillRect(7, swing ? by - 5 : by + 1, 4, 2); // hammer head
+                ctx.fillStyle = '#ffd166';
+                ctx.fillRect(5, by + 6, 7, 2);
+                ctx.fillRect(9, by + 4, 4, 2);
                 break;
             }
             case STATE.BASH: {
                 const punch = (f >> 2) & 1;
-                ctx.fillStyle = '#7cb342';
+                // Big outlined glove creates a distinct "punching forward" silhouette.
+                ctx.fillStyle = '#1b2a14';
+                ctx.fillRect(2, by + 1 + punch, punch ? 9 : 6, 5);
+                ctx.fillStyle = '#9ccc65';
                 ctx.fillRect(3, by + 2 + punch, punch ? 5 : 3, 2);
+                ctx.fillStyle = '#ff7043';
+                ctx.fillRect(punch ? 8 : 6, by + 1 + punch, 4, 4);
+                ctx.fillRect(punch ? 11 : 9, by + 2 + punch, 2, 2);
                 break;
             }
             case STATE.MINE: {

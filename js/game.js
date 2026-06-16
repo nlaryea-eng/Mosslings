@@ -192,7 +192,10 @@ class Game {
         // the state is PLAY — a PAUSE here would dead-loop the rewind.
         this.state = 'PLAY';
         if (!silent) {
-            if (typeof music !== 'undefined' && music) music.start(this.level.theme || 'FOREST');
+            if (typeof music !== 'undefined' && music) {
+                music.duck(false);
+                music.start(this.level.theme || 'FOREST');
+            }
             ui.onLevelStart(this, isCustom);
         }
     }
@@ -313,7 +316,7 @@ class Game {
             this.onboarding = false;
             if (this.state === 'PAUSE') { this.state = 'PLAY'; ui.refreshButtons(this); }
             this.juice({ flash: 0.18, color: '#9ccc65' });
-            ui.toast('🌉 Bridge going up! Now guide the rest of the colony home.');
+            ui.toast('Bridge going up! Now guide the rest of the colony home.');
             audio.sfxSave(1.2);
         }
         ui.toggleTutorial(false); // they've made their first move — clear the coaching card
@@ -553,15 +556,20 @@ class Game {
         ctx.strokeStyle = C.arch;
         ctx.lineWidth = 2.5;
         ctx.stroke();
-        // athlete badge — twin marks (☂ + ⛏) above the arch
+        // Athlete badge: tiny pixel umbrella + pick marks above the arch.
         if (gold) {
-            ctx.fillStyle = C.spark;
-            ctx.font = '9px monospace';
-            ctx.textAlign = 'center';
             ctx.shadowColor = C.spark; ctx.shadowBlur = 4;
-            ctx.fillText('☂⛏', x, y - 34);
+            ctx.strokeStyle = C.spark;
+            ctx.fillStyle = C.spark;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(x - 10, y - 34); ctx.lineTo(x - 5, y - 39); ctx.lineTo(x, y - 34);
+            ctx.stroke();
+            ctx.fillRect(x - 6, y - 34, 1, 5);
+            ctx.fillRect(x + 4, y - 39, 7, 1);
+            ctx.fillRect(x + 7, y - 38, 1, 6);
+            ctx.fillRect(x + 9, y - 35, 3, 1);
             ctx.shadowBlur = 0;
-            ctx.textAlign = 'left';
         }
         // orbiting sparks
         ctx.fillStyle = C.spark;
@@ -691,7 +699,8 @@ class Game {
             ctx.arc(m.x, m.y - 6, 10 + Math.sin(this.tick * 0.2), 0, Math.PI * 2);
             ctx.stroke();
             ctx.fillStyle = 'rgba(0,0,0,0.7)';
-            const label = STATE_NAMES[m.state] + (m.hasClimber ? ' ⛏' : '') + (m.hasFloater ? ' ☂' : '');
+            const tags = (m.hasClimber ? ' CLIMB' : '') + (m.hasFloater ? ' FLOAT' : '');
+            const label = STATE_NAMES[m.state] + tags;
             ctx.font = '9px monospace';
             const tw = ctx.measureText(label).width;
             ctx.fillRect(m.x - tw / 2 - 3, m.y - 32, tw + 6, 11);

@@ -1,3 +1,11 @@
+@font-face {
+    font-family: 'Moss Pixel';
+    src: url('assets/fonts/moss-pixel.woff2?v=20260616-p5') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
 :root {
     --bg: #07090e;
     --panel: rgba(18, 24, 22, 0.92);
@@ -9,7 +17,7 @@
     --danger: #ef5350;
     --gold: #ffeb3b;
     --font: 'Segoe UI', system-ui, sans-serif;
-    --pixel-font: 'Courier New', Courier, monospace;
+    --pixel-font: 'Moss Pixel', 'Courier New', Courier, monospace;
 }
 
 * { box-sizing: border-box; user-select: none; }
@@ -68,6 +76,7 @@ canvas {
 
 /* ---------- HUD (reserved top bar, three balanced zones) ---------- */
 #hud-top {
+    font-family: var(--pixel-font);
     flex: 0 0 auto;
     display: flex; align-items: center; gap: 12px;
     padding: 7px 14px;
@@ -94,7 +103,7 @@ canvas {
     background: rgba(124, 179, 66, 0.06);
     border: 1px solid var(--border); border-radius: 8px;
 }
-.chip-label { font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; color: #7e947e; }
+.chip-label { font-size: 9px; letter-spacing: 0; text-transform: uppercase; color: #7e947e; }
 .hud-chip b { margin-top: 3px; font-size: 15px; color: #fff; font-family: var(--pixel-font); }
 .hud-chip b i { color: #7e947e; font-style: normal; font-size: 12px; }
 #lbl-time.time-low { color: var(--danger); animation: pulse 0.8s infinite; }
@@ -103,7 +112,7 @@ canvas {
 
 /* Live medal pace icons */
 #hud-medals { display: flex; gap: 3px; }
-#hud-medals .medal { font-size: 16px; transition: opacity 0.3s, filter 0.3s; }
+#hud-medals .medal { transition: opacity 0.3s, filter 0.3s; }
 #hud-medals .medal.failed { opacity: 0.25; filter: grayscale(1); }
 
 /* Rate stepper */
@@ -142,6 +151,31 @@ button:active { transform: translateY(1px); }
     animation: pulse 0.4s infinite;
 }
 
+.pixel-icon {
+    width: 1.1em; height: 1.1em;
+    display: block;
+    overflow: visible;
+    fill: currentColor;
+    image-rendering: pixelated;
+}
+#header-btns .pixel-icon,
+.rate-ctl .pixel-icon { width: 18px; height: 18px; }
+.skill-btn .icon {
+    width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
+    color: #d4eac2; line-height: 1; pointer-events: none;
+}
+.skill-btn .pixel-icon { width: 22px; height: 22px; }
+.skill-btn[data-skill="0"] .icon { color: #ff8a80; }
+.skill-btn[data-skill="1"] .icon { color: #ffd166; }
+.skill-btn[data-skill="2"] .icon { color: #ffab91; }
+.skill-btn[data-skill="3"] .icon { color: #c5d8ff; }
+.skill-btn[data-skill="4"] .icon { color: #bcaaa4; }
+.skill-btn[data-skill="5"] .icon { color: #80deea; }
+.skill-btn[data-skill="6"] .icon { color: #a5d6a7; }
+.skill-btn[data-skill="7"] .icon { color: #ff7043; }
+.medal .pixel-icon { width: 18px; height: 18px; }
+#hud-medals .pixel-icon { width: 16px; height: 16px; }
+
 /* ---------- Tutorial bar ---------- */
 #tutorial-bar {
     position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
@@ -154,25 +188,27 @@ button:active { transform: translateY(1px); }
     animation: tutIn 0.4s ease-out both;
 }
 #tutorial-bar::before {
-    content: '💡'; position: absolute; left: 11px; top: 50%; transform: translateY(-50%);
-    font-size: 14px; filter: drop-shadow(0 0 4px rgba(255, 220, 120, 0.6));
+    content: ''; position: absolute; left: 13px; top: 50%; transform: translateY(-50%);
+    width: 8px; height: 8px; background: #ffd166;
+    box-shadow: 0 0 0 2px #6b5b1b, 0 0 8px rgba(255, 220, 120, 0.7);
 }
 @keyframes tutIn { from { opacity: 0; transform: translate(-50%, -8px); } to { opacity: 1; transform: translate(-50%, 0); } }
 .tut-dismiss {
     display: block; margin-top: 4px;
-    font-size: 10px; letter-spacing: 0.5px; color: #7e9a76; text-transform: uppercase;
+    font-size: 10px; letter-spacing: 0; color: #7e9a76; text-transform: uppercase;
 }
 
 /* Portrait-phone rotate nudge (shown only by the media query below). */
 #rotate-hint {
     display: none; flex: 0 0 auto; text-align: center;
-    padding: 5px 10px; font-size: 11px; letter-spacing: 0.5px;
+    padding: 5px 10px; font-size: 11px; letter-spacing: 0;
     color: #cfe8c8; background: linear-gradient(180deg, #16241a, #0e1711);
     border-bottom: 1px solid var(--border);
 }
 
 /* ---------- Skill toolbar (reserved bottom bar) ---------- */
 #toolbar {
+    font-family: var(--pixel-font);
     flex: 0 0 auto;
     background: linear-gradient(180deg, #0d130e, #0a0f0b);
     padding: 9px 12px;
@@ -192,8 +228,7 @@ button:active { transform: translateY(1px); }
     color: #5d705d; font-size: 9px;
     position: absolute; top: 3px; left: 6px;
 }
-.skill-btn .icon { font-size: 16px; line-height: 18px; pointer-events: none; }
-.skill-btn .label { font-size: 9px; color: #8ba88b; text-transform: uppercase; letter-spacing: 1px; }
+.skill-btn .label { font-size: 9px; color: #8ba88b; text-transform: uppercase; letter-spacing: 0; }
 .skill-btn .count { color: #fff; font-size: 15px; line-height: 15px; font-family: var(--pixel-font); }
 .skill-btn.active {
     background: #2c4222; border-color: var(--accent);
@@ -209,6 +244,7 @@ button:active { transform: translateY(1px); }
 
 /* ---------- Full-screen overlays ---------- */
 #start-screen, #message-overlay {
+    font-family: var(--pixel-font);
     position: absolute; inset: 0;
     background:
         radial-gradient(ellipse at 50% 30%, rgba(30, 48, 32, 0.55) 0%, rgba(5, 8, 6, 0) 60%),
@@ -220,8 +256,8 @@ button:active { transform: translateY(1px); }
 
 .logo {
     color: var(--accent-bright);
-    font-size: 64px; font-weight: 900;
-    letter-spacing: 10px;
+    font-size: 46px; font-weight: 900;
+    letter-spacing: 0;
     font-family: var(--pixel-font);
     text-shadow:
         0 0 24px rgba(124, 179, 66, 0.55),
@@ -232,9 +268,9 @@ button:active { transform: translateY(1px); }
 @keyframes logoGlow {
     50% { text-shadow: 0 0 40px rgba(156, 204, 101, 0.85), 3px 3px 0 #1b3413, 6px 6px 0 #0a1407; }
 }
-.tagline { font-size: 15px; text-align: center; line-height: 1.5; color: #a8c5a0; margin: 10px 0 26px; }
-.controls-hint { font-size: 11px; color: #5d705d; margin-top: 24px; letter-spacing: 0.5px; }
-.first-run-hint { font-size: 13px; color: #8fb07f; margin-top: 18px; letter-spacing: 0.5px; }
+.tagline { font-size: 11px; text-align: center; line-height: 1.7; color: #a8c5a0; margin: 10px 0 26px; }
+.controls-hint { font-size: 8px; color: #5d705d; margin-top: 24px; letter-spacing: 0; max-width: 760px; text-align: center; line-height: 1.8; }
+.first-run-hint { font-size: 9px; color: #8fb07f; margin-top: 18px; letter-spacing: 0; }
 
 /* First-run view: strip everything but a single dominant Play button so a brand
    new player has exactly one obvious thing to do (see ui.buildMenu). Level
@@ -246,7 +282,7 @@ button:active { transform: translateY(1px); }
 #start-screen.first-run .controls-hint { display: none; }
 #start-screen:not(.first-run) .first-run-hint { display: none; }
 #start-screen.first-run #btn-start {
-    padding: 16px 46px; font-size: 20px;
+    padding: 16px 46px; font-size: 16px;
     animation: playPulse 2s ease-in-out infinite;
 }
 @keyframes playPulse {
@@ -255,7 +291,7 @@ button:active { transform: translateY(1px); }
 
 #start-btns { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
 .big-btn {
-    padding: 12px 28px; font-size: 16px; border-radius: 6px;
+    padding: 12px 28px; font-size: 12px; border-radius: 6px;
     border: 1px solid var(--accent); color: var(--accent-bright);
     background: rgba(124, 179, 66, 0.08);
 }
@@ -297,10 +333,10 @@ button:active { transform: translateY(1px); }
     50% { text-shadow: 0 0 48px rgba(156, 204, 101, 1), 0 0 80px rgba(124, 179, 66, 0.6); }
 }
 
-#msg-title { font-size: 48px; margin: 0 0 14px; font-family: var(--pixel-font); letter-spacing: 4px; }
-#msg-text { font-size: 17px; margin: 0 0 26px; color: #b9ccb4; }
+#msg-title { font-size: 34px; margin: 0 0 14px; font-family: var(--pixel-font); letter-spacing: 0; }
+#msg-text { font-size: 11px; margin: 0 0 26px; color: #b9ccb4; }
 #msg-btns { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; max-width: 640px; }
-#msg-btns button { padding: 10px 22px; font-size: 15px; }
+#msg-btns button { padding: 10px 22px; font-size: 10px; }
 #msg-btn-share, #msg-btn-retry { opacity: 0.9; }
 
 .win { color: var(--accent-bright); text-shadow: 0 0 30px rgba(124, 179, 66, 0.7); }
@@ -336,7 +372,7 @@ button:active { transform: translateY(1px); }
     position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%) translateY(8px);
     background: rgba(8, 14, 10, 0.95); border: 1px solid var(--accent);
     color: #e8f0e8; padding: 10px 18px; border-radius: 8px;
-    font-size: 13px; letter-spacing: 0.3px; max-width: 80%; text-align: center;
+    font-size: 13px; letter-spacing: 0; max-width: 80%; text-align: center;
     box-shadow: 0 6px 22px rgba(0, 0, 0, 0.5), 0 0 16px rgba(124, 179, 66, 0.25);
     z-index: 200; pointer-events: none; opacity: 0;
     transition: opacity 0.25s ease, transform 0.25s ease;
@@ -356,7 +392,7 @@ button:active { transform: translateY(1px); }
 
 .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .setting { display: flex; flex-direction: column; gap: 4px; }
-.setting label { font-size: 11px; color: #9ab39a; text-transform: uppercase; letter-spacing: 1px; }
+.setting label { font-size: 11px; color: #9ab39a; text-transform: uppercase; letter-spacing: 0; }
 .setting input[type="number"] {
     background: #0d130e; color: #fff; border: 1px solid var(--border); border-radius: 4px;
     padding: 6px 10px; font-family: var(--pixel-font); outline: none;
@@ -372,7 +408,7 @@ button:active { transform: translateY(1px); }
 .settings-btns { margin-top: 24px; display: flex; justify-content: center; }
 
 /* ---------- Medals ---------- */
-.medal { font-size: 18px; filter: drop-shadow(0 0 4px rgba(0,0,0,0.5)); }
+.medal { display: inline-flex; align-items: center; justify-content: center; filter: drop-shadow(0 0 4px rgba(0,0,0,0.5)); }
 .medal-gold { color: #ffeb3b; }
 .medal-silver { color: #e0e0e0; }
 .medal-bronze { color: #cd7f32; }
@@ -382,7 +418,7 @@ button:active { transform: translateY(1px); }
 
 #lvl-medals { display: flex; gap: 4px; margin-top: 4px; }
 .lvl-btn .medal { font-size: 14px; }
-.msg-medals { margin-bottom: 20px; display: flex; gap: 12px; align-items: center; background: rgba(255,255,255,0.05); padding: 8px 16px; border-radius: 20px; }
+.msg-medals { margin-bottom: 20px; display: flex; gap: 12px; align-items: center; background: rgba(255,255,255,0.05); padding: 8px 16px; border-radius: 8px; }
 .msg-medal-slot { display: flex; flex-direction: column; align-items: center; gap: 2px; }
 #msg-medal-label { font-size: 9px; color: #8ba88b; text-transform: uppercase; }
 /* Each earned medal slams in like a stamp, staggered, with a brief flash. */
@@ -411,7 +447,7 @@ button:active { transform: translateY(1px); }
     background: rgba(124, 179, 66, 0.08); border: 1px solid rgba(124, 179, 66, 0.18);
 }
 .stat b { font-size: 20px; color: var(--accent-bright); font-family: var(--pixel-font); }
-.stat span { font-size: 9px; color: #8ba88b; text-transform: uppercase; letter-spacing: 1px; }
+.stat span { font-size: 9px; color: #8ba88b; text-transform: uppercase; letter-spacing: 0; }
 
 /* ---------- Gallery ---------- */
 #gallery-screen {
@@ -458,10 +494,10 @@ button:active { transform: translateY(1px); }
     /* Toolbar: 8 buttons share the width instead of overflowing. */
     #toolbar { gap: 5px; padding: 7px 6px; }
     .skill-btn { width: auto; flex: 1 1 0; min-width: 0; height: 56px; }
-    .skill-btn .icon { font-size: 15px; }
+    .skill-btn .icon, .skill-btn .pixel-icon { width: 20px; height: 20px; }
 
-    .logo { font-size: 44px; letter-spacing: 6px; }
-    .tagline { font-size: 13px; }
+    .logo { font-size: 30px; letter-spacing: 0; }
+    .tagline { font-size: 9px; max-width: 92vw; }
     #editor-settings { width: 92vw; padding: 16px; }
     #gallery-list { width: 92vw; grid-template-columns: 1fr; }
 }
@@ -490,5 +526,3 @@ button:active { transform: translateY(1px); }
     #toolbar { padding: 4px 6px; }
     .skill-btn { height: 46px; }
 }
-
-
