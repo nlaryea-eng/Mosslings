@@ -63,7 +63,7 @@ global.localStorage = (() => {
 // Delete existing global.ui before loading ui.js to avoid collisions
 delete global.ui;
 
-for (const f of ['constants.js', 'icons.js', 'audio.js', 'haptics.js', 'music.js', 'particles.js', 'terrain.js', 'mossling.js', 'levels.js', 'daily.js', 'result-card.js', 'overlays.js', 'game.js', 'utils.js', 'ui.js', 'menu-ui.js', 'result-ui.js']) {
+for (const f of ['constants.js', 'icons.js', 'audio.js', 'haptics.js', 'music.js', 'particles.js', 'terrain.js', 'mossling.js', 'levels.js', 'daily.js', 'utils.js', 'replay-integrity.js', 'daily-ghost.js', 'ugc-trust.js', 'result-card.js', 'overlays.js', 'game.js', 'ui.js', 'menu-ui.js', 'result-ui.js']) {
     const file = path.join(__dirname, '..', 'js', f);
     vm.runInThisContext(fs.readFileSync(file, 'utf8'), { filename: file });
 }
@@ -76,6 +76,9 @@ function test(name, fn) {
 }
 function assert(cond, msg) { if (!cond) throw new Error(msg || 'assertion failed'); }
 function eq(a, b, msg) { assert(a === b, `${msg || 'expected equal'}: got ${a}, want ${b}`); }
+function replayCodeFromPayload(payload) {
+    return _toBase64Url(new TextEncoder().encode(JSON.stringify(payload)));
+}
 
 // --- Fixtures ----------------------------------------------------------------
 function makeGame() {
@@ -392,6 +395,39 @@ test('solvability clears the same gate once a matching switch exists', () => {
 });
 
 // ==============================================================
+console.log('\n— UGC trust-state language —');
+// ==============================================================
+function trustLevelFixture() {
+    return {
+        name: 'Trust Fixture', totalSpawn: 5, reqSaved: 3, time: 120, spawnRate: 60,
+        spawn: { x: 80, y: 360 }, exit: { x: 880, y: 420 },
+        inventory: { [SKILLS.BUILD]: 5 },
+        commands: [{ type: T_DIRT, x: 0, y: 420, w: 960, h: 120 }],
+    };
+}
+test('UGC trust display rules use exactly one prioritized primary badge', () => {
+    eq(ugcTrustBadge(null).message, 'This level has not been checked.');
+    const lvl = trustLevelFixture();
+    eq(ugcTrustBadge(lvl, { solvability: { status: 'fail', reason: 'blocked' } }).label, 'Structurally Valid');
+    eq(ugcTrustBadge(lvl, { solvability: { status: 'fail', reason: 'blocked' } }).message, 'Required objects exist. Solvability is unknown.');
+    const heuristic = ugcTrustBadge(lvl, { solvability: { status: 'ok', reason: 'route exists' } });
+    eq(heuristic.label, 'No Obvious Dead End Found');
+    eq(heuristic.message, 'Basic checks passed. This is not a proof.');
+    assert(!/verified/i.test(heuristic.label + heuristic.message), 'heuristic-only state must not claim verification');
+
+    const fp = levelFingerprint(lvl);
+    const creator = { ...lvl, ugcTrust: { creatorClear: { fingerprint: fp, replayCode: 'abc' } } };
+    eq(ugcTrustBadge(creator).label, 'Creator Cleared');
+    eq(ugcTrustBadge(creator).message, 'The creator attached a clear replay for this exact version.');
+    const verified = { ...lvl, ugcTrust: { creatorClear: { fingerprint: fp }, replayVerified: { fingerprint: fp, replayCode: 'abc' } } };
+    eq(ugcTrustBadge(verified).label, 'Replay Verified', 'replay verification outranks creator clear');
+    eq(ugcTrustBadge(verified).message, 'A clear replay was validated locally for this exact version.');
+    const official = { ...verified, officialCurated: true };
+    eq(ugcTrustBadge(official).label, 'Official', 'official outranks all other trust states');
+    eq(ugcTrustBadge(official).message, 'Included or curated by the Mosslings team.');
+});
+
+// ==============================================================
 console.log('\n— End-to-end: scripted solve of Level 1 —');
 // ==============================================================
 test('a builder assigned at the gap edge carries a mossling to the exit', () => {
@@ -505,6 +541,27 @@ test('rewind discards inputs that occurred after the target step', () => {
     assert(replayed && !replayed.hasFloater, 'a post-target assignment must not persist');
     assert(g.actionLog.every(a => a.step < 250), 'action log trimmed to the horizon');
 });
+test('rewind restores muted side effects after a replay catch-up throw', () => {
+    const g = new Game(); g.loadLevel(1);
+    for (let i = 0; i < 550; i++) g.update();
+    g.actionLog = [{ step: 0, type: 'nuke' }];
+    const realSpawn = g.particles.spawn;
+    const realApply = g.applyAction;
+    audio._silent = false;
+    g.applyAction = () => { throw new Error('forced replay failure'); };
+    let threw = false;
+    try {
+        g.rewind();
+    } catch (e) {
+        threw = true;
+    } finally {
+        g.applyAction = realApply;
+    }
+    assert(threw, 'fixture must throw during replay catch-up');
+    eq(g.particles.spawn, realSpawn, 'particle spawn restored after throw');
+    eq(audio._silent, false, 'audio silence flag restored after throw');
+    eq(g.replaying, false, 'replaying flag restored after throw');
+});
 
 // ==============================================================
 console.log('\n— Level serialization (sharing) —');
@@ -544,6 +601,48 @@ test('serializeReplay → deserializeReplay round-trips a campaign run', () => {
     eq(back.actions[1].type, 'assign'); eq(back.actions[1].id, 2); eq(back.actions[1].skill, SKILLS.BUILD);
     eq(back.actions[2].type, 'nuke');
 });
+test('v2 replay payload includes app version, algorithm, and level fingerprint', () => {
+    const code = serializeReplay({ kind: 'campaign', levelIdx: 0, actions: [] });
+    assert(code, 'v2 replay encodes');
+    const back = deserializeReplay(code);
+    assert(back, 'v2 replay decodes');
+    eq(back.schemaVersion, 2);
+    eq(back.appVersion, APP_VERSION);
+    eq(back.alg, LEVEL_FINGERPRINT_ALG);
+    eq(back.fingerprint, levelFingerprint(LEVELS[0]));
+    const check = validateReplayForPlayback(code);
+    eq(check.status, 'valid');
+    eq(check.severity, 'allow');
+    eq(check.expectedFingerprint, check.actualFingerprint);
+});
+test('level fingerprint is stable across key order and ignores cosmetic copy', () => {
+    const a = {
+        name: 'A', theme: 'FOREST', tut: 'Teach me',
+        totalSpawn: 5, reqSaved: 3, time: 120, spawnRate: 60,
+        spawn: { x: 80, y: 360 }, exit: { x: 880, y: 420 },
+        inventory: { [SKILLS.BUILD]: 5 },
+        commands: [{ type: T_DIRT, x: 0, y: 420, w: 960, h: 120 }],
+    };
+    const b = {
+        tut: 'Different words', theme: 'VOLCANO', name: 'B',
+        spawnRate: 60, time: 120, reqSaved: 3, totalSpawn: 5,
+        exit: { y: 420, x: 880 }, spawn: { y: 360, x: 80 },
+        commands: [{ h: 120, w: 960, y: 420, x: 0, type: T_DIRT }],
+        inventory: { [SKILLS.BUILD]: 5 },
+    };
+    eq(levelFingerprint(a), levelFingerprint(b), 'cosmetic/key-order changes do not affect identity');
+    const c = { ...b, commands: [{ h: 120, w: 960, y: 421, x: 0, type: T_DIRT }] };
+    assert(levelFingerprint(a) !== levelFingerprint(c), 'gameplay geometry changes affect identity');
+});
+test('v1 legacy replay decodes and validates as warn-but-allow', () => {
+    const code = replayCodeFromPayload({ v: 1, k: 'campaign', l: 0, a: [{ s: 10, t: 'nuke' }] });
+    const back = deserializeReplay(code);
+    assert(back && back.legacy, 'legacy replay decodes');
+    const check = validateReplayForPlayback(code);
+    eq(check.status, 'legacy');
+    eq(check.severity, 'warn');
+    assert(check.ok, 'legacy replay is allowed');
+});
 test('deserializeReplay rejects garbage and out-of-order steps', () => {
     eq(deserializeReplay('!!!not-base64-json'), null, 'garbage → null');
     eq(deserializeReplay(''), null, 'empty → null');
@@ -554,6 +653,45 @@ test('deserializeReplay rejects garbage and out-of-order steps', () => {
         { step: 200, type: 'rate', value: 50 }, { step: 100, type: 'nuke' },
     ] });
     eq(deserializeReplay(outOfOrder), null, 'descending steps → null');
+});
+test('campaign replay fingerprint mismatch refuses playback', () => {
+    const code = serializeReplay({ kind: 'campaign', levelIdx: 0, fingerprint: '00000000', actions: [] });
+    const check = validateReplayForPlayback(code);
+    eq(check.status, 'fingerprint_mismatch');
+    eq(check.severity, 'refuse');
+    assert(!check.ok, 'mismatch is not playable');
+});
+test('daily replay fingerprint mismatch refuses playback', () => {
+    const code = serializeReplay({ kind: 'daily', dailyKey: '2026-06-17', fingerprint: '00000000', actions: [] });
+    const check = validateReplayForPlayback(code);
+    eq(check.status, 'fingerprint_mismatch');
+    eq(check.severity, 'refuse');
+});
+test('custom replay carries and validates the embedded level fingerprint', () => {
+    const lvl = {
+        name: 'Replay Custom', totalSpawn: 5, reqSaved: 3, time: 90, spawnRate: 60,
+        spawn: { x: 100, y: 100 }, exit: { x: 820, y: 400 },
+        inventory: { [SKILLS.BUILD]: 5 },
+        commands: [{ type: T_DIRT, x: 0, y: 200, w: 960, h: 20 }, { type: T_DIRT, x: 0, y: 400, w: 960, h: 40 }],
+    };
+    const code = serializeReplay({ kind: 'custom', level: lvl, levelCode: serializeLevel(lvl), actions: [] });
+    const back = deserializeReplay(code);
+    assert(back && back.level, 'custom replay decodes with a level');
+    eq(back.fingerprint, levelFingerprint(lvl));
+    eq(validateReplayForPlayback(code).status, 'valid');
+});
+test('malformed and unsupported replay payloads refuse playback', () => {
+    eq(validateReplayForPlayback('!!!not-base64-json').status, 'malformed');
+    const unsupported = replayCodeFromPayload({ v: 99, k: 'campaign', l: 0, a: [] });
+    const check = validateReplayForPlayback(unsupported);
+    eq(check.status, 'unsupported_schema');
+    eq(check.severity, 'refuse');
+});
+test('v2 replay missing a fingerprint refuses playback', () => {
+    const missing = replayCodeFromPayload({ v: 2, app: APP_VERSION, alg: LEVEL_FINGERPRINT_ALG, k: 'campaign', l: 0, a: [] });
+    const check = validateReplayForPlayback(missing);
+    eq(check.status, 'missing_fingerprint');
+    eq(check.severity, 'refuse');
 });
 test('a replay plays back deterministically (same payload → identical end state)', () => {
     const code = serializeReplay({ kind: 'campaign', levelIdx: 0, actions: [
@@ -717,6 +855,35 @@ test('daily best storage keeps the stronger run while counting attempts', () => 
     });
     eq(better.pct, 63, 'stores stronger run');
     eq(better.attempts, 3);
+});
+test('daily ghost comparator ranks saved, time, skills, then earlier timestamp', () => {
+    const base = { saved: 8, total: 10, timeSeconds: 80, skills: 4, completedAt: '2030-01-01T00:00:10.000Z' };
+    assert(compareDailyGhostRecords({ ...base, saved: 9 }, base) > 0, 'higher saved wins');
+    assert(compareDailyGhostRecords({ ...base, timeSeconds: 70 }, base) > 0, 'lower time wins');
+    assert(compareDailyGhostRecords({ ...base, skills: 3 }, base) > 0, 'fewer skills wins');
+    assert(compareDailyGhostRecords({ ...base, completedAt: '2030-01-01T00:00:01.000Z' }, base) > 0, 'earlier completion wins ties');
+});
+test('daily ghost storage replaces only better records and prunes history', () => {
+    storage.save('dailyGhosts', {});
+    const key = '2030-01-15';
+    const first = { key, saved: 5, total: 10, pct: 50, timeSeconds: 90, skills: 5, completedAt: '2030-01-15T00:00:05.000Z', fingerprint: 'aaaa', replay: { code: 'x' } };
+    const worse = { ...first, saved: 4, timeSeconds: 60, completedAt: '2030-01-15T00:00:01.000Z' };
+    const better = { ...first, saved: 6, timeSeconds: 95, completedAt: '2030-01-15T00:00:10.000Z' };
+    eq(storage.setDailyGhost(key, first).state, 'set');
+    eq(storage.setDailyGhost(key, worse).state, 'behind');
+    eq(storage.getDailyGhost(key).saved, 5, 'worse run did not replace the ghost');
+    eq(storage.setDailyGhost(key, better).state, 'beat');
+    eq(storage.getDailyGhost(key).saved, 6, 'better run replaced the ghost');
+
+    const many = {};
+    for (let i = 1; i <= 20; i++) {
+        const d = `2030-02-${String(i).padStart(2, '0')}`;
+        many[d] = { key: d, saved: i, total: 20, timeSeconds: 100, skills: 4, completedAt: `${d}T00:00:00.000Z` };
+    }
+    const pruned = pruneDailyGhostHistory(many, 14);
+    eq(Object.keys(pruned).length, 14, 'history is bounded');
+    assert(pruned['2030-02-20'], 'latest ghost kept');
+    assert(!pruned['2030-02-01'], 'oldest ghost pruned');
 });
 test('daily wins do not unlock campaign progress', () => {
     storage.save('unlocked', 0);

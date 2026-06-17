@@ -527,12 +527,19 @@ class MenuUI {
         card.classList.toggle('hidden', firstRun || !challenge);
         if (firstRun || !challenge) return;
 
-        const result = storage.getDailyResult(challenge.key);
+        const ghost = storage.getDailyGhost(challenge.key);
+        const actualFingerprint = typeof levelFingerprint === 'function' ? levelFingerprint(LEVELS[challenge.levelIdx]) : null;
+        const ghostMatches = !!(ghost && ghost.fingerprint && ghost.fingerprint === actualFingerprint);
+        const ghostMismatch = !!(ghost && !ghostMatches);
         document.getElementById('daily-title').innerText =
             `${challenge.key} - L${challenge.levelIdx + 1} ${challenge.levelName}`;
-        document.getElementById('daily-meta').innerText = result
-            ? `Best ${result.pct}% - ${this.host.fmtTime(result.timeSeconds)} - ${result.skills} skills - ${result.attempts} attempt${result.attempts === 1 ? '' : 's'}`
-            : 'No local run yet. Same puzzle for everyone today.';
+        document.getElementById('daily-meta').innerText = ghostMismatch
+            ? 'Ghost unavailable: today\'s puzzle changed.'
+            : ghostMatches
+                ? dailyGhostSummaryText(ghost)
+                : 'Your first clear becomes today\'s ghost.';
+        const btn = document.getElementById('btn-daily');
+        if (btn) btn.innerText = ghostMatches ? 'Beat Your Ghost' : 'Play Today\'s Puzzle';
     }
 }
 

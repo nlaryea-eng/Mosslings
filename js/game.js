@@ -47,6 +47,17 @@ class StorageManager {
         this.save('daily', all);
         return best;
     }
+    getDailyGhosts() { return this.load('dailyGhosts', {}) || {}; }
+    getDailyGhost(key) { return this.getDailyGhosts()[key] || null; }
+    setDailyGhost(key, record, limit = DAILY_GHOST_HISTORY_LIMIT) {
+        const all = this.getDailyGhosts();
+        const previous = all[key] || null;
+        const stored = compareDailyGhostRecords(record, previous) > 0;
+        if (stored) all[key] = { ...record, key };
+        const pruned = pruneDailyGhostHistory(all, limit);
+        this.save('dailyGhosts', pruned);
+        return dailyGhostOutcome(record, previous, stored);
+    }
     getRunStreak() {
         const s = this.load('streak', { current: 0, best: 0 }) || {};
         const current = Math.max(0, Number(s.current) | 0);
@@ -642,16 +653,20 @@ class Game {
         // Mute the catch-up: noop particle spawns and silence audio.
         this.replaying = true;
         const realSpawn = this.particles.spawn;
+        const wasSilent = audio._silent;
         this.particles.spawn = () => {};
         audio._silent = true;
-        let ai = 0;
-        while (this.simStep < targetStep) {
-            while (ai < kept.length && kept[ai].step === this.simStep) this.applyAction(kept[ai++]);
-            this.update();
+        try {
+            let ai = 0;
+            while (this.simStep < targetStep) {
+                while (ai < kept.length && kept[ai].step === this.simStep) this.applyAction(kept[ai++]);
+                this.update();
+            }
+        } finally {
+            this.particles.spawn = realSpawn;
+            audio._silent = wasSilent;
+            this.replaying = false;
         }
-        this.particles.spawn = realSpawn;
-        audio._silent = false;
-        this.replaying = false;
         this.selectedSkill = null;
         this.state = wasPaused ? 'PAUSE' : 'PLAY';
         ui.updateToolbar(this);
@@ -661,9 +676,10 @@ class Game {
     /** Snapshot the current run as a shareable replay payload (level id + log). */
     buildReplay() {
         const actions = this.actionLog.map(a => ({ ...a }));
-        if (this.runMode === 'daily' && this.dailyChallenge) return { kind: 'daily', dailyKey: this.dailyChallenge.key, actions };
-        if (this.levelIdx >= 0) return { kind: 'campaign', levelIdx: this.levelIdx, actions };
-        return { kind: 'custom', levelCode: serializeLevel(this.level), actions };
+        const fingerprint = typeof levelFingerprint === 'function' ? levelFingerprint(this.level) : null;
+        if (this.runMode === 'daily' && this.dailyChallenge) return { kind: 'daily', dailyKey: this.dailyChallenge.key, fingerprint, actions };
+        if (this.levelIdx >= 0) return { kind: 'campaign', levelIdx: this.levelIdx, fingerprint, actions };
+        return { kind: 'custom', level: this.level, levelCode: serializeLevel(this.level), fingerprint, actions };
     }
     /**
      * Load a decoded replay and play it back deterministically: the level is
@@ -671,7 +687,13 @@ class Game {
      * at their simStep while the sim runs live (audio/particles on, so it looks
      * like a real run). Player assignment is locked out for the duration.
      */
-    loadReplay(replay) {
+    loadReplay(replay, validation = null) {
+        const check = validation || (typeof validateReplayForPlayback === 'function'
+            ? validateReplayForPlayback(replay)
+            : { ok: true, severity: 'allow', replay });
+        this.lastReplayValidation = check;
+        if (!check || check.severity === 'refuse' || !check.replay) return false;
+        replay = check.replay;
         if (!replay || !Array.isArray(replay.actions)) return false;
         if (replay.kind === 'campaign') this.loadLevel(replay.levelIdx);
         else if (replay.kind === 'daily') this.loadDailyChallenge(dailyChallengeForDate(replay.dailyKey));

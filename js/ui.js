@@ -259,8 +259,10 @@ const ui = {
         // Skip the menu — drop the player straight into the shared puzzle.
         // Audio waits for the player's first input so shared links do not trip
         // autoplay restrictions.
+        if (typeof ugcTrustMeta === 'function') level.ugcTrust = ugcTrustMeta(level);
         this.game.loadLevel(level, true);
-        this.toast(`Playing shared level: ${level.name}`);
+        const badge = typeof ugcTrustBadge === 'function' ? ugcTrustBadge(level) : null;
+        this.toast(badge ? `Playing shared level: ${level.name}. ${badge.message}` : `Playing shared level: ${level.name}`);
         history.replaceState(null, '', location.pathname);
     },
     /** Validate + decode a shared level string; returns a level object or null. */
@@ -274,15 +276,20 @@ const ui = {
         let code = params.get('replay');
         if (!code && location.hash.startsWith('#replay=')) code = location.hash.slice(8);
         if (!code) return false;
-        const replay = deserializeReplay(code);
+        const validation = typeof validateReplayForPlayback === 'function'
+            ? validateReplayForPlayback(code)
+            : { ok: true, severity: 'allow', replay: deserializeReplay(code), message: 'Playing shared replay' };
         history.replaceState(null, '', location.pathname);
-        if (!replay) { this.toast('That replay link is invalid or corrupted.', true); return true; }
+        if (!validation || validation.severity === 'refuse') {
+            this.toast(validation && validation.message ? validation.message : 'That replay link is invalid or corrupted.', true);
+            return true;
+        }
         this.armAudioForPlay();
-        if (this.game.loadReplay(replay)) {
+        if (this.game.loadReplay(validation.replay, validation)) {
             this.setTutorial('▶ Watching a shared replay — press Esc or Menu to take over.');
-            this.toast('Playing shared replay');
+            this.toast(validation.severity === 'warn' ? validation.message : 'Playing shared replay');
         } else {
-            this.toast('Could not load that replay.', true);
+            this.toast(validation.message || 'Could not load that replay.', true);
         }
         return true;
     },
@@ -320,18 +327,21 @@ const ui = {
         // Generous solvability smoke check (advisory, not a proof). Don't block
         // the share, but warn so a likely-broken level isn't sent out blind.
         const solve = analyzeSolvability(game.level);
-        const warn = solve.status === 'fail' ? ` (warning: ${solve.reason})` : '';
+        if (typeof ugcTrustMeta === 'function') game.level.ugcTrust = ugcTrustMeta(game.level, { solvability: solve });
+        const badge = typeof ugcTrustBadge === 'function' ? ugcTrustBadge(game.level, { solvability: solve }) : null;
+        const trust = badge ? ` ${badge.label}: ${badge.message}` : '';
+        const warn = solve.status === 'fail' ? ` Warning: ${solve.reason}.` : '';
 
         // On file:// there is no public origin to hand out, so a "link" would be
         // a dead local path on anyone else's machine. Share the level CODE
         // instead and tell the player to host the game for real links.
         if (location.protocol === 'file:') {
             this.promptCopy(code);
-            this.toast(`Copied level code. Host the game to share a clickable link.${warn}`, !!warn);
+            this.toast(`Copied level code. Host the game to share a clickable link.${trust}${warn}`, !!warn);
             return;
         }
         const url = this.shareUrlFor(code);
-        this.copyText(url, `Share link copied to clipboard!${warn}`);
+        this.copyText(url, `Share link copied to clipboard!${trust}${warn}`);
     },
     /** Build a clean share URL from the current hosted location or test stub. */
     currentShareUrl() {
@@ -495,6 +505,13 @@ const ui = {
             meta.appendChild(span);
         }
         card.appendChild(meta);
+        if (typeof ugcTrustBadge === 'function') {
+            const badge = ugcTrustBadge(lvl);
+            const b = el('span', `ugc-badge ugc-${badge.state}`);
+            b.textContent = badge.label;
+            b.title = badge.message;
+            card.appendChild(b);
+        }
 
         const actions = el('div', 'card-btns');
         const btn = (cls, label, onClick) => {
@@ -760,11 +777,12 @@ const ui = {
         // (e.g. spawn over a pit or an exit in mid-air) that fails only later.
         const err = validateLevelStructure(game.level);
         if (err) { this.toast(`Can't save: ${err}`, true); return; }
-        storage.saveCustomLevel(game.level);
         // Advisory only — a generous reachability smoke check, not a proof. We
         // still save (the heuristic must never lock a creator out of a clever
         // level), but flag a likely dead end so it isn't shared blind.
         const solve = analyzeSolvability(game.level);
+        if (typeof ugcTrustMeta === 'function') game.level.ugcTrust = ugcTrustMeta(game.level, { solvability: solve });
+        storage.saveCustomLevel(game.level);
         if (solve.status === 'fail') this.toast(`Saved "${game.level.name}" — heads up: ${solve.reason}.`, true);
         else this.toast(`Level "${game.level.name}" saved to LocalStorage.`);
         this.backToMenu();

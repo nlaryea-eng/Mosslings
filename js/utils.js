@@ -254,7 +254,8 @@ function objectSolidAt(objects, x, y, step = 0, switchState = {}) {
 // the level identity, packed for a URL so a friend can watch the exact run.
 // JSON over the same URL-safe base64 the level sharer uses — replays are
 // transient links, so readability/robustness beats a custom binary here.
-const REPLAY_FORMAT_VERSION = 1;
+const REPLAY_FORMAT_VERSION = 2;
+const REPLAY_LEGACY_FORMAT_VERSION = 1;
 const REPLAY_MAX_CHARS = 8000; // keep well under URL limits; reject runaway logs
 
 function serializeReplay(replay) {
@@ -266,7 +267,16 @@ function serializeReplay(replay) {
         else if (a.type === 'rate') o.v = a.value | 0;
         return o;
     });
-    const payload = { v: REPLAY_FORMAT_VERSION, k: replay.kind, a: acts };
+    const fingerprint = replay.fingerprint || (typeof fingerprintForReplay === 'function' ? fingerprintForReplay(replay) : null);
+    if (!fingerprint) return null;
+    const payload = {
+        v: REPLAY_FORMAT_VERSION,
+        app: typeof APP_VERSION !== 'undefined' ? APP_VERSION : 'dev',
+        alg: typeof LEVEL_FINGERPRINT_ALG !== 'undefined' ? LEVEL_FINGERPRINT_ALG : 'unknown',
+        h: fingerprint,
+        k: replay.kind,
+        a: acts,
+    };
     if (replay.kind === 'campaign') payload.l = replay.levelIdx | 0;
     else if (replay.kind === 'daily') payload.d = replay.dailyKey;
     else if (replay.kind === 'custom') payload.c = replay.levelCode || null;
@@ -280,28 +290,63 @@ function serializeReplay(replay) {
     } catch (e) { return null; }
 }
 
-function deserializeReplay(encoded) {
+function parseReplayPayload(encoded) {
     try {
-        if (typeof encoded !== 'string' || !encoded || encoded.length > REPLAY_MAX_CHARS) return null;
+        if (typeof encoded !== 'string' || !encoded || encoded.length > REPLAY_MAX_CHARS) return { ok: false, status: 'malformed', payload: null };
         const json = new TextDecoder().decode(_fromBase64Url(encoded));
         const p = JSON.parse(json);
-        if (!p || p.v !== REPLAY_FORMAT_VERSION || !Array.isArray(p.a)) return null;
-        if (p.k !== 'campaign' && p.k !== 'daily' && p.k !== 'custom') return null;
-        const actions = [];
-        let lastStep = -1;
-        for (const a of p.a) {
-            const step = a.s | 0;
-            if (step < lastStep) return null;           // steps must be non-decreasing
-            lastStep = step;
-            if (a.t === 'assign') actions.push({ step, type: 'assign', id: a.i | 0, skill: a.k | 0 });
-            else if (a.t === 'rate') actions.push({ step, type: 'rate', value: a.v | 0 });
-            else if (a.t === 'nuke') actions.push({ step, type: 'nuke' });
-            else return null;                            // unknown action type
+        if (!p || typeof p !== 'object' || !Array.isArray(p.a)) return { ok: false, status: 'malformed', payload: p || null };
+        if (p.v !== REPLAY_FORMAT_VERSION && p.v !== REPLAY_LEGACY_FORMAT_VERSION) {
+            return { ok: false, status: p.v ? 'unsupported_schema' : 'malformed', payload: p };
         }
-        const out = { kind: p.k, actions };
-        if (p.k === 'campaign') { out.levelIdx = p.l | 0; if (out.levelIdx < 0) return null; }
-        else if (p.k === 'daily') { out.dailyKey = p.d; if (!isValidDailyKey(out.dailyKey)) return null; }
-        else if (p.k === 'custom') { out.level = deserializeLevel(p.c); if (!out.level) return null; }
+        if (p.v === REPLAY_FORMAT_VERSION && !p.h) return { ok: true, status: 'missing_fingerprint', payload: p };
+        return { ok: true, status: p.v === REPLAY_LEGACY_FORMAT_VERSION ? 'legacy' : 'valid', payload: p };
+    } catch (e) { return { ok: false, status: 'malformed', payload: null }; }
+}
+
+function replayFromPayload(p) {
+    if (!p || (p.v !== REPLAY_FORMAT_VERSION && p.v !== REPLAY_LEGACY_FORMAT_VERSION) || !Array.isArray(p.a)) return null;
+    if (p.k !== 'campaign' && p.k !== 'daily' && p.k !== 'custom') return null;
+    const actions = [];
+    let lastStep = -1;
+    for (const a of p.a) {
+        const step = a.s | 0;
+        if (step < lastStep) return null;           // steps must be non-decreasing
+        lastStep = step;
+        if (a.t === 'assign') actions.push({ step, type: 'assign', id: a.i | 0, skill: a.k | 0 });
+        else if (a.t === 'rate') actions.push({ step, type: 'rate', value: a.v | 0 });
+        else if (a.t === 'nuke') actions.push({ step, type: 'nuke' });
+        else return null;                            // unknown action type
+    }
+    const out = {
+        schemaVersion: p.v,
+        legacy: p.v === REPLAY_LEGACY_FORMAT_VERSION,
+        appVersion: p.app || null,
+        alg: p.alg || null,
+        fingerprint: p.h || null,
+        kind: p.k,
+        actions,
+    };
+    if (p.k === 'campaign') {
+        out.levelIdx = p.l | 0;
+        if (out.levelIdx < 0) return null;
+    } else if (p.k === 'daily') {
+        out.dailyKey = p.d;
+        if (!isValidDailyKey(out.dailyKey)) return null;
+    } else if (p.k === 'custom') {
+        out.levelCode = p.c || null;
+        out.level = out.levelCode ? deserializeLevel(out.levelCode) : null;
+    }
+    return out;
+}
+
+function deserializeReplay(encoded) {
+    try {
+        const parsed = parseReplayPayload(encoded);
+        if (!parsed.ok && parsed.status !== 'unsupported_schema') return null;
+        if (!parsed.ok) return null;
+        const out = replayFromPayload(parsed.payload);
+        if (!out) return null;
         return out;
     } catch (e) { return null; }
 }
@@ -500,11 +545,14 @@ if (typeof module !== 'undefined' && module.exports) {
         computeMedals,
         serializeReplay,
         deserializeReplay,
+        parseReplayPayload,
+        replayFromPayload,
         analyzeSolvability,
         validateLevelStructure,
         normalizeLevelObjects,
         objectRectAt,
         objectSolidAt,
         LEVEL_FORMAT_VERSION,
+        REPLAY_FORMAT_VERSION,
     };
 }

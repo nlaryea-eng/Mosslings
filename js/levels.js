@@ -62,7 +62,7 @@ const LEVELS = [
             headlineSkill: SKILLS.CLIMB,
             theme: 'CAVE',
             tut: 'CLIMBER [7] scales any vertical face and keeps the skill forever. Send them up and over.',
-            inventory: { [SKILLS.CLIMB]: 10, [SKILLS.BLOCK]: 2, [SKILLS.FLOAT]: 2 },
+            inventory: { [SKILLS.CLIMB]: 12, [SKILLS.BLOCK]: 2, [SKILLS.FLOAT]: 2 },
             spawn: { x: 100, y: 330 }, exit: { x: 850, y: 200 },
             commands: [
                 { type: T_DIRT, x: 0, y: 400, w: 400, h: 140 },   // valley floor (drop 70 — safe)

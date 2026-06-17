@@ -135,6 +135,16 @@ test('landscape-phone board reclaims chrome height (bigger than the old 457x257 
     expect(toolbarFits, 'toolbar pushed below the viewport').toBeTruthy();
 });
 
+test('portrait phone keeps Daily Ghost card readable without horizontal overflow', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.addInitScript(seedProgress);
+    await page.goto('/');
+    await expect(page.locator('#daily-card')).toBeVisible();
+    await expect(page.locator('#btn-daily')).toHaveText('Play Today\'s Puzzle');
+    const overflows = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
+    expect(overflows, 'page overflows horizontally on a portrait phone').toBeFalsy();
+});
+
 test('first run shows only Play, then the full menu returns once Level 1 is cleared', async ({ page }) => {
     // No seedProgress: a brand-new player (unlocked === 0) gets the stripped menu.
     await page.goto('/');
@@ -192,6 +202,39 @@ test('daily challenge card starts today\'s deterministic level', async ({ page }
     expect(daily.label).toContain(`Daily ${daily.key}`);
 });
 
+test('daily card presents first-run ghost setup clearly', async ({ page }) => {
+    await page.addInitScript(seedProgress);
+    await page.goto('/');
+    await expect(page.locator('#daily-card')).toBeVisible();
+    await expect(page.locator('#btn-daily')).toHaveText('Play Today\'s Puzzle');
+    await expect(page.locator('#daily-meta')).toHaveText('Your first clear becomes today\'s ghost.');
+});
+
+test('daily card presents returning ghost target clearly', async ({ page }) => {
+    await page.addInitScript(seedProgress);
+    await page.goto('/');
+    await page.evaluate(() => {
+        const c = dailyChallengeForDate();
+        const fp = levelFingerprint(LEVELS[c.levelIdx]);
+        storage.save('dailyGhosts', {
+            [c.key]: {
+                key: c.key,
+                saved: 5,
+                total: 10,
+                pct: 50,
+                timeSeconds: 72,
+                skills: 4,
+                completedAt: `${c.key}T00:00:00.000Z`,
+                fingerprint: fp,
+                replay: { code: 'seed', fingerprint: fp },
+            },
+        });
+        ui.buildMenu();
+    });
+    await expect(page.locator('#btn-daily')).toHaveText('Beat Your Ghost');
+    await expect(page.locator('#daily-meta')).toContainText(/Best 50%.*1:12.*4 skills/);
+});
+
 test('daily deep link opens the requested challenge directly', async ({ page }) => {
     await page.goto('/?daily=2026-06-17');
     await expect(page.locator('#gameCanvas')).toBeVisible();
@@ -204,6 +247,51 @@ test('daily deep link opens the requested challenge directly', async ({ page }) 
     expect(daily.mode).toBe('daily');
     expect(daily.key).toBe('2026-06-17');
     expect(daily.idx).toBe(daily.expected);
+});
+
+test('daily result shows ghost delta state after beating a stored ghost', async ({ page }) => {
+    await page.addInitScript(seedProgress);
+    await page.goto('/');
+    await page.evaluate(() => {
+        const c = dailyChallengeForDate();
+        const fp = levelFingerprint(LEVELS[c.levelIdx]);
+        storage.save('dailyGhosts', {
+            [c.key]: {
+                key: c.key,
+                saved: 1,
+                total: LEVELS[c.levelIdx].totalSpawn,
+                pct: 10,
+                timeSeconds: 120,
+                skills: 8,
+                completedAt: `${c.key}T00:00:00.000Z`,
+                fingerprint: fp,
+                replay: { code: 'seed', fingerprint: fp },
+            },
+        });
+        ui.buildMenu();
+    });
+    await page.locator('#btn-daily').click();
+    await page.evaluate(() => {
+        const g = ui.game;
+        g.savedCount = g.level.totalSpawn;
+        g.skillsUsed = 2;
+        g.time = Math.max(0, (g.level.time - 60) * 60);
+        g.deadCount = 0;
+        g.spawnCounter = g.level.totalSpawn;
+        g.mosslings = [];
+        g.endLevel();
+    });
+    await expect(page.locator('#message-overlay')).toBeVisible();
+    await expect(page.locator('.msg-daily-ghost')).toContainText('You beat your ghost.');
+    await expect(page.locator('.msg-daily-ghost')).toContainText(/Saved \+\d+ · Time -\d+:\d{2} · Skills -\d+/);
+});
+
+test('replay fingerprint mismatch refuses playback with clear copy', async ({ page }) => {
+    await page.goto('/');
+    const code = await page.evaluate(() => serializeReplay({ kind: 'campaign', levelIdx: 0, fingerprint: '00000000', actions: [] }));
+    await page.goto(`/?replay=${code}`);
+    await expect(page.locator('#toast')).toContainText('Replay refused: the level changed since this run was recorded.');
+    expect(await page.evaluate(() => ui.game.ghostMode)).toBe(false);
 });
 
 test('result overlay renders and copies a PNG share card', async ({ page }) => {
@@ -375,4 +463,45 @@ test('editor refuses to save a structurally invalid level', async ({ page }) => 
     await expect(page.locator('#start-screen')).toBeHidden();
     const after = await page.evaluate(() => storage.getCustomLevels().length);
     expect(after).toBe(before);
+});
+
+test('custom level import announces heuristic trust copy', async ({ page }) => {
+    await page.goto('/');
+    const code = await page.evaluate(() => serializeLevel({
+        name: 'Trust Import',
+        totalSpawn: 5,
+        reqSaved: 3,
+        time: 120,
+        spawnRate: 60,
+        spawn: { x: 80, y: 360 },
+        exit: { x: 880, y: 420 },
+        inventory: { [SKILLS.BUILD]: 5 },
+        commands: [{ type: T_DIRT, x: 0, y: 420, w: 960, h: 120 }],
+    }));
+    await page.goto(`/?level=${code}`);
+    await expect(page.locator('#toast')).toContainText('Basic checks passed. This is not a proof.');
+});
+
+test('custom gallery shows creator clear trust badge for exact fingerprint', async ({ page }) => {
+    await page.addInitScript(seedProgress);
+    await page.goto('/');
+    await page.evaluate(() => {
+        const lvl = {
+            name: 'Creator Clear',
+            totalSpawn: 5,
+            reqSaved: 3,
+            time: 120,
+            spawnRate: 60,
+            spawn: { x: 80, y: 360 },
+            exit: { x: 880, y: 420 },
+            inventory: { [SKILLS.BUILD]: 5 },
+            commands: [{ type: T_DIRT, x: 0, y: 420, w: 960, h: 120 }],
+        };
+        const fp = levelFingerprint(lvl);
+        lvl.ugcTrust = { creatorClear: { fingerprint: fp, replayCode: 'seed' } };
+        storage.saveCustomLevel(lvl);
+        ui.buildMenu();
+    });
+    await page.locator('#btn-gallery').click();
+    await expect(page.locator('.ugc-badge')).toContainText('Creator Cleared');
 });

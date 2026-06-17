@@ -1047,6 +1047,17 @@ button:focus-visible {
     border: 1px solid rgba(255, 235, 59, 0.22);
     border-radius: 7px;
 }
+.msg-daily-ghost {
+    margin-top: -12px;
+    background: rgba(77, 208, 225, 0.08);
+    border-color: rgba(77, 208, 225, 0.28);
+}
+.msg-daily-ghost b {
+    display: block;
+    color: var(--accent-bright);
+    font-size: 11px;
+}
+.msg-daily-ghost span { display: block; color: #b9ccb4; }
 #msg-progress {
     margin: -4px 0 16px;
     display: flex;
@@ -1153,6 +1164,20 @@ button:focus-visible {
 .gallery-medals .medal { width: 12px; height: 12px; filter: none; }
 .gallery-medals .pixel-icon { width: 12px; height: 12px; }
 .gallery-card .card-meta { font-size: 10px; color: #789078; display: flex; gap: 10px; }
+.ugc-badge {
+    align-self: flex-start;
+    padding: 4px 7px;
+    font-size: 8px;
+    line-height: 1;
+    color: #dfeecf;
+    background: rgba(77, 208, 225, 0.10);
+    border: 1px solid rgba(77, 208, 225, 0.28);
+    border-radius: 5px;
+}
+.ugc-unverified { color: #d6b8b3; background: rgba(239, 83, 80, 0.08); border-color: rgba(239, 83, 80, 0.28); }
+.ugc-structurally_valid { color: #d5c79a; background: rgba(255, 213, 79, 0.08); border-color: rgba(255, 213, 79, 0.25); }
+.ugc-heuristic_plausible { color: #dfeecf; background: rgba(124, 179, 66, 0.10); border-color: rgba(124, 179, 66, 0.30); }
+.ugc-creator_clear_attached, .ugc-replay_verified, .ugc-official_curated { color: #e8f0e8; background: rgba(156, 204, 101, 0.14); border-color: rgba(156, 204, 101, 0.42); }
 .gallery-card .card-btns { display: flex; gap: 6px; }
 .gallery-card button { padding: 4px 8px; font-size: 11px; flex: 1; }
 .btn-delete { color: #aa7d78; border-color: #423130; background: rgba(58, 36, 35, 0.36); }

@@ -192,6 +192,24 @@ Object.assign(ui, {
             result.dailyBest = best;
             result.dailyBestIsNew = isNewBest;
             mWrap.innerHTML += ResultView.dailyBestHtml(result);
+            const replayCode = serializeReplay(game.buildReplay());
+            const fingerprint = typeof levelFingerprint === 'function' ? levelFingerprint(game.level) : null;
+            const candidate = makeDailyGhostRecord({
+                key: result.dailyKey,
+                levelIdx: game.levelIdx,
+                levelName: game.level.name,
+                result,
+                replayCode,
+                fingerprint,
+            });
+            if (candidate) {
+                const previousGhost = storage.getDailyGhost(result.dailyKey);
+                const ghostOutcome = win
+                    ? storage.setDailyGhost(result.dailyKey, candidate)
+                    : (previousGhost ? dailyGhostOutcome(candidate, previousGhost, false) : null);
+                result.dailyGhostOutcome = ghostOutcome;
+                mWrap.innerHTML += dailyGhostResultHtml(ghostOutcome);
+            }
         }
 
         this.lastResult = result;
