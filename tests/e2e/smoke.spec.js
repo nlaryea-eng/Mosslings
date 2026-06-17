@@ -208,6 +208,49 @@ test('result overlay renders and copies a PNG share card', async ({ page }) => {
     expect(errors, `console/page errors:\n${errors.join('\n')}`).toEqual([]);
 });
 
+test('on-screen Rewind button is available in play and steps the sim back', async ({ page }) => {
+    await page.addInitScript(seedProgress);
+    await page.goto('/');
+    await page.locator('#btn-start').click();
+    await expect(page.locator('#btn-rewind')).toBeVisible();
+    // Advance past the 5s rewind window, then PAUSE so the live RAF loop can't
+    // advance simStep between this read and the button click (rewind works while
+    // paused). That makes the step-count assertion deterministic.
+    const before = await page.evaluate(() => {
+        const g = ui.game;
+        for (let i = 0; i < 360; i++) g.update();
+        if (g.state === 'PLAY') g.togglePause();
+        return g.simStep;
+    });
+    expect(before).toBeGreaterThanOrEqual(300);
+    await page.locator('#btn-rewind').click();
+    const after = await page.evaluate(() => ui.game.simStep);
+    expect(after, 'rewind steps the sim ~5s (300 steps) back').toBe(before - 300);
+});
+
+test('a loss leads with Retry (no brag card); a win shows the next-level pull', async ({ page }) => {
+    await page.addInitScript(seedProgress);
+    await page.goto('/');
+    await page.locator('#btn-start').click();
+    // Force a loss: time out with nobody saved.
+    await page.evaluate(() => {
+        const g = ui.game;
+        g.savedCount = 0; g.time = 0; g.spawnCounter = g.level.totalSpawn; g.mosslings = []; g.update();
+    });
+    await expect(page.locator('#message-overlay')).toBeVisible();
+    await expect(page.locator('#result-card-preview')).toBeHidden();      // no brag card on a loss
+    await expect(page.locator('#msg-btn-card')).toBeHidden();
+    await expect(page.locator('#msg-btn-primary')).toHaveText(/^retry$/i);
+    expect(await page.evaluate(() => document.getElementById('message-overlay').classList.contains('has-result-card'))).toBe(false);
+
+    // A campaign win names the next level and emphasizes the button.
+    await page.locator('#msg-btn-primary').click();                       // retry → back into the level
+    await page.evaluate(() => { const g = ui.game; g.savedCount = g.level.totalSpawn; g.endLevel(); });
+    await expect(page.locator('#result-card-preview')).toBeVisible();     // brag card returns on a win
+    await expect(page.locator('#msg-btn-primary')).toContainText('Next');
+    expect(await page.evaluate(() => document.getElementById('msg-btn-primary').classList.contains('primary-next'))).toBe(true);
+});
+
 test('editor refuses to save a structurally invalid level', async ({ page }) => {
     await page.addInitScript(seedProgress);
     await page.goto('/');

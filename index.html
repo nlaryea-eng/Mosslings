@@ -18,7 +18,7 @@
     <meta name="twitter:title" content="Mosslings — a tiny moss-folk puzzle">
     <meta name="twitter:description" content="Guide mindless moss creatures home. Can you save the whole colony?">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect x='4' y='5' width='8' height='9' rx='2' fill='%237cb342'/><rect x='6' y='3' width='2' height='3' fill='%232e7d32'/><rect x='9' y='2' width='2' height='4' fill='%232e7d32'/><rect x='6' y='8' width='2' height='2' fill='white'/><rect x='10' y='8' width='2' height='2' fill='white'/></svg>">
-    <link rel="stylesheet" href="style.css?v=20260617-harden">
+    <link rel="stylesheet" href="style.css?v=20260617-sprint">
 </head>
 <body>
     <div id="game-container">
@@ -50,6 +50,7 @@
                 </div>
                 <div id="header-btns">
                     <button id="btn-ffwd" title="Fast forward [F]" aria-label="Fast forward"></button>
+                    <button id="btn-rewind" title="Rewind 5 seconds [Backspace]" aria-label="Rewind 5 seconds"></button>
                     <button id="btn-pause" title="Pause [Space]" aria-label="Pause"></button>
                     <button id="btn-restart" title="Restart level [R]" aria-label="Restart"></button>
                     <button id="btn-nuke" title="Nuke — detonate everyone (press twice) [N]" aria-label="Nuke"></button>
@@ -185,6 +186,7 @@
             </div>
             <p class="first-run-hint">One rule: guide the moss folk to the portal. We'll show you how.</p>
             <button id="btn-crt" class="toggle-link" aria-pressed="true">CRT effect: On</button>
+            <button id="btn-haptics" class="toggle-link hidden" aria-pressed="true">Vibrate: On</button>
             <details class="controls-disc">
                 <summary>⌨ Controls &amp; keys</summary>
                 <p>1-8 skills · click to assign (works paused) · F fast-forward · Backspace rewind 5s · +/- spawn rate · N nuke twice · R restart · Space pause · C crt · M mute</p>
@@ -204,19 +206,20 @@
         </div>
     </div>
 
-    <script src="js/constants.js?v=20260617-harden"></script>
-    <script src="js/icons.js?v=20260617-harden"></script>
-    <script src="js/utils.js?v=20260617-harden"></script>
-    <script src="js/audio.js?v=20260617-harden"></script>
-    <script src="js/music.js?v=20260617-harden"></script>
-    <script src="js/particles.js?v=20260617-harden"></script>
-    <script src="js/terrain.js?v=20260617-harden"></script>
-    <script src="js/mossling.js?v=20260617-harden"></script>
-    <script src="js/levels.js?v=20260617-harden"></script>
-    <script src="js/daily.js?v=20260617-harden"></script>
-    <script src="js/result-card.js?v=20260617-harden"></script>
-    <script src="js/overlays.js?v=20260617-harden"></script>
-    <script src="js/game.js?v=20260617-harden"></script>
-    <script src="js/ui.js?v=20260617-harden"></script>
+    <script src="js/constants.js?v=20260617-sprint"></script>
+    <script src="js/icons.js?v=20260617-sprint"></script>
+    <script src="js/utils.js?v=20260617-sprint"></script>
+    <script src="js/audio.js?v=20260617-sprint"></script>
+    <script src="js/haptics.js?v=20260617-sprint"></script>
+    <script src="js/music.js?v=20260617-sprint"></script>
+    <script src="js/particles.js?v=20260617-sprint"></script>
+    <script src="js/terrain.js?v=20260617-sprint"></script>
+    <script src="js/mossling.js?v=20260617-sprint"></script>
+    <script src="js/levels.js?v=20260617-sprint"></script>
+    <script src="js/daily.js?v=20260617-sprint"></script>
+    <script src="js/result-card.js?v=20260617-sprint"></script>
+    <script src="js/overlays.js?v=20260617-sprint"></script>
+    <script src="js/game.js?v=20260617-sprint"></script>
+    <script src="js/ui.js?v=20260617-sprint"></script>
 </body>
 </html>
