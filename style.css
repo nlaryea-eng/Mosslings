@@ -466,6 +466,35 @@ button:focus-visible {
     padding: 9px 14px;
     font-size: 10px;
 }
+.daily-target {
+    align-self: flex-start;
+    margin-top: 1px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    font-size: 8px; line-height: 1.3; letter-spacing: 0.3px;
+    color: #ffe9a6;
+    background: rgba(255, 213, 102, 0.10);
+    border: 1px solid rgba(255, 213, 102, 0.30);
+}
+.daily-target.hidden { display: none; }
+/* A live ghost turns the daily into an explicit race — brighter than a plain
+   entry, but still calmer than the Continue hero so it never competes with it. */
+.daily-card.is-race {
+    border-color: rgba(255, 213, 102, 0.46);
+    background:
+        radial-gradient(circle at top right, rgba(255, 213, 102, 0.10), transparent 38%),
+        linear-gradient(180deg, rgba(34, 40, 28, 0.86), rgba(13, 16, 11, 0.9));
+    box-shadow: inset 0 0 0 1px rgba(255, 213, 102, 0.06);
+}
+.daily-card.is-race .daily-kicker { color: var(--gold); }
+.daily-card.is-race .big-btn {
+    color: #1a1404;
+    background: var(--gold);
+    border-color: var(--gold);
+}
+.daily-card.is-race .big-btn:hover {
+    box-shadow: 0 0 18px rgba(255, 213, 102, 0.45);
+}
 
 .chapter-reward-card {
     width: min(760px, 90vw);
@@ -837,7 +866,16 @@ button:focus-visible {
 .world-mastery-chips {
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
     gap: 6px;
+}
+.world-mastery-line {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 8px;
+    line-height: 1.3;
+    letter-spacing: 0.2px;
+    color: #cfe6c2;
 }
 .world-mastery-chip {
     padding: 3px 7px;

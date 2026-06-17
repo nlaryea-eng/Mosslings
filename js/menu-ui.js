@@ -161,17 +161,19 @@ class MenuUI {
     worldMasterySummaryHtml(meta, unlocked = storage.getUnlocked()) {
         const data = this.worldMasteryData(meta, unlocked);
         const locked = unlocked < meta.start;
-        const chips = locked
-            ? `<span class="world-mastery-chip next">Locked - clear earlier worlds</span>`
-            : [
-                `<span class="world-mastery-chip rescue">Rescue ${data.rescue}/${data.levelCount}</span>`,
-                `<span class="world-mastery-chip efficiency">Efficiency ${data.efficiency}/${data.levelCount}</span>`,
-                `<span class="world-mastery-chip speed">Speed ${data.speed}/${data.levelCount}</span>`,
-                `<span class="world-mastery-chip mastered">Mastered ${data.mastered}/${data.levelCount}</span>`,
-                data.nextGoal
-                    ? `<span class="world-mastery-chip next" title="${data.nextGoal.label}">Next: L${data.nextGoal.level} ${data.nextGoal.short}</span>`
-                    : `<span class="world-mastery-chip next complete">World mastered</span>`
-            ].join('');
+        // Progressive disclosure: one compact summary line + the track + a single
+        // next-target chip, instead of four competing rescue/efficiency/speed/
+        // mastered chips fighting for first-glance attention.
+        const medals = data.rescue + data.efficiency + data.speed;
+        const summary = locked
+            ? `<span class="world-mastery-line">Locked - clear earlier worlds</span>`
+            : `<span class="world-mastery-line">Mastered ${data.mastered}/${data.levelCount} · ${medals}/${data.levelCount * 3} medals</span>`;
+        const nextChip = locked
+            ? ''
+            : (data.nextGoal
+                ? `<span class="world-mastery-chip next" title="${data.nextGoal.label}">Next: L${data.nextGoal.level} ${data.nextGoal.short}</span>`
+                : `<span class="world-mastery-chip next complete">World mastered</span>`);
+        const chips = `${summary}${nextChip}`;
         const nodes = data.levels.map((entry) => {
             const cls = ['world-mastery-node', entry.locked ? 'locked' : `m${entry.medalCount}`, entry.mastered ? 'mastered' : ''].filter(Boolean).join(' ');
             const status = entry.locked ? 'Locked' : `${entry.medalCount}/3 mastery`;
@@ -446,6 +448,13 @@ class MenuUI {
         if (next) next.onclick = () => this.moveWorld(1);
         if (carousel) {
             carousel.onkeydown = (e) => this.handleWorldKey(e);
+            // Trackpad/horizontal-wheel intent advances the selected world and lets
+            // scrollIntoView re-center it — a calmer snap than free overflow scroll.
+            carousel.onwheel = (e) => {
+                const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+                const dir = this.wheelNavIntent(e.deltaX, e.deltaY, now);
+                if (dir) { if (e.preventDefault) e.preventDefault(); this.moveWorld(dir); }
+            };
         }
         root.querySelectorAll('.world-card').forEach((card) => {
             card.onclick = () => this.selectWorld(parseInt(card.dataset.world, 10));
@@ -490,6 +499,20 @@ class MenuUI {
         this.game.loadLevel(idx);
     }
 
+    /**
+     * Decide whether a wheel/trackpad gesture should step the carousel. Returns
+     * -1 (prev), 1 (next), or 0 (ignore). Pure enough to unit-test: a dominantly
+     * vertical or tiny gesture is ignored so page scroll still works, and a
+     * cooldown stops one flick from skating across every world at once.
+     */
+    wheelNavIntent(deltaX, deltaY, now) {
+        if (Math.abs(deltaX) <= Math.abs(deltaY)) return 0; // vertical → leave page scroll alone
+        if (Math.abs(deltaX) < 10) return 0;                // too small to be intentional
+        if (this._wheelLock != null && now - this._wheelLock < 260) return 0;
+        this._wheelLock = now;
+        return deltaX > 0 ? 1 : -1;
+    }
+
     handleWorldKey(e) {
         const start = document.getElementById('start-screen');
         if (!start || start.classList.contains('hidden') || start.classList.contains('first-run')) return false;
@@ -528,18 +551,23 @@ class MenuUI {
         if (firstRun || !challenge) return;
 
         const ghost = storage.getDailyGhost(challenge.key);
-        const actualFingerprint = typeof levelFingerprint === 'function' ? levelFingerprint(LEVELS[challenge.levelIdx]) : null;
-        const ghostMatches = !!(ghost && ghost.fingerprint && ghost.fingerprint === actualFingerprint);
-        const ghostMismatch = !!(ghost && !ghostMatches);
-        document.getElementById('daily-title').innerText =
-            `${challenge.key} - L${challenge.levelIdx + 1} ${challenge.levelName}`;
-        document.getElementById('daily-meta').innerText = ghostMismatch
-            ? 'Ghost unavailable: today\'s puzzle changed.'
-            : ghostMatches
-                ? dailyGhostSummaryText(ghost)
-                : 'Your first clear becomes today\'s ghost.';
+        const fingerprint = typeof levelFingerprint === 'function' ? levelFingerprint(LEVELS[challenge.levelIdx]) : null;
+        const model = dailyCardModel({ challenge, ghost, fingerprint });
+        if (!model) { card.classList.add('hidden'); return; }
+
+        // A live ghost turns the card into an explicit race, not just an entry.
+        card.classList.toggle('is-race', model.state === 'race');
+        const kicker = document.getElementById('daily-kicker');
+        if (kicker) kicker.innerText = model.kicker;
+        document.getElementById('daily-title').innerText = model.title;
+        document.getElementById('daily-meta').innerText = model.meta;
+        const target = document.getElementById('daily-target');
+        if (target) {
+            target.innerText = model.target;
+            target.classList.toggle('hidden', !model.target);
+        }
         const btn = document.getElementById('btn-daily');
-        if (btn) btn.innerText = ghostMatches ? 'Beat Your Ghost' : 'Play Today\'s Puzzle';
+        if (btn) btn.innerText = model.cta;
     }
 }
 

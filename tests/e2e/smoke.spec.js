@@ -231,8 +231,16 @@ test('daily card presents returning ghost target clearly', async ({ page }) => {
         });
         ui.buildMenu();
     });
+    // A live, fingerprint-matched ghost flips the card into an explicit race:
+    // gold "Beat the Ghost" framing, a single target chip carrying the numbers,
+    // and a short motivator instead of a duplicate stat line.
+    await expect(page.locator('#daily-card')).toHaveClass(/is-race/);
+    await expect(page.locator('#daily-kicker')).toHaveText('Beat the Ghost');
     await expect(page.locator('#btn-daily')).toHaveText('Beat Your Ghost');
-    await expect(page.locator('#daily-meta')).toContainText(/Best 50%.*1:12.*4 skills/);
+    await expect(page.locator('#daily-target')).toContainText(/Beat 50%.*1:12.*4 skills/);
+    await expect(page.locator('#daily-meta')).toHaveText('Your run is on the clock.');
+    // The race must still defer to the Continue hero as the primary CTA.
+    await expect(page.locator('#continue-hero')).toBeVisible();
 });
 
 test('daily deep link opens the requested challenge directly', async ({ page }) => {

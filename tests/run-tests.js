@@ -63,7 +63,7 @@ global.localStorage = (() => {
 // Delete existing global.ui before loading ui.js to avoid collisions
 delete global.ui;
 
-for (const f of ['constants.js', 'icons.js', 'audio.js', 'haptics.js', 'music.js', 'particles.js', 'terrain.js', 'mossling.js', 'levels.js', 'daily.js', 'utils.js', 'replay-integrity.js', 'daily-ghost.js', 'ugc-trust.js', 'result-card.js', 'overlays.js', 'game.js', 'ui.js', 'menu-ui.js', 'result-ui.js']) {
+for (const f of ['constants.js', 'icons.js', 'audio.js', 'haptics.js', 'music.js', 'particles.js', 'terrain.js', 'mossling.js', 'levels.js', 'daily.js', 'utils.js', 'replay-integrity.js', 'daily-ghost.js', 'storage.js', 'ugc-trust.js', 'result-card.js', 'overlays.js', 'game.js', 'ui.js', 'menu-ui.js', 'result-ui.js']) {
     const file = path.join(__dirname, '..', 'js', f);
     vm.runInThisContext(fs.readFileSync(file, 'utf8'), { filename: file });
 }
@@ -884,6 +884,36 @@ test('daily ghost storage replaces only better records and prunes history', () =
     eq(Object.keys(pruned).length, 14, 'history is bounded');
     assert(pruned['2030-02-20'], 'latest ghost kept');
     assert(!pruned['2030-02-01'], 'oldest ghost pruned');
+});
+test('dailyGhostTargetText frames the stored ghost as a beatable goal', () => {
+    const rec = { saved: 8, total: 10, timeSeconds: 84, skills: 3 };
+    eq(dailyGhostTargetText(rec), 'Beat 80% · 1:24 · 3 skills', 'target line reads as a race goal');
+    eq(dailyGhostTargetText({ saved: 5, total: 5, timeSeconds: 60, skills: 1 }), 'Beat 100% · 1:00 · 1 skill', 'singular skill is grammatical');
+    eq(dailyGhostTargetText(null), '', 'no record yields no target');
+});
+test('dailyCardModel drives the three Beat-the-Ghost menu states', () => {
+    const challenge = { key: '2030-03-01', levelIdx: 2, levelName: 'Cavern Climb' };
+    // No ghost yet — the card invites a first clear, not a race.
+    const fresh = dailyCardModel({ challenge, ghost: null, fingerprint: 'abc' });
+    eq(fresh.state, 'fresh');
+    eq(fresh.kicker, 'Daily Challenge');
+    eq(fresh.cta, "Play Today's Puzzle");
+    eq(fresh.target, '');
+    assert(fresh.title.includes('L3 Cavern Climb'), 'title names the level');
+    // Matching ghost — the card becomes an explicit race with a target chip.
+    const ghost = { fingerprint: 'abc', saved: 9, total: 10, timeSeconds: 72, skills: 4 };
+    const race = dailyCardModel({ challenge, ghost, fingerprint: 'abc' });
+    eq(race.state, 'race');
+    eq(race.kicker, 'Beat the Ghost');
+    eq(race.cta, 'Beat Your Ghost');
+    eq(race.target, 'Beat 90% · 1:12 · 4 skills');
+    assert(race.ghostMatches && !race.ghostMismatch, 'matching fingerprint flags a live ghost');
+    // Stale ghost (puzzle changed) — race copy is suppressed, no false target.
+    const stale = dailyCardModel({ challenge, ghost, fingerprint: 'zzz' });
+    eq(stale.state, 'stale');
+    eq(stale.target, '');
+    assert(stale.ghostMismatch, 'fingerprint drift is reported as a mismatch');
+    eq(dailyCardModel({ challenge: null }), null, 'no challenge yields no card');
 });
 test('daily wins do not unlock campaign progress', () => {
     storage.save('unlocked', 0);
@@ -2047,9 +2077,10 @@ test('world mastery summary counts medals and exposes the next focus', () => {
     eq(data.masteryComplete, false, 'partial world is not flagged complete');
     eq(data.nextGoal.level, 2, 'next focus points at the first incomplete unlocked level');
     const html = ui.worldMasterySummaryHtml(meta, 6);
-    assert(html.includes('Rescue 2/7'), 'row prints rescue progress');
-    assert(html.includes('Mastered 1/7'), 'row prints mastered progress');
-    assert(html.includes('Next: L2'), 'row prints the next focus chip');
+    assert(html.includes('Mastered 1/7'), 'summary line prints mastered progress');
+    assert(html.includes('4/21 medals'), 'summary line compresses every medal into one count');
+    assert(html.includes('Next: L2'), 'a single next-target chip remains');
+    assert(!/Rescue \d|Efficiency \d|Speed \d/.test(html), 'individual rescue/efficiency/speed chips are gone');
 });
 
 test('world mastery summary exposes completion state when every level is mastered', () => {
@@ -2083,6 +2114,16 @@ test('world reward ribbon summarizes world-complete stats and mastery state', ()
     assert(html.includes('World mastered'), 'reward ribbon distinguishes mastery from a plain unlock');
     assert(html.includes('21/21 medals'), 'reward ribbon surfaces aggregate medal totals');
     assert(html.includes('Mastery complete'), 'reward ribbon prints the mastery pill');
+});
+
+test('carousel wheel intent steps horizontally, ignores vertical, and debounces', () => {
+    const menu = ui._ensureMenu();
+    menu._wheelLock = null;
+    eq(menu.wheelNavIntent(40, 4, 1000), 1, 'a rightward flick advances one world');
+    eq(menu.wheelNavIntent(-40, 4, 1400), -1, 'a leftward flick steps back once the cooldown clears');
+    eq(menu.wheelNavIntent(50, 4, 1500), 0, 'a second flick inside the cooldown window is swallowed');
+    eq(menu.wheelNavIntent(4, 60, 3000), 0, 'a dominantly vertical gesture leaves page scroll alone');
+    eq(menu.wheelNavIntent(3, 0, 4000), 0, 'a tiny horizontal jitter is ignored');
 });
 
 test('late-campaign ordering now ramps world 2 and 3 more steadily', () => {

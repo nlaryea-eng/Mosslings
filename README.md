@@ -64,9 +64,12 @@ js/terrain.js     per-pixel collision mask + layered canvas rendering
 js/mossling.js    creature state machine + procedural animated sprite
 js/levels.js      the 21 campaign maps (geometry derived from movement math)
 js/daily.js       deterministic UTC daily challenge selection + scoring helper
+js/daily-ghost.js daily personal-best ghost records + Beat-the-Ghost card model
+js/storage.js     localStorage wrapper (progress, medals, ghosts, streaks)
 js/result-card.js result overlay snippets + deterministic PNG share-card export
 js/overlays.js    render-only readability overlays (danger probe + hints)
 js/game.js        engine: fixed-timestep loop, skills, ghost replay, HUD, juice
+                  (persistence lives in js/storage.js, loaded before it)
 js/ui.js          core DOM bindings, shared UI orchestration, editor, pointer input
 js/menu-ui.js     campaign menu: Continue hero, world carousel, level rail
 js/result-ui.js   result overlay, run summary, sharing, ghost-replay export
@@ -219,7 +222,16 @@ determinism invariant (presentation lives outside `update()`):
 - **World carousel menu** (`js/menu-ui.js`) — after the first clear, the start
   screen becomes a campaign navigator: a dominant selected world, subdued locked
   worlds, compact adjacent progress, and a selected-world detail panel with a
-  level rail, recommended level, mastery chips, and completion/reward state.
+  level rail, recommended level, and completion/reward state. Mastery is
+  progressively disclosed: one compact summary line (`Mastered 2/7 · 13/21
+  medals`), a subtle node track, and a single next-target chip — not a wall of
+  per-medal chips. Navigation supports click/tap, prev/next, keyboard
+  (←/→/Home/End), native touch scroll-snap, and a debounced trackpad-wheel step.
+- **Beat the Ghost (daily)** — when a fingerprint-matched personal ghost exists
+  for today, the daily card becomes an explicit race: gold framing, a single
+  `Beat 90% · 1:12 · 4 skills` target chip, and a "Beat Your Ghost" CTA. It stays
+  calmer than the Continue hero so it never competes with the primary path. The
+  card's fresh/race/stale logic is a pure `dailyCardModel()` in `js/daily-ghost.js`.
 - **Ghost replays** — any run packs into a `?replay=` link off the existing
   action log; opening it plays the run back deterministically (the same machinery
   as rewind), with player input locked out and the viewer's save untouched. This
