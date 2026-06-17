@@ -63,9 +63,38 @@ global.localStorage = (() => {
 // Delete existing global.ui before loading ui.js to avoid collisions
 delete global.ui;
 
-for (const f of ['constants.js', 'icons.js', 'audio.js', 'haptics.js', 'music.js', 'particles.js', 'terrain.js', 'mossling.js', 'levels.js', 'daily.js', 'utils.js', 'replay-integrity.js', 'daily-ghost.js', 'storage.js', 'menu-stage.js', 'ugc-trust.js', 'result-card.js', 'overlays.js', 'game.js', 'ghost-race.js', 'ui.js', 'menu-ui.js', 'result-ui.js']) {
+const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+const allScriptFiles = [...html.matchAll(/<script\s+src="js\/([^"?]+)(?:\?[^"]*)?"/g)]
+    .map(m => m[1]);
+assertScriptOrder(allScriptFiles);
+const scriptFiles = allScriptFiles.filter(f => f !== 'main.js');
+for (const f of scriptFiles) {
     const file = path.join(__dirname, '..', 'js', f);
     vm.runInThisContext(fs.readFileSync(file, 'utf8'), { filename: file });
+}
+function assertScriptOrder(files) {
+    if (!files.length) throw new Error('No runtime scripts found in index.html');
+    const mustPrecede = (a, b) => {
+        const ia = files.indexOf(a), ib = files.indexOf(b);
+        if (ia < 0 || ib < 0 || ia > ib) throw new Error(`Bad script order: ${a} must load before ${b}`);
+    };
+    mustPrecede('constants.js', 'utils.js');
+    mustPrecede('utils.js', 'daily.js');
+    mustPrecede('game.js', 'game-objects.js');
+    mustPrecede('game.js', 'game-render.js');
+    mustPrecede('game.js', 'game-hud.js');
+    mustPrecede('game-objects.js', 'main.js');
+    mustPrecede('game-render.js', 'main.js');
+    mustPrecede('game-hud.js', 'main.js');
+    mustPrecede('game.js', 'ui.js');
+    mustPrecede('ui.js', 'share-ui.js');
+    mustPrecede('ui.js', 'editor-ui.js');
+    mustPrecede('ui.js', 'menu-ui.js');
+    mustPrecede('ui.js', 'result-ui.js');
+    mustPrecede('share-ui.js', 'main.js');
+    mustPrecede('editor-ui.js', 'main.js');
+    mustPrecede('menu-ui.js', 'main.js');
+    mustPrecede('result-ui.js', 'main.js');
 }
 
 // --- Tiny test harness -------------------------------------------------------
@@ -758,38 +787,33 @@ const TEST_PACK = {
     V01_CODE: 'AQpUZXN0IExldmVsAQUFAWQAOAAKAAEAZADQAGQA8AAEBAQEBAQEBAQEBAUAF0AAZADQAKAAKAA'
 };
 
-function validateLevelStructure(lvl) {
-    if (!lvl.spawn || !lvl.exit) return 'Spawn or Exit missing';
-    const terrain = new Terrain(W, H);
-    terrain.clear();
-    for (const c of lvl.commands) terrain.drawRect(c.x, c.y, c.w, c.h, c.type);
-    const objects = normalizeLevelObjects(lvl.objects || []);
-    
-    const drop = dropBelow(terrain, lvl.spawn.x, lvl.spawn.y);
-    const objectDrop = (() => {
-        for (let yy = Math.floor(lvl.spawn.y); yy < H; yy++) {
-            if (objectSolidAt(objects, lvl.spawn.x, yy + 1)) return yy - lvl.spawn.y;
-        }
-        return Infinity;
-    })();
-    const bestDrop = Math.min(drop, objectDrop);
-    if (bestDrop === Infinity) return 'Nothing under the spawn';
-    if (bestDrop >= PHYS.FATAL_FALL) return 'Spawn drop is too high';
-    
-    const exitDrop = dropBelow(terrain, lvl.exit.x, lvl.exit.y - 4);
-    if (exitDrop > 6) return 'Exit must be placed on solid ground';
-    
-    return null;
-}
 
 test('validateLevelStructure identifies easy level as valid', () => {
     eq(validateLevelStructure(TEST_PACK.EASY), null);
 });
 test('validateLevelStructure identifies fatal spawn drop', () => {
-    eq(validateLevelStructure(TEST_PACK.FATAL_SPAWN), 'Spawn drop is too high');
+    eq(validateLevelStructure(TEST_PACK.FATAL_SPAWN), 'Spawn is too high above the ground.');
 });
 test('validateLevelStructure identifies floating exit', () => {
-    eq(validateLevelStructure(TEST_PACK.FLOATING_EXIT), 'Exit must be placed on solid ground');
+    eq(validateLevelStructure(TEST_PACK.FLOATING_EXIT), 'Exit must be placed on solid ground.');
+});
+
+test('validateLevelStructure rejects zero-spawn zero-time shared level', () => {
+    const lvl = {
+        name: 'Degenerate', totalSpawn: 0, reqSaved: 0, time: 0, spawnRate: 60,
+        spawn: { x: 100, y: 190 }, exit: { x: 200, y: 190 },
+        inventory: { [SKILLS.BUILD]: 1 },
+        commands: [{ type: T_DIRT, x: 0, y: 200, w: 960, h: 20 }]
+    };
+    eq(validateLevelStructure(lvl), 'Total mosslings must be between 1 and 255.');
+});
+test('validateLevelStructure rejects empty inventory', () => {
+    const lvl = { ...TEST_PACK.EASY, inventory: {} };
+    eq(validateLevelStructure(lvl), 'Level needs at least one usable skill.');
+});
+test('validateLevelStructure rejects empty terrain command list', () => {
+    const lvl = { ...TEST_PACK.EASY, commands: [] };
+    eq(validateLevelStructure(lvl), 'Level needs at least one terrain command.');
 });
 test('v0x01 shared links continue to decode correctly', () => {
     const lvl = {
@@ -1726,6 +1750,17 @@ test('save streak is deterministic and rebuilds exactly on rewind', () => {
     for (let i = 0; i < 400; i++) { a.update(); b.update(); }
     eq(a.saveStreak, b.saveStreak, 'streak diverged between identical runs');
     eq(a.lastSaveStep, b.lastSaveStep, 'lastSaveStep diverged');
+});
+test('rescue popups are render-only and expire on the draw clock', () => {
+    const g = new Game();
+    g.loadLevel(0);
+    g.tick = 10;
+    g.spawnSavePopup({ x: 120, y: 180 }, 3, false);
+    eq(g.savePopups.length, 1, 'popup should be queued');
+    eq(g.actionLog.length, 0, 'popup should not write gameplay input');
+    g.tick = 100;
+    g.drawSavePopups(makeCtx());
+    eq(g.savePopups.length, 0, 'expired popup should be culled by render pass');
 });
 test('blink is render-only: update() never touches it, updateCosmetics() drives it deterministically', () => {
     const m = new Mossling(100, 100, 7);

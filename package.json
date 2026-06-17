@@ -9,6 +9,6 @@
     "bump": "node tools/bump-version.js"
   },
   "devDependencies": {
-    "@playwright/test": "^1.48.0"
+    "@playwright/test": "1.61.0"
   }
 }

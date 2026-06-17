@@ -118,6 +118,7 @@ Object.assign(ui, {
         // attempt is immediate, not gated behind a "FAILED RUN" brag card.
         o.classList.toggle('has-result-card', win);
         if (typeof music !== 'undefined' && music) music.duck(true);
+        if (typeof music !== 'undefined' && music && music.setState) music.setState(win ? 'celebration' : 'tense');
         document.getElementById('msg-title').innerText = title;
         document.getElementById('msg-title').className = win ? 'win' : 'fail';
         document.getElementById('msg-text').innerText = text;
@@ -226,10 +227,13 @@ Object.assign(ui, {
 
         // The shareable PNG brag card is a win-only flourish; demote it on a loss.
         document.getElementById('msg-btn-card').classList.toggle('hidden', !win);
-        // "Copy replay" shares the deterministic action log of THIS run. Offer it
+        // Beat-my-run shares the deterministic action log of THIS run. Offer it
         // for any run the player actually drove (hidden while watching a ghost).
         const replayBtn = document.getElementById('msg-btn-replay');
-        if (replayBtn) replayBtn.classList.toggle('hidden', !!game.ghostMode);
+        if (replayBtn) {
+            replayBtn.innerText = win ? 'Beat my run' : 'Copy replay';
+            replayBtn.classList.toggle('hidden', !!game.ghostMode);
+        }
 
         // Forward pull: on a campaign win, name the reward you're heading to.
         const primary = document.getElementById('msg-btn-primary');
@@ -304,7 +308,7 @@ Object.assign(ui, {
         }
         const url = this.currentShareUrl();
         url.searchParams.set('replay', code);
-        this.copyText(url.toString(), 'Replay link copied — share it to show your run!');
+        this.copyText(url.toString(), 'Beat-my-run link copied!');
     },
     resultUrlFor(r) {
         if (!r || location.protocol === 'file:') return null;

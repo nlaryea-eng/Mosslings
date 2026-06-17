@@ -447,7 +447,7 @@ class Mossling {
         if (this.isExploding) {
             const sec = Math.ceil(this.explodeTimer / 60);
             ctx.fillStyle = this.explodeTimer % 20 < 10 ? '#ffeb3b' : '#ff5722';
-            ctx.font = 'bold 9px monospace';
+            ctx.font = 'bold 9px "Moss Pixel", "Courier New", monospace';
             ctx.textAlign = 'center';
             ctx.fillText(String(sec), Math.round(this.x), Math.round(this.y) - 16);
             ctx.textAlign = 'left';
@@ -571,7 +571,7 @@ class Mossling {
                 ctx.fillStyle = light;
                 ctx.fillRect(-6, by + 1, 1, 1); ctx.fillRect(5, by + 1, 1, 1);
                 ctx.fillStyle = '#fff';
-                ctx.font = '8px monospace';
+                ctx.font = '8px "Moss Pixel", "Courier New", monospace';
                 ctx.fillText('?', 4, by - 4);
                 break;
             }

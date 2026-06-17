@@ -260,6 +260,7 @@ class Terrain {
         this.paintHills(ctx, h * 0.62, 60, hills[0], 11);
         this.paintHills(ctx, h * 0.74, 80, hills[1], 7);
         this.paintHills(ctx, h * 0.88, 70, hills[2], 5);
+        this.paintBackdropDetails(ctx, theme);
         
         // ground mist
         const mist = ctx.createLinearGradient(0, h - 110, 0, h);
@@ -297,5 +298,65 @@ class Terrain {
             ctx.closePath();
             ctx.fill();
         }
+    }
+    paintBackdropDetails(ctx, theme) {
+        const w = this.w, h = this.h;
+        ctx.save();
+        if (theme === 'VOLCANO') {
+            const glow = ctx.createLinearGradient(0, h * 0.55, 0, h);
+            glow.addColorStop(0, 'rgba(255,112,67,0)');
+            glow.addColorStop(1, 'rgba(255,112,67,0.18)');
+            ctx.fillStyle = glow;
+            ctx.fillRect(0, h * 0.45, w, h * 0.55);
+            ctx.fillStyle = 'rgba(255,193,7,0.28)';
+            for (let x = 90; x < w; x += 190) {
+                ctx.fillRect(x, h * 0.74 + ((x / 19) % 18), 54, 2);
+                ctx.fillRect(x + 8, h * 0.74 + 7 + ((x / 23) % 12), 32, 2);
+            }
+            ctx.fillStyle = 'rgba(255,138,80,0.42)';
+            for (let i = 0; i < 34; i++) {
+                const x = (i * 137) % w;
+                const y = 42 + ((i * 83) % Math.floor(h * 0.54));
+                ctx.fillRect(x, y, i % 5 === 0 ? 2 : 1, 1);
+            }
+        } else if (theme === 'CAVE') {
+            for (let x = 70; x < w; x += 130) {
+                const y = h * 0.62 + ((x / 13) % 42);
+                const size = 22 + ((x / 17) % 18);
+                const g = ctx.createLinearGradient(x, y - size, x, y + size);
+                g.addColorStop(0, 'rgba(159,226,255,0.30)');
+                g.addColorStop(1, 'rgba(85,70,170,0.05)');
+                ctx.fillStyle = g;
+                ctx.beginPath();
+                ctx.moveTo(x, y - size);
+                ctx.lineTo(x - size * 0.28, y + size * 0.2);
+                ctx.lineTo(x + size * 0.2, y + size * 0.1);
+                ctx.closePath();
+                ctx.fill();
+            }
+            ctx.fillStyle = 'rgba(159,226,255,0.22)';
+            for (let i = 0; i < 24; i++) ctx.fillRect((i * 211) % w, 64 + ((i * 47) % 230), 1, 1);
+        } else {
+            const creek = ctx.createLinearGradient(0, h * 0.78, w, h * 0.88);
+            creek.addColorStop(0, 'rgba(77,208,225,0.02)');
+            creek.addColorStop(0.45, 'rgba(77,208,225,0.16)');
+            creek.addColorStop(1, 'rgba(255,235,160,0.04)');
+            ctx.fillStyle = creek;
+            ctx.beginPath();
+            ctx.moveTo(0, h * 0.82);
+            for (let x = 0; x <= w; x += 40) ctx.lineTo(x, h * 0.81 + Math.sin(x * 0.018) * 9);
+            ctx.lineTo(w, h * 0.92);
+            ctx.lineTo(0, h * 0.93);
+            ctx.closePath();
+            ctx.fill();
+            ctx.fillStyle = 'rgba(255,235,120,0.35)';
+            for (let i = 0; i < 30; i++) {
+                const x = (i * 173) % w;
+                const y = 118 + ((i * 61) % Math.floor(h * 0.5));
+                ctx.fillRect(x, y, 1, 1);
+                if (i % 7 === 0) ctx.fillRect(x + 1, y, 1, 1);
+            }
+        }
+        ctx.restore();
     }
 }

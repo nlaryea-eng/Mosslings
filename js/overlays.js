@@ -73,7 +73,7 @@ function drawDangerOverlay(game, ctx) {
 
     const t = game.tick * 0.13;
     ctx.save();
-    ctx.font = 'bold 11px monospace';
+    ctx.font = 'bold 11px "Moss Pixel", "Courier New", monospace';
     ctx.textAlign = 'center';
     for (const h of hints) {
         if (!h.m.alive()) continue;

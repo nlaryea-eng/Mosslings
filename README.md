@@ -36,9 +36,9 @@ assign (with a wider assist radius for fingers). The HUD and toolbar reflow for
 phones, and the board is bounded by the viewport height so the toolbar is never
 pushed off-screen. Best played in landscape.
 
-**Daily Challenge:** once Level 1 is cleared, the menu shows a UTC daily puzzle.
+**Daily Challenge:** once Grove 2 is reached, the menu shows a UTC daily puzzle.
 It is deterministic and static-hostable (`?daily=YYYY-MM-DD`), with a local best
-stored per date. There is no hosted leaderboard.
+and personal ghost stored per date. There is no hosted leaderboard.
 
 **Skills:** Blocker · Builder (12 rising bricks) · Basher (horizontal tunnel) ·
 Miner (1:1 diagonal stairway) · Digger (vertical shaft) · Floater (permanent
@@ -69,21 +69,25 @@ js/storage.js     localStorage wrapper (progress, medals, ghosts, streaks, tenur
 js/menu-stage.js  pure onboarding stage model + bounded carousel window
 js/result-card.js result overlay snippets + deterministic PNG share-card export
 js/overlays.js    render-only readability overlays (danger probe + hints)
-js/game.js        engine: fixed-timestep loop, skills, ghost replay, HUD, juice
-                  (persistence lives in js/storage.js, loaded before it)
+js/game.js        engine: fixed-timestep loop, level lifecycle, skills, replay
+js/game-objects.js platforms, switches, gates, and rider carry logic
+js/game-render.js render-only props, portal/hatch, skill previews, cursor cues
+js/game-hud.js    HUD sync and spawn-rate controls
 js/ghost-race.js  live Beat-the-Ghost phantom: precompute + render-only draw
-js/ui.js          core DOM bindings, shared UI orchestration, editor, pointer input
+js/ui.js          core DOM bindings, shared UI orchestration, pointer input
+js/share-ui.js    shared-level, daily, replay import/export helpers
+js/editor-ui.js   level-editor state, tools, settings, and editor overlay
 js/menu-ui.js     campaign menu: Continue hero, grove carousel, patch rail
 js/result-ui.js   result overlay, run summary, sharing, ghost-replay export
 js/main.js        bootstrap (constructs Game + ui, starts the loop), loads last
 ```
 
-The `ui` object is split across `ui.js` (core orchestration/editor/input),
-`menu-ui.js` (campaign menu + grove carousel), and `result-ui.js` (result
-overlay + sharing). `menu-ui.js` is instantiated as `ui.menu`; `ui.js` keeps
-small wrapper methods for the public `ui.*` calls that existing game/result code
-uses. `result-ui.js` still mixes methods onto the same object via
-`Object.assign`, so call sites stay stable while the monolith keeps shrinking.
+The `Game` prototype is split across the engine core plus focused object,
+render, and HUD modules. The shared `ui` object is split across `ui.js` (core
+orchestration/input), `share-ui.js`, `editor-ui.js`, `menu-ui.js`, and
+`result-ui.js`. `menu-ui.js` is instantiated as `ui.menu`; the others mix
+methods onto the same object via `Object.assign`, so public `ui.*` call sites
+stay stable while the monolith keeps shrinking.
 
 Design principles:
 
@@ -111,12 +115,12 @@ Design principles:
 ## Tests
 
 ```
-node tests/run-tests.js          # 175 unit tests, no framework (stubbed DOM)
-npm install && npm run test:e2e  # 17 Playwright browser smoke tests (dev-only)
+node tests/run-tests.js          # unit tests, no framework (stubbed DOM)
+npm ci && npm run test:e2e       # Playwright browser smoke tests (dev-only)
 ```
 
-The unit suite (175 tests, no test framework needed) loads the real game scripts
-into Node with stubbed canvas/DOM. A separate **Playwright** smoke suite
+The unit suite prints the exact current test count and loads the real game scripts
+from `index.html` into Node with stubbed canvas/DOM. A separate **Playwright** smoke suite
 (`tests/e2e/`) drives a real Chromium against the static site to catch
 boot/layout regressions (grove-carousel overflow, first-run menu gating,
 patch-rail selection, play-next flow) and is gated in CI before deploy. The unit

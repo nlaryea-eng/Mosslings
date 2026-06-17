@@ -14,6 +14,8 @@
     --accent: #7cb342;
     --accent-bright: #9ccc65;
     --cyan: #4dd0e1;
+    --amber: #ffd166;
+    --violet: #7e6be8;
     --danger: #ef5350;
     --gold: #ffeb3b;
     --font: 'Segoe UI', system-ui, sans-serif;
@@ -28,7 +30,10 @@
 * { box-sizing: border-box; user-select: none; }
 body {
     margin: 0; padding: 0;
-    background: radial-gradient(ellipse at 50% 40%, #101822 0%, var(--bg) 70%);
+    background:
+        radial-gradient(circle at 20% 12%, rgba(77, 208, 225, 0.11), transparent 28%),
+        radial-gradient(circle at 82% 18%, rgba(255, 209, 102, 0.10), transparent 25%),
+        radial-gradient(ellipse at 50% 42%, #101822 0%, var(--bg) 72%);
     /* A single flex child centred with margin:auto — centres on roomy screens
        yet keeps the top reachable (no clipping) and scrolls when the viewport
        is too short for the full HUD + board + toolbar. */
@@ -43,8 +48,11 @@ body {
     margin: auto;                 /* centres; auto margins never clip the top */
     width: min(960px, 100vw);     /* board scales with width; height follows 16:9 */
     background: #0a0f0c;
-    box-shadow: 0 0 60px rgba(124, 179, 66, 0.12), 0 0 120px rgba(0, 0, 0, 0.9);
-    border: 1px solid #1d2a20;
+    box-shadow:
+        0 0 42px rgba(77, 208, 225, 0.09),
+        0 0 64px rgba(124, 179, 66, 0.12),
+        0 0 120px rgba(0, 0, 0, 0.9);
+    border: 1px solid #223324;
     border-radius: 8px;
     overflow: hidden;
     touch-action: manipulation;
@@ -140,7 +148,9 @@ canvas {
     flex: 0 0 auto;
     display: flex; align-items: center; gap: 12px;
     padding: 7px 14px;
-    background: linear-gradient(180deg, #121a14, #0d130e);
+    background:
+        linear-gradient(90deg, rgba(77, 208, 225, 0.08), transparent 28%, rgba(255, 209, 102, 0.06)),
+        linear-gradient(180deg, #121a14, #0d130e);
     border-bottom: 1px solid var(--border);
     pointer-events: auto;
 }
@@ -160,7 +170,9 @@ canvas {
 .hud-chip {
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     line-height: 1; min-width: 56px; padding: 4px 12px;
-    background: rgba(124, 179, 66, 0.06);
+    background:
+        linear-gradient(180deg, rgba(255,255,255,0.025), rgba(0,0,0,0.04)),
+        rgba(124, 179, 66, 0.06);
     border: 1px solid var(--border); border-radius: 8px;
 }
 .chip-label { font-size: 9px; letter-spacing: 0; text-transform: uppercase; color: #7e947e; }
@@ -178,7 +190,8 @@ canvas {
 /* Rate stepper */
 .rate-ctl {
     display: flex; align-items: center; gap: 6px;
-    padding: 3px 8px; background: rgba(124, 179, 66, 0.06);
+    padding: 3px 8px;
+    background: rgba(77, 208, 225, 0.055);
     border: 1px solid var(--border); border-radius: 8px;
 }
 .rate-ctl .chip-label { margin-right: 1px; }
@@ -204,7 +217,10 @@ canvas {
 }
 
 button {
-    background: rgba(34, 44, 38, 0.9); color: var(--text);
+    background:
+        linear-gradient(180deg, rgba(255,255,255,0.04), rgba(0,0,0,0.08)),
+        rgba(34, 44, 38, 0.9);
+    color: var(--text);
     border: 1px solid var(--border); border-radius: 4px;
     padding: 4px 10px; cursor: pointer;
     font-family: var(--pixel-font); font-weight: bold; font-size: 13px;
@@ -288,7 +304,10 @@ button:focus-visible {
 #toolbar {
     font-family: var(--pixel-font);
     flex: 0 0 auto;
-    background: linear-gradient(180deg, #0d130e, #0a0f0b);
+    background:
+        radial-gradient(circle at 18% 0%, rgba(77, 208, 225, 0.10), transparent 24%),
+        radial-gradient(circle at 84% 0%, rgba(255, 209, 102, 0.08), transparent 24%),
+        linear-gradient(180deg, #0d130e, #0a0f0b);
     padding: 9px 12px;
     display: flex; justify-content: center; gap: 8px;
     border-top: 1px solid var(--border);
@@ -298,7 +317,9 @@ button:focus-visible {
     width: 76px; height: 62px;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     gap: 1px; position: relative;
-    background: rgba(20, 28, 22, 0.95);
+    background:
+        linear-gradient(180deg, rgba(255,255,255,0.035), rgba(0,0,0,0.08)),
+        rgba(20, 28, 22, 0.95);
     border: 2px solid #28342a; border-radius: 6px;
     padding: 2px;
 }
@@ -309,8 +330,14 @@ button:focus-visible {
 .skill-btn .label { font-size: 9px; color: #8ba88b; text-transform: uppercase; letter-spacing: 0; }
 .skill-btn .count { color: #fff; font-size: 15px; line-height: 15px; font-family: var(--pixel-font); }
 .skill-btn.active {
-    background: #2c4222; border-color: var(--accent);
-    box-shadow: 0 0 14px rgba(124, 179, 66, 0.45), inset 0 0 8px rgba(124, 179, 66, 0.2);
+    background:
+        linear-gradient(180deg, rgba(255, 209, 102, 0.14), rgba(124, 179, 66, 0.16)),
+        #2c4222;
+    border-color: var(--amber);
+    box-shadow:
+        0 0 14px rgba(255, 209, 102, 0.24),
+        0 0 18px rgba(124, 179, 66, 0.36),
+        inset 0 0 8px rgba(124, 179, 66, 0.2);
 }
 .skill-btn.active .count { color: var(--gold); }
 /* Disabled = clearly inactive but still legible: keep partial color and enough
@@ -327,8 +354,10 @@ button:focus-visible {
     font-family: var(--pixel-font);
     position: absolute; inset: 0;
     background:
-        radial-gradient(ellipse at 50% 30%, rgba(30, 48, 32, 0.55) 0%, rgba(5, 8, 6, 0) 60%),
-        rgba(6, 9, 7, 0.93);
+        radial-gradient(circle at 18% 18%, rgba(77, 208, 225, 0.10), transparent 28%),
+        radial-gradient(circle at 82% 16%, rgba(255, 209, 102, 0.09), transparent 24%),
+        radial-gradient(ellipse at 50% 30%, rgba(30, 48, 32, 0.58) 0%, rgba(5, 8, 6, 0) 62%),
+        rgba(3, 6, 5, 0.992);
     display: flex; flex-direction: column; justify-content: center; align-items: center;
     pointer-events: auto; z-index: 100;
 }
@@ -410,7 +439,7 @@ button:focus-visible {
     animation: playPulse 2s ease-in-out infinite;
 }
 @keyframes playPulse {
-    50% { box-shadow: 0 0 30px rgba(124, 179, 66, 0.6); transform: scale(1.04); }
+    50% { box-shadow: 0 0 30px rgba(124, 179, 66, 0.6), 0 0 18px rgba(255, 209, 102, 0.20); }
 }
 
 #start-btns { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
@@ -1265,6 +1294,16 @@ button:focus-visible {
     .daily-card { width: 100%; margin-bottom: 0; }
     .grove-reward-card { width: 92vw; padding: 12px 13px; margin-bottom: 12px; }
     .grove-menu { width: 92vw; gap: 9px; margin-bottom: 20px; }
+    #continue-hero { order: 1; }
+    #grove-menu { order: 2; }
+    #menu-secondary-actions { order: 3; }
+    #grove-reward-card { order: 4; }
+    #start-btns { order: 5; }
+    .first-run-hint { order: 6; }
+    #btn-crt { order: 7; }
+    #btn-haptics { order: 8; }
+    .controls-disc { order: 9; }
+    .app-version { order: 10; }
     .grove-carousel-shell { grid-template-columns: 30px minmax(0, 1fr) 30px; gap: 6px; }
     .grove-nav-btn { width: 30px; height: 76px; }
     .grove-card { flex-basis: 168px; }
@@ -1339,6 +1378,9 @@ button:focus-visible {
     #hud-medals { display: none; }       /* medal pace is a luxury on a tiny board */
     #toolbar { padding: 3px 6px; }
     .skill-btn { height: 44px; }
+    .skill-btn .label { display: none; }
+    .skill-btn .count { font-size: 13px; line-height: 13px; }
+    .skill-btn .icon, .skill-btn .pixel-icon { width: 18px; height: 18px; }
     /* The tutorial card must not eat the board it is teaching on. */
     #tutorial-bar { top: 4px; padding: 4px 10px 4px 26px; font-size: 11px; max-width: 90%; }
     #tutorial-bar::before { left: 9px; width: 6px; height: 6px; }

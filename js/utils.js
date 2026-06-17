@@ -357,14 +357,43 @@ function deserializeReplay(encoded) {
  */
 function validateLevelStructure(lvl) {
     if (!lvl || !lvl.spawn || !lvl.exit) return 'Level data is damaged.';
-    
-    // We need a temporary terrain to check drops
+
+    const totalSpawn = lvl.totalSpawn | 0;
+    const reqSaved = lvl.reqSaved | 0;
+    const time = lvl.time | 0;
+    const spawnRate = lvl.spawnRate | 0;
+    if (totalSpawn < 1 || totalSpawn > 255) return 'Total mosslings must be between 1 and 255.';
+    if (reqSaved < 1 || reqSaved > totalSpawn) return 'Required saved must be between 1 and total mosslings.';
+    if (time < 10 || time > 999) return 'Time limit must be between 10 and 999 seconds.';
+    if (spawnRate < RATE_MIN || spawnRate > RATE_MAX) return 'Spawn rate is outside the allowed range.';
+    if (!Array.isArray(lvl.commands) || lvl.commands.length === 0) return 'Level needs at least one terrain command.';
+    if (lvl.commands.length > 255) return 'Level has too many terrain commands.';
+
+    const inBounds = (p) => p && Number.isFinite(p.x) && Number.isFinite(p.y) && p.x >= 0 && p.x < W && p.y >= 0 && p.y < H;
+    if (!inBounds(lvl.spawn)) return 'Spawn must be inside the play field.';
+    if (!inBounds(lvl.exit)) return 'Exit must be inside the play field.';
+
+    const inv = lvl.inventory || {};
+    let hasSkill = false;
+    for (let s = 0; s < 8; s++) {
+        const count = inv[s] | 0;
+        if (count < 0 || count > 99) return 'Inventory counts must be between 0 and 99.';
+        if (count > 0) hasSkill = true;
+    }
+    if (!hasSkill) return 'Level needs at least one usable skill.';
+
+    // We need a temporary terrain to check drops.
     const terrain = new Terrain(W, H);
     terrain.clear();
-    for (const c of (lvl.commands || [])) terrain.drawRect(c.x, c.y, c.w, c.h, c.type);
+    for (const c of lvl.commands) {
+        if (!c || c.type < T_AIR || c.type > T_ONEWAY_L) return 'Terrain command is damaged.';
+        if (c.w <= 0 || c.h <= 0) return 'Terrain command has invalid size.';
+        terrain.drawRect(c.x, c.y, c.w, c.h, c.type);
+    }
     const objects = normalizeLevelObjects(lvl.objects || []);
-    
-    // Helper: find drop distance below a point
+    if (objects.length > SHARE_MAX_OBJECTS) return 'Level has too many objects.';
+
+    // Helper: find drop distance below a point.
     const dropBelow = (x, y) => {
         for (let yy = Math.floor(y); yy < H; yy++) {
             const t = terrain.get(x, yy + 1);
@@ -376,11 +405,9 @@ function validateLevelStructure(lvl) {
     const drop = dropBelow(lvl.spawn.x, lvl.spawn.y);
     if (drop === Infinity) return 'No solid ground under the spawn.';
     if (drop >= PHYS.FATAL_FALL) return 'Spawn is too high above the ground.';
-    
+
     const exitDrop = dropBelow(lvl.exit.x, lvl.exit.y - 4);
-    if (exitDrop > 6) return 'Exit needs to be placed on solid ground.';
-    
-    if (lvl.reqSaved > lvl.totalSpawn) return 'Required saved exceeds total mosslings.';
+    if (exitDrop > 6) return 'Exit must be placed on solid ground.';
 
     return null;
 }
