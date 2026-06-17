@@ -60,14 +60,20 @@ js/music.js       generative ambient score (per-theme pad/bass/melody)
 js/particles.js   particle engine + ambient spore drift
 js/terrain.js     per-pixel collision mask + layered canvas rendering
 js/mossling.js    creature state machine + procedural animated sprite
-js/levels.js      the 9 campaign maps (geometry derived from movement math)
+js/levels.js      the 21 campaign maps (geometry derived from movement math)
 js/daily.js       deterministic UTC daily challenge selection + scoring helper
 js/result-card.js result overlay snippets + deterministic PNG share-card export
 js/overlays.js    render-only readability overlays (danger probe + hints)
-js/game.js        engine: fixed-timestep loop, skills, HUD, juice, effects
-js/ui.js          DOM bindings, menu, overlays, level editor, pointer input
-js/utils.js       level (de)serialization for sharing + pure medal logic
+js/game.js        engine: fixed-timestep loop, skills, ghost replay, HUD, juice
+js/ui.js          core DOM bindings, menu, level editor, pointer input
+js/result-ui.js   result overlay, run summary, sharing, ghost-replay export
+js/utils.js       level + replay (de)serialization, solvability check, medal logic
+js/main.js        bootstrap (constructs Game + ui, starts the loop), loads last
 ```
+
+The `ui` object is split across `ui.js` (core/menu/editor) and `result-ui.js`
+(the result overlay + sharing), which mixes its methods onto the same object via
+`Object.assign` — so call sites stay stable while the monolith keeps shrinking.
 
 Design principles:
 
@@ -95,11 +101,11 @@ Design principles:
 ## Tests
 
 ```
-node tests/run-tests.js          # 121 unit tests, no framework (stubbed DOM)
+node tests/run-tests.js          # 175 unit tests, no framework (stubbed DOM)
 npm install && npm run test:e2e  # 17 Playwright browser smoke tests (dev-only)
 ```
 
-The unit suite (121 tests, no test framework needed) loads the real game scripts
+The unit suite (175 tests, no test framework needed) loads the real game scripts
 into Node with stubbed canvas/DOM. A separate **Playwright** smoke suite
 (`tests/e2e/`) drives a real Chromium against the static site to catch
 boot/layout regressions (e.g. level-select card overflow) and is gated in CI
@@ -140,6 +146,15 @@ before deploy. The unit suite covers:
 12. **Shared-level import robustness** — `deserializeLevel` is fuzzed with
    thousands of random/truncated/oversized payloads and must always return
    `null` or a well-formed level — never throw
+13. **Athlete-gate diagnosis** — a colony turned away by a gold portal is
+   tallied (deterministically, once per creature) so a loss names the real
+   cause ("reached the gate, not athletes") instead of a generic timeout
+14. **Solvability smoke check** — the generous reachability flood passes on
+   all 21 shipped levels (no false positives) and flags broken fixtures
+   (lava moat with no Builder, full-height metal wall, switch-less gate)
+15. **Ghost replays** — `serializeReplay`/`deserializeReplay` round-trip the
+   action log, playback reproduces the run deterministically, and watching a
+   replay never mutates the viewer's save
 
 ## Level editor
 
@@ -193,6 +208,16 @@ determinism invariant (presentation lives outside `update()`):
   cleared level cards/result overlays expose the next missing medal target.
   Consecutive wins also build a local streak chip and best-streak memory.
 - **Onboarding** — dismissible/auto-hiding tutorial card, portrait rotate hint.
+- **Continue hero** — the menu leads with one strong CTA that resumes the first
+  unlocked level you haven't cleared (the start of the world-carousel redesign).
+- **Ghost replays** — any run packs into a `?replay=` link off the existing
+  action log; opening it plays the run back deterministically (the same machinery
+  as rewind), with player input locked out and the viewer's save untouched. This
+  is the share/watch MVP; concurrent "race the ghost" builds on the same infra.
+- **Shared-level safety net** — a generous reachability smoke check
+  (`analyzeSolvability`) warns at editor save/share if it can't find any route to
+  the exit with the given skills. It is an honest *heuristic*, not a proof (see
+  Known limitations), so it advises rather than blocks.
 - **New level** — "One-Way Out" introduces the one-way membrane to the campaign.
 
 ## Progressive disclosure
@@ -214,6 +239,14 @@ Honest gaps, not bugs — most need a human, not more code:
 - **Icon/glyph readability is unproven on real devices.** Tests check the icon
   map is *complete*, not that 16px glyphs are *distinguishable* on a phone.
 - **No hosted leaderboard.** Progress, best-%, and daily bests are local-only.
+- **Solvability check is a heuristic, not a proof.** It catches obvious dead
+  ends (lava with no Builder, a metal wall with no way over, a switch-less gate)
+  but does *not* model resource counts, builder reach, fatal falls, timing, or
+  whether a gate's switch is itself reachable. A clean result means "no obvious
+  dead end found," never "guaranteed solvable" — which is why it advises instead
+  of blocking a save/share.
+- **Menu redesign is partial.** The Continue hero is in; the full horizontal
+  world carousel that replaces the stacked chapter dashboard is still to come.
 
 ### Real-device check (do before each release)
 
@@ -230,15 +263,17 @@ Browser emulation proves layout, not feel. Walk this list on actual hardware:
 
 Free, build-free helpers (run from the repo root):
 
-- `node tools/bump-version.js [label]` — bump every `?v=` cache-busting query in
-  `index.html`/`style.css` in one shot (single source of truth, no missed tags).
+- `node tools/bump-version.js [label]` — versioning is coherent off one source
+  of truth, `package.json` "version". With no argument the cache-bust label is
+  `<version>-<YYYYMMDD>`; pass a bare semver (`1.2.0`) to promote `package.json`
+  too. Either way it syncs the `APP_VERSION` constant (shown on the menu) and
+  every `?v=` query in `index.html`/`style.css` — no missed tags.
 - `node tools/render-og.js` — rasterize `assets/og-card.svg` → `og-card.png`
   (1200×630) using the Chromium that Playwright already installs.
 
 ## Ideas for later
 
-More campaign worlds · level-complete confetti · a colourblind-friendly palette
-toggle · ghost/replay export (the deterministic action log already supports it)
-· extracting the editor code out of `ui.js` as it grows.
-ready supports it)
-· extracting the editor code out of `ui.js` as it grows.
+The horizontal world carousel (replacing the stacked chapter dashboard) ·
+"race the ghost" concurrent replays + a baked daily dev-ghost · level-complete
+confetti · a colourblind-friendly palette toggle · continuing to split the menu
+code out of `ui.js` as it grows.
