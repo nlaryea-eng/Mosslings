@@ -65,7 +65,8 @@ js/mossling.js    creature state machine + procedural animated sprite
 js/levels.js      the 21 campaign maps (geometry derived from movement math)
 js/daily.js       deterministic UTC daily challenge selection + scoring helper
 js/daily-ghost.js daily personal-best ghost records + Beat-the-Ghost card model
-js/storage.js     localStorage wrapper (progress, medals, ghosts, streaks)
+js/storage.js     localStorage wrapper (progress, medals, ghosts, streaks, tenure)
+js/menu-stage.js  pure onboarding stage model + bounded carousel window
 js/result-card.js result overlay snippets + deterministic PNG share-card export
 js/overlays.js    render-only readability overlays (danger probe + hints)
 js/game.js        engine: fixed-timestep loop, skills, ghost replay, HUD, juice
@@ -244,17 +245,35 @@ determinism invariant (presentation lives outside `update()`):
 
 ## Progressive disclosure
 
-The toolbar is intentionally calm for a new player: on a brand-new save the menu
-collapses to a single **Start Playing** button, and the **advanced HUD controls
+The toolbar is intentionally calm for a new player: the **advanced HUD controls
 (spawn-rate ± and Nuke) stay hidden until Level 3** — they return automatically
 once Level 2 is cleared, and are always present on custom/shared/editor levels.
 The keyboard shortcuts (`N`, `+`/`−`) keep working throughout, so power users
 lose nothing.
 
-Once Level 1 is cleared, the menu expands in three layers: the Continue hero is
-the strongest action, Daily/Editor are secondary, and the world carousel exposes
-only the selected world's detail. Locked worlds remain visible for orientation
-but do not expose dense mastery data.
+**Staged onboarding** (`js/menu-stage.js`, pure + unit-tested) paces *capability*,
+not just detail, so the menu never dumps everything at once. `menuFeatureState`
+maps `{unlocked, daysSinceFirstPlay, customLevelCount}` → which surfaces are live:
+
+| Stage | Trigger | Unlocks |
+|---|---|---|
+| Newcomer | brand-new save | one dominant **Start Playing** |
+| Learning | cleared Level 1 | Continue hero + world carousel + keyboard hints |
+| Explorer | reached World 2 | **Daily / Beat-the-Ghost** loop |
+| Veteran | reached World 3 **or** ~week three by tenure | **Level Editor** (then **My Levels** once a custom exists) |
+
+Each freshly-unlocked surface shows a one-time **NEW** badge (`.menu-new`,
+cleared on first use). Visibility is owned by `MenuUI.applyMenuSurfaces`, not a
+binary `.first-run` CSS gate, and on phones the staged surfaces stack as
+full-width modular blocks. Tenure is a wall-clock first-play stamp
+(`storage.firstSeenAt`) and is **menu-only** — it never enters the simulation.
+
+Within the menu, the Continue hero is the strongest action, the staged
+Daily/Editor surfaces are secondary, and the world carousel exposes only the
+selected world's detail. Locked worlds remain visible for orientation but do not
+expose dense mastery data. The carousel renders only a **bounded window** of
+worlds around the selection (`carouselWindow`), so a 100-world campaign costs the
+same to render as a 3-world one.
 
 ## Known limitations
 

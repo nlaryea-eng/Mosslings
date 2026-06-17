@@ -299,27 +299,61 @@ class MenuUI {
         hero.classList.remove('hidden');
     }
 
+    /**
+     * Which menu surfaces are unlocked right now, from progression + tenure.
+     * Stamps the first-play date on first call so tenure can start counting.
+     */
+    featureState() {
+        const firstSeen = storage.markFirstSeen();
+        const daysSinceFirstPlay = menuDaysBetween(firstSeen, new Date().toISOString());
+        return menuFeatureState({
+            unlocked: storage.getUnlocked(),
+            daysSinceFirstPlay,
+            customLevelCount: storage.getCustomLevels().length,
+            worldSize: this.worldSize,
+        });
+    }
+
     buildMenu() {
         const unlocked = storage.getUnlocked();
-        const firstRun = unlocked === 0;
-        const start = document.getElementById('btn-start');
+        const features = this.featureState();
+        const firstRun = features.stage === 'newcomer';
         document.getElementById('start-screen').classList.toggle('first-run', firstRun);
+        const start = document.getElementById('btn-start');
         if (start) {
             start.innerText = firstRun ? 'Start Playing' : 'Play';
             start.classList.toggle('hidden', !firstRun);
         }
         this.renderWorldReward(firstRun ? -1 : unlocked);
         this.renderContinueHero();
-        this.renderWorldMenu(firstRun, unlocked);
-        this.refreshDailyCard(firstRun);
-        const gallery = document.getElementById('btn-gallery');
-        if (gallery) gallery.classList.toggle('hidden', storage.getCustomLevels().length === 0);
+        this.renderWorldMenu(features.worldMenu, unlocked);
+        this.refreshDailyCard(features.daily);
+        this.applyMenuSurfaces(features);
     }
 
-    renderWorldMenu(firstRun, unlocked) {
+    /**
+     * Toggle the staged secondary surfaces (editor / gallery / controls / the
+     * secondary row container) and the one-time "NEW" reveal badges. Visibility
+     * lives here, not in `.first-run` CSS, so the reveal can be paced.
+     */
+    applyMenuSurfaces(features) {
+        const setHidden = (id, hidden) => { const el = document.getElementById(id); if (el) el.classList.toggle('hidden', hidden); };
+        setHidden('btn-editor', !features.editor);
+        setHidden('btn-gallery', !features.gallery);
+        const controls = document.querySelector('.controls-disc');
+        if (controls) controls.classList.toggle('hidden', !features.controls);
+        const secondary = document.getElementById('menu-secondary-actions');
+        if (secondary) secondary.classList.toggle('hidden', !(features.daily || features.editor || features.gallery));
+        // A freshly-unlocked surface the player hasn't acknowledged yet glows once.
+        const badge = (id, on) => { const el = document.getElementById(id); if (el) el.classList.toggle('menu-new', on); };
+        badge('daily-card', features.daily && !storage.hasMenuRevealSeen('daily'));
+        badge('btn-editor', features.editor && !storage.hasMenuRevealSeen('editor'));
+    }
+
+    renderWorldMenu(show, unlocked) {
         const root = document.getElementById('world-menu');
         if (!root) return;
-        if (firstRun) {
+        if (!show) {
             root.classList.add('hidden');
             root.innerHTML = '';
             return;
@@ -327,10 +361,10 @@ class MenuUI {
         root.classList.remove('hidden');
         this.syncSelectedWorld(unlocked);
         const recommended = this.recommendedLevelIdx();
-        const cards = [];
-        for (let world = 0; world < this.worldCount(); world++) {
-            cards.push(this.worldCardHtml(this.worldMetaByWorld(world), unlocked, recommended));
-        }
+        // Render only a bounded window of worlds around the selection so the
+        // carousel costs the same at 3 worlds or 300.
+        const cards = carouselWindow(this.selectedWorld, this.worldCount())
+            .map((world) => this.worldCardHtml(this.worldMetaByWorld(world), unlocked, recommended));
         const detail = this.worldDetailHtml(this.worldMetaByWorld(this.selectedWorld), unlocked, recommended);
         root.innerHTML =
             `<section class="world-carousel-shell" aria-label="Campaign worlds">` +
@@ -471,7 +505,8 @@ class MenuUI {
 
     selectWorld(world) {
         this.selectedWorld = Math.max(0, Math.min(this.worldCount() - 1, world));
-        this.renderWorldMenu(false, storage.getUnlocked());
+        // The carousel is, by definition, already shown when a world is selected.
+        this.renderWorldMenu(true, storage.getUnlocked());
     }
 
     moveWorld(delta) {
@@ -543,12 +578,13 @@ class MenuUI {
         return false;
     }
 
-    refreshDailyCard(firstRun) {
+    refreshDailyCard(show) {
         const card = document.getElementById('daily-card');
         if (!card) return;
         const challenge = dailyChallengeForDate();
-        card.classList.toggle('hidden', firstRun || !challenge);
-        if (firstRun || !challenge) return;
+        const hidden = !show || !challenge;
+        card.classList.toggle('hidden', hidden);
+        if (hidden) return;
 
         const ghost = storage.getDailyGhost(challenge.key);
         const fingerprint = typeof levelFingerprint === 'function' ? levelFingerprint(LEVELS[challenge.levelIdx]) : null;

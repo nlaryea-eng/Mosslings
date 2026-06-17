@@ -32,10 +32,10 @@ const ui = {
         $('btn-gallery-back').onclick = () => { $('gallery-screen').classList.add('hidden'); this.backToMenu(); };
         $('btn-gallery-editor').onclick = () => { $('gallery-screen').classList.add('hidden'); this.startEditor(); };
 
-        $('btn-editor').onclick = () => { audio.init(); this.startEditor(); };
+        $('btn-editor').onclick = () => { storage.markMenuRevealSeen('editor'); audio.init(); this.startEditor(); };
         $('btn-start').onclick = () => { this.armAudioForPlay(); game.loadLevel(game.levelIdx); };
         $('continue-hero').onclick = () => this.startRecommendedLevel();
-        $('btn-daily').onclick = () => { audio.init(); game.loadDailyChallenge(); };
+        $('btn-daily').onclick = () => { storage.markMenuRevealSeen('daily'); audio.init(); game.loadDailyChallenge(); };
         $('btn-chapter-open').onclick = () => this.openPendingChapterReward();
         $('btn-chapter-dismiss').onclick = () => this.dismissPendingChapterReward();
         $('btn-edit-save').onclick = () => this.saveCustomLevel();
