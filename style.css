@@ -89,6 +89,35 @@ body {
     color: #5f6c60; font-family: var(--pixel-font); font-size: 9px;
     letter-spacing: 1px; opacity: 0.7;
 }
+/* Continue hero — the strongest CTA on the menu: pick up where you left off. */
+.continue-hero {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    width: min(560px, 92%); margin: 4px auto 14px; padding: 14px 20px;
+    text-align: left; cursor: pointer;
+    background: linear-gradient(100deg, #28401f, #1a2a16);
+    border: 1px solid var(--accent); border-radius: 12px;
+    box-shadow: 0 6px 22px rgba(124, 179, 66, 0.18);
+    transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+}
+.continue-hero:hover, .continue-hero:focus-visible {
+    transform: translateY(-2px); border-color: var(--accent-bright);
+    box-shadow: 0 10px 30px rgba(124, 179, 66, 0.28);
+}
+.continue-hero .continue-copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.continue-hero .continue-kicker {
+    font-family: var(--pixel-font); font-size: 10px; letter-spacing: 1px;
+    text-transform: uppercase; color: var(--accent-bright);
+}
+.continue-hero .continue-title, .continue-hero #continue-title {
+    font-size: 18px; font-weight: 800; color: var(--text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.continue-hero .continue-sub { font-size: 12px; color: #a8c5a0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.continue-hero .continue-cta {
+    flex: none; width: 40px; height: 40px; border-radius: 50%;
+    display: grid; place-items: center; font-size: 18px;
+    background: var(--accent); color: #0c130c;
+}
 
 canvas {
     display: block; width: 100%; height: 100%;

@@ -38,6 +38,13 @@ const ui = {
 
         $('btn-editor').onclick = () => { audio.init(); this.startEditor(); };
         $('btn-start').onclick = () => { this.armAudioForPlay(); game.loadLevel(game.levelIdx); };
+        $('continue-hero').onclick = () => {
+            const idx = this.recommendedLevelIdx();
+            if (idx == null) return;
+            game.levelIdx = idx;
+            this.armAudioForPlay();
+            game.loadLevel(idx);
+        };
         $('btn-daily').onclick = () => { audio.init(); game.loadDailyChallenge(); };
         $('btn-chapter-open').onclick = () => this.openPendingChapterReward();
         $('btn-chapter-dismiss').onclick = () => this.dismissPendingChapterReward();
@@ -597,6 +604,35 @@ const ui = {
         this.game.loadLevel(meta.start);
     },
 
+    /**
+     * The single level to surface as "Continue": the first unlocked level the
+     * player hasn't cleared yet, otherwise the furthest unlocked level. Capped to
+     * the campaign and to what's unlocked. Returns null on a brand-new save.
+     */
+    recommendedLevelIdx() {
+        const unlocked = Math.min(storage.getUnlocked(), LEVELS.length - 1);
+        if (storage.getUnlocked() === 0) return null;
+        for (let i = 0; i <= unlocked; i++) {
+            if (storage.getBest(i) === null) return i; // first uncleared = pick up here
+        }
+        return unlocked; // everything unlocked is cleared — sit on the newest
+    },
+    /** Top-of-menu hero: the strongest CTA is always "continue where you left off". */
+    renderContinueHero() {
+        const hero = document.getElementById('continue-hero');
+        if (!hero) return;
+        const idx = this.recommendedLevelIdx();
+        if (idx == null) { hero.classList.add('hidden'); return; }
+        const meta = this.chapterMeta(idx);
+        const lvl = LEVELS[idx];
+        const cleared = storage.getBest(idx) !== null;
+        const hook = lvl.headlineSkill != null ? `${SKILL_NAMES[lvl.headlineSkill]} leads here` : 'Fresh route ahead';
+        document.getElementById('continue-kicker').innerText = `${cleared ? 'Replay' : 'Continue'} · ${meta.title}`;
+        document.getElementById('continue-title').innerText = `${idx + 1}. ${lvl.name}`;
+        document.getElementById('continue-sub').innerText = cleared ? `${hook} · best ${storage.getBest(idx)}%` : hook;
+        if (hero.setAttribute) hero.setAttribute('aria-label', `Continue: level ${idx + 1}, ${lvl.name}, ${meta.title}`);
+        hero.classList.remove('hidden');
+    },
     buildMenu() {
         const c = document.getElementById('level-select-container');
         c.innerHTML = '';
@@ -605,6 +641,7 @@ const ui = {
         document.getElementById('start-screen').classList.toggle('first-run', firstRun);
         document.getElementById('btn-start').innerText = firstRun ? 'Start Playing' : 'Play';
         this.renderChapterReward(firstRun ? -1 : unlocked);
+        this.renderContinueHero();
 
         const chapterCount = Math.ceil(LEVELS.length / this.chapterSize);
         for (let chapter = 0; chapter < chapterCount; chapter++) {
