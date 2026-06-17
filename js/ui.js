@@ -35,7 +35,7 @@ const ui = {
         $('btn-editor').onclick = () => { storage.markMenuRevealSeen('editor'); audio.init(); this.startEditor(); };
         $('btn-start').onclick = () => { this.armAudioForPlay(); game.loadLevel(game.levelIdx); };
         $('continue-hero').onclick = () => this.startRecommendedLevel();
-        $('btn-daily').onclick = () => { storage.markMenuRevealSeen('daily'); audio.init(); game.loadDailyChallenge(); };
+        $('btn-daily').onclick = () => { storage.markMenuRevealSeen('daily'); audio.init(); game.loadDailyChallenge(); game.armGhostRace(); };
         $('btn-grove-open').onclick = () => this.openPendingGroveReward();
         $('btn-grove-dismiss').onclick = () => this.dismissPendingGroveReward();
         $('btn-edit-save').onclick = () => this.saveCustomLevel();

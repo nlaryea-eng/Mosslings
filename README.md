@@ -71,6 +71,7 @@ js/result-card.js result overlay snippets + deterministic PNG share-card export
 js/overlays.js    render-only readability overlays (danger probe + hints)
 js/game.js        engine: fixed-timestep loop, skills, ghost replay, HUD, juice
                   (persistence lives in js/storage.js, loaded before it)
+js/ghost-race.js  live Beat-the-Ghost phantom: precompute + render-only draw
 js/ui.js          core DOM bindings, shared UI orchestration, editor, pointer input
 js/menu-ui.js     campaign menu: Continue hero, grove carousel, patch rail
 js/result-ui.js   result overlay, run summary, sharing, ghost-replay export
@@ -233,10 +234,16 @@ determinism invariant (presentation lives outside `update()`):
   `Beat 90% · 1:12 · 4 skills` target chip, and a "Beat Your Ghost" CTA. It stays
   calmer than the Continue hero so it never competes with the primary path. The
   card's fresh/race/stale logic is a pure `dailyCardModel()` in `js/daily-ghost.js`.
+- **Live ghost phantom race** (`js/ghost-race.js`) — starting that daily runs the
+  stored ghost's recorded action log **once**, muted and headless, to precompute a
+  per-step position trajectory; the ghost then races live as translucent phantoms
+  beside your colony with a rolling `You N · Ghost M` rescue delta. The precompute
+  reloads the level clean afterwards, so your run is byte-identical to one with no
+  ghost — the phantom is render-only and never touches the sim (guarded by a
+  determinism unit test). A rewind keeps the phantom; a fresh load drops it.
 - **Ghost replays** — any run packs into a `?replay=` link off the existing
   action log; opening it plays the run back deterministically (the same machinery
-  as rewind), with player input locked out and the viewer's save untouched. This
-  is the share/watch MVP; concurrent "race the ghost" builds on the same infra.
+  as rewind), with player input locked out and the viewer's save untouched.
 - **Shared-level safety net** — a generous reachability smoke check
   (`analyzeSolvability`) warns at editor save/share if it can't find any route to
   the exit with the given skills. It is an honest *heuristic*, not a proof (see

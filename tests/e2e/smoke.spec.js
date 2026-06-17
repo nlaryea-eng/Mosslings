@@ -261,6 +261,39 @@ test('daily card presents returning ghost target clearly', async ({ page }) => {
     await expect(page.locator('#continue-hero')).toBeVisible();
 });
 
+test('Beat the Ghost arms a live phantom race when starting the daily', async ({ page }) => {
+    const errors = [];
+    page.on('pageerror', (err) => errors.push(String(err)));
+    await page.addInitScript(seedProgress);
+    await page.goto('/');
+    // Forge today's daily ghost from a short headless run, fingerprint-matched.
+    await page.evaluate(() => {
+        const ch = dailyChallengeForDate();
+        const g = ui.game;
+        g.loadDailyChallenge(ch);
+        for (let i = 0; i < 80; i++) g.update();
+        const code = serializeReplay(g.buildReplay());
+        const fp = levelFingerprint(g.level);
+        storage.setDailyGhost(ch.key, {
+            key: ch.key, saved: g.savedCount, total: g.level.totalSpawn,
+            timeSeconds: 12, skills: 0, fingerprint: fp, completedAt: new Date().toISOString(),
+            replay: { code, fingerprint: fp },
+        });
+    });
+    await page.reload();
+    await expect(page.locator('#daily-card')).toHaveClass(/is-race/);
+    await page.locator('#btn-daily').click();
+    await expect(page.locator('#gameCanvas')).toBeVisible();
+    // The phantom trajectory is armed and the player still starts from a clean run.
+    const race = await page.evaluate(() => ({
+        armed: !!(ui.game.ghostRace && ui.game.ghostRace.trajectory.length > 0),
+        runMode: ui.game.runMode,
+    }));
+    expect(race.armed, 'ghost race trajectory armed').toBeTruthy();
+    expect(race.runMode).toBe('daily');
+    expect(errors, `page errors during the race:\n${errors.join('\n')}`).toEqual([]);
+});
+
 test('daily deep link opens the requested challenge directly', async ({ page }) => {
     await page.goto('/?daily=2026-06-17');
     await expect(page.locator('#gameCanvas')).toBeVisible();

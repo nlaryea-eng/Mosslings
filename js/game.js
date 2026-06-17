@@ -63,6 +63,9 @@ class Game {
         // drives the sim deterministically and player input is locked out. Set
         // by loadReplay(), cleared on every fresh loadLevel(). Render-only badge.
         this.ghostMode = false; this.ghostActions = null; this.ghostAI = 0;
+        // Live "Beat the Ghost" race: a precomputed render-only phantom trajectory
+        // of the stored daily ghost (see js/ghost-race.js). Never read by the sim.
+        this.ghostRace = null;
         // First-run onboarding (Level 1 only, until cleared). Render-driven
         // coaching: pre-selects Builder, auto-pauses once when a mossling nears
         // the gap, and arrows the player to the right tap. No sim coupling.
@@ -245,6 +248,8 @@ class Game {
         if (this.runMode !== 'daily' && this.levelIdx >= 0) this.lastCampaignLevelIdx = this.levelIdx;
         this.loadLevel(challenge.levelIdx, false, false, { mode: 'daily', daily: challenge });
     }
+    /** Arm the live phantom race if today's daily has a matching personal ghost. */
+    armGhostRace() { return armGhostRace(this); }
     loadLevel(idx, isCustom = false, silent = false, opts = {}) {
         if (!isCustom && idx >= LEVELS.length) {
             this.state = 'VICTORY';
@@ -282,6 +287,7 @@ class Game {
         this.gateRejectMissing = { floater: 0, climber: 0, both: 0 };
         this.simStep = 0; this.actionLog = [];   // fresh input history per attempt
         this.ghostMode = false; this.ghostActions = null; this.ghostAI = 0; // cleared unless loadReplay re-arms
+        if (!silent) this.ghostRace = null; // a rewind (silent) keeps the phantom; a fresh load drops it
         // Onboard a brand-new player on (and only on) campaign Level 1.
         this.onboarding = !isCustom && idx === 0 && storage.getUnlocked() === 0;
         this.onboardDone = false; this.onboardPausedOnce = false;
@@ -672,6 +678,7 @@ class Game {
             this.drawExit(ctx);
             this.drawFailHint(ctx);   // "last time" retry marker (render-only, fades out)
             this.drawDangerHints(ctx);
+            if (this.ghostRace) drawGhostRace(this, ctx); // translucent phantoms behind the live colony
             for (const m of this.mosslings) m.draw(ctx);
             this.particles.draw(ctx);
             this.drawOnboarding(ctx);

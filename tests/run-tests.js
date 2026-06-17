@@ -63,7 +63,7 @@ global.localStorage = (() => {
 // Delete existing global.ui before loading ui.js to avoid collisions
 delete global.ui;
 
-for (const f of ['constants.js', 'icons.js', 'audio.js', 'haptics.js', 'music.js', 'particles.js', 'terrain.js', 'mossling.js', 'levels.js', 'daily.js', 'utils.js', 'replay-integrity.js', 'daily-ghost.js', 'storage.js', 'menu-stage.js', 'ugc-trust.js', 'result-card.js', 'overlays.js', 'game.js', 'ui.js', 'menu-ui.js', 'result-ui.js']) {
+for (const f of ['constants.js', 'icons.js', 'audio.js', 'haptics.js', 'music.js', 'particles.js', 'terrain.js', 'mossling.js', 'levels.js', 'daily.js', 'utils.js', 'replay-integrity.js', 'daily-ghost.js', 'storage.js', 'menu-stage.js', 'ugc-trust.js', 'result-card.js', 'overlays.js', 'game.js', 'ghost-race.js', 'ui.js', 'menu-ui.js', 'result-ui.js']) {
     const file = path.join(__dirname, '..', 'js', f);
     vm.runInThisContext(fs.readFileSync(file, 'utf8'), { filename: file });
 }
@@ -944,6 +944,77 @@ test('returning from daily restores the previous unlocked campaign selection', (
     ui.backToMenu();
     eq(g.runMode, 'campaign');
     eq(g.levelIdx, 0, 'Play returns to the prior campaign selection, not the daily level');
+});
+
+// ==============================================================
+console.log('\n— Live ghost race (Beat the Ghost phantom) —');
+// ==============================================================
+const ghostRaceSnapshot = (g) => JSON.stringify({
+    step: g.simStep, saved: g.savedCount, dead: g.deadCount, spawn: g.spawnCounter,
+    log: g.actionLog.length,
+    ms: g.mosslings.map(m => [Math.round(m.x * 1000), Math.round(m.y * 1000), m.dir, m.state]),
+});
+
+test('the ghost-race precompute leaves the player run byte-identical (determinism)', () => {
+    storage.save('dailyGhosts', {});
+    const challenge = dailyChallengeForDate('2026-06-17');
+    // Control: a plain daily run, N steps, no phantom.
+    const control = new Game(); ui.game = control;
+    control.loadDailyChallenge(challenge);
+    for (let i = 0; i < 240; i++) control.update();
+    const controlSnap = ghostRaceSnapshot(control);
+
+    // Same run, but after a muted phantom precompute + clean reload.
+    const raced = new Game(); ui.game = raced;
+    raced.loadDailyChallenge(challenge);
+    const traj = buildGhostTrajectory(raced, []); // empty ghost log still drives a headless walk
+    raced.loadDailyChallenge(challenge);           // reload clean for the player
+    raced.ghostRace = { trajectory: traj, finalSaved: traj.finalSaved, total: traj.total };
+    for (let i = 0; i < 240; i++) raced.update();
+
+    eq(ghostRaceSnapshot(raced), controlSnap, 'the phantom precompute must not perturb the player sim');
+    assert(traj.length > 0, 'the precompute recorded a trajectory');
+    assert(Array.isArray(traj.steps[0].poses), 'each trajectory frame carries phantom poses');
+});
+
+test('armGhostRace no-ops cleanly without a matching daily ghost', () => {
+    storage.save('dailyGhosts', {});
+    const g = new Game(); ui.game = g;
+    g.loadDailyChallenge(dailyChallengeForDate('2026-06-17'));
+    eq(g.armGhostRace(), false, 'no stored ghost → no race');
+    eq(g.ghostRace, null, 'ghostRace stays unarmed');
+});
+
+test('a fingerprint-matched daily ghost arms a faithful phantom from step 0', () => {
+    storage.save('dailyGhosts', {});
+    const challenge = dailyChallengeForDate('2026-06-17');
+    // Record a short ghost run, then store it as today's daily ghost.
+    const rec = new Game(); ui.game = rec;
+    rec.loadDailyChallenge(challenge);
+    for (let i = 0; i < 40; i++) rec.update();
+    const code = serializeReplay(rec.buildReplay());
+    const fp = levelFingerprint(rec.level);
+    storage.setDailyGhost(challenge.key, {
+        key: challenge.key, saved: rec.savedCount, total: rec.level.totalSpawn,
+        timeSeconds: 10, skills: 0, fingerprint: fp, completedAt: new Date().toISOString(),
+        replay: { code, fingerprint: fp },
+    });
+    // Arm on a fresh game and verify the player resets to a clean step 0.
+    const g = new Game(); ui.game = g;
+    g.loadDailyChallenge(challenge);
+    eq(g.armGhostRace(), true, 'a fingerprint-matched ghost arms the race');
+    assert(g.ghostRace && g.ghostRace.trajectory.length > 0, 'a phantom trajectory was built');
+    eq(g.simStep, 0, 'the player races from a clean step 0 after the precompute');
+    eq(g.savedCount, 0, 'no rescues leaked from the precompute into the live run');
+    // A stale fingerprint refuses the race.
+    storage.setDailyGhost(challenge.key, {
+        key: challenge.key, saved: 1, total: 1, timeSeconds: 5, skills: 0,
+        fingerprint: 'deadbeef', completedAt: new Date().toISOString(),
+        replay: { code, fingerprint: 'deadbeef' },
+    });
+    const g2 = new Game(); ui.game = g2;
+    g2.loadDailyChallenge(challenge);
+    eq(g2.armGhostRace(), false, 'a stale-fingerprint ghost refuses to race');
 });
 
 // ==============================================================
