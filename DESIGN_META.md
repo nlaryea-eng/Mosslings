@@ -241,16 +241,16 @@ function computeMedals(par, stats) {
 
 ### Menu Rendering
 
-The campaign menu is now a world carousel instead of a stacked level grid.
+The campaign menu is now a grove carousel instead of a stacked level grid.
 `js/menu-ui.js` owns the menu model and DOM rendering; `js/ui.js` keeps small
 delegating wrappers so existing `ui.*` call sites stay stable.
 
 **Staged onboarding.** Menu surfaces are revealed by progression + tenure, not
 all-at-once. `menuFeatureState()` (pure, `js/menu-stage.js`) maps
-`{unlocked, daysSinceFirstPlay, customLevelCount, worldSize}` →
-`{stage, worldMenu, controls, daily, editor, gallery}`: carousel/controls after
-Level 1, daily/ghost at World 2 (`unlocked >= worldSize`), editor at World 3
-(`unlocked >= worldSize*2`) **or** `EDITOR_TENURE_DAYS` (14) by tenure, gallery
+`{unlocked, daysSinceFirstPlay, customLevelCount, groveSize}` →
+`{stage, groveMenu, controls, daily, editor, gallery}`: carousel/controls after
+Level 1, daily/ghost at Grove 2 (`unlocked >= groveSize`), editor at Grove 3
+(`unlocked >= groveSize*2`) **or** `EDITOR_TENURE_DAYS` (14) by tenure, gallery
 once the editor is live and a custom exists. `MenuUI.applyMenuSurfaces` toggles
 `.hidden` per surface and adds a one-time `.menu-new` badge (cleared via
 `storage.markMenuRevealSeen` on first use). Tenure comes from
@@ -258,33 +258,33 @@ once the editor is live and a custom exists. `MenuUI.applyMenuSurfaces` toggles
 must never reach `update()`. The old binary `.first-run` CSS display:none gate is
 gone; `.first-run` now only styles the dominant Play button.
 
-**Bounded carousel.** `renderWorldMenu` renders only `carouselWindow(selected,
-count)` worlds (≤ `2*CAROUSEL_WINDOW_RADIUS+1`), so render cost is O(visible),
-not O(worlds). For the current 3-world campaign the window is the whole set, so
-nothing changes visibly today; the change exists so 100+ worlds never become a
+**Bounded carousel.** `renderGroveMenu` renders only `carouselWindow(selected,
+count)` groves (≤ `2*CAROUSEL_WINDOW_RADIUS+1`), so render cost is O(visible),
+not O(groves). For the current 3-grove campaign the window is the whole set, so
+nothing changes visibly today; the change exists so 100+ groves never become a
 render cliff.
 
 - `#continue-hero` is the strongest CTA and starts the first unlocked campaign
   level that has not been cleared, falling back to replaying the current edge.
-- `#world-menu` contains `#world-carousel`, where `.world-card` buttons expose
-  one selected world, adjacent available/locked worlds, compact progress, and
+- `#grove-menu` contains `#grove-carousel`, where `.grove-card` buttons expose
+  one selected grove, adjacent available/locked groves, compact progress, and
   `aria-selected` state.
-- `#world-detail` is rendered only for the selected world. It shows the world
-  number/name/theme, compact progress, `.world-next-callout`, `.level-rail`,
-  `.level-node` buttons, a compressed mastery summary, and completion/reward
+- `#grove-detail` is rendered only for the selected grove. It shows the grove
+  number/name/theme, compact progress, `.grove-next-callout`, `.patch-rail`,
+  `.patch-node` buttons, a compressed mastery summary, and completion/reward
   state.
-- Mastery uses progressive disclosure: `.world-mastery` renders a single
-  `.world-mastery-line` (`Mastered X/N · M/3N medals`), the subtle
-  `.world-mastery-track` of per-level nodes, and one `.world-mastery-chip.next`
+- Mastery uses progressive disclosure: `.grove-mastery` renders a single
+  `.grove-mastery-line` (`Mastered X/N · M/3N medals`), the subtle
+  `.grove-mastery-track` of per-level nodes, and one `.grove-mastery-chip.next`
   target — the earlier four-chip rescue/efficiency/speed/mastered row was
   retired so mastery informs without dominating first glance.
-- Carousel navigation: `.world-card` click/tap, `#world-prev`/`#world-next`,
-  keyboard (←/→/Home/End on the focused `#world-carousel`), native
+- Carousel navigation: `.grove-card` click/tap, `#grove-prev`/`#grove-next`,
+  keyboard (←/→/Home/End on the focused `#grove-carousel`), native
   `overflow-x` scroll-snap for touch/trackpad, and a debounced horizontal-wheel
   step via `MenuUI.wheelNavIntent()` (vertical/tiny gestures are ignored so page
   scroll is untouched).
 - Locked levels use `aria-disabled="true"` and remain visible in the selected
-  world's level rail; locked worlds remain visible and subdued in the carousel.
+  grove's patch rail; locked groves remain visible and subdued in the carousel.
 - The next unearned medal target is disclosed on the relevant level node with
   compact labels such as `SAVE 8`, `SK<=3`, or `T<0:55`.
 
@@ -295,16 +295,16 @@ kicker, a `#daily-target` chip, and a `Beat Your Ghost` CTA; otherwise it invite
 a first clear. The race is styled to stay subordinate to the Continue hero.
 
 The browser e2e contract deliberately no longer uses `.lvl-btn` or
-`#level-select-container`. It asserts `#world-menu`, `.world-card`,
-`#world-detail .level-node`, the Continue hero, the staged onboarding reveal
+`#level-select-container`. It asserts `#grove-menu`, `.grove-card`,
+`#grove-detail .patch-node`, the Continue hero, the staged onboarding reveal
 (newcomer → learning → explorer → veteran, including `.menu-new` badges),
-keyboard world navigation, level starting, daily entry, the Beat-the-Ghost race
-state, and locked/unlocked progression. Unit tests cover the world mastery
+keyboard grove navigation, level starting, daily entry, the Beat-the-Ghost race
+state, and locked/unlocked progression. Unit tests cover the grove mastery
 helpers, the daily card model, `wheelNavIntent`, `menuFeatureState`,
 `carouselWindow`, `menuDaysBetween`, and the static menu asset contract.
 
-World reward seen-state intentionally persists through the compatible
-`mosslings_chapterRewardSeen` storage key. The user-facing language is "World";
+Grove reward seen-state intentionally persists through the compatible
+`mosslings_chapterRewardSeen` storage key. The user-facing language is "Grove";
 the key remains legacy-compatible for existing saves.
 
 ---
@@ -316,7 +316,7 @@ These systems layer cleanly:
 - **Serialization**: compact, versioned binary format for any level object
 - **URL Importing**: query-param bootstrap with validation and graceful fallback
 - **Par Medals**: per-level par targets with real-time skill tracking and persistent tier storage
-- **World Carousel Menu**: scalable campaign navigation with selected-world
+- **Grove Carousel Menu**: scalable campaign navigation with selected-grove
   detail and a stable Playwright selector contract
 
 All of them respect the existing game architecture (StorageManager, level shape,

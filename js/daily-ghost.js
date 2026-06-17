@@ -71,7 +71,7 @@ function dailyCardModel({ challenge, ghost, fingerprint } = {}) {
     const ghostMatches = !!(ghost && ghost.fingerprint && fingerprint && ghost.fingerprint === fingerprint);
     const ghostMismatch = !!(ghost && !ghostMatches);
     const base = {
-        title: `${challenge.key} · L${challenge.levelIdx + 1} ${challenge.levelName}`,
+        title: `${challenge.key} · P${challenge.levelIdx + 1} ${challenge.levelName}`,
         ghostMatches,
         ghostMismatch,
     };

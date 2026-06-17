@@ -3,13 +3,13 @@
  * MOSSLINGS — browser smoke + layout-regression guard.
  *
  * The Node suite (tests/run-tests.js) covers logic against a stubbed DOM; this
- * is the first *real-browser* net. It directly guards the world-carousel menu
+ * is the first *real-browser* net. It directly guards the grove-carousel menu
  * contract and confirms the game boots clean, starts, and stays usable at
  * landscape-phone size.
  */
 const { test, expect } = require('@playwright/test');
 
-// Seed a progressed *and tenured* save: into World 2 with a full medal stack,
+// Seed a progressed *and tenured* save: into Grove 2 with a full medal stack,
 // plus a first-play date weeks ago — i.e. a returning player for whom every
 // staged surface (carousel, daily, editor, gallery) has unlocked. This is the
 // menu's worst case for layout and the common case for feature visibility.
@@ -48,9 +48,9 @@ async function startFromContinue(page) {
 }
 
 async function startLevelFromRail(page, levelIdx) {
-    const world = Math.floor(levelIdx / 7);
-    await page.locator(`.world-card[data-world="${world}"]`).click();
-    await page.locator(`.level-node[data-level="${levelIdx}"]`).click();
+    const grove = Math.floor(levelIdx / 7);
+    await page.locator(`.grove-card[data-grove="${grove}"]`).click();
+    await page.locator(`.patch-node[data-patch="${levelIdx}"]`).click();
     await expect(page.locator('#gameCanvas')).toBeVisible();
 }
 
@@ -65,10 +65,10 @@ test('boots with no console/page errors and shows the menu', async ({ page }) =>
     expect(errors, `console/page errors:\n${errors.join('\n')}`).toEqual([]);
 });
 
-test('world carousel cards and selected detail do not overflow their borders', async ({ page }) => {
+test('grove carousel cards and selected detail do not overflow their borders', async ({ page }) => {
     await page.addInitScript(seedProgress);
     await page.goto('/');
-    const cards = page.locator('#world-carousel .world-card');
+    const cards = page.locator('#grove-carousel .grove-card');
     await expect(cards.first()).toBeVisible();
     const count = await cards.count();
     expect(count).toBeGreaterThan(2);
@@ -77,29 +77,29 @@ test('world carousel cards and selected detail do not overflow their borders', a
         // so this catches clipped overflow too — the exact regression we hit.
         const fits = await cards.nth(i).evaluate((el) =>
             el.scrollHeight <= el.clientHeight + 1 && el.scrollWidth <= el.clientWidth + 1);
-        expect(fits, `world card ${i + 1} content overflows the card`).toBeTruthy();
+        expect(fits, `grove card ${i + 1} content overflows the card`).toBeTruthy();
     }
-    await expect(page.locator('#world-carousel .world-card.is-selected')).toBeVisible();
-    await expect(page.locator('#world-carousel .world-card.is-locked')).toBeVisible();
-    await expect(page.locator('#world-detail')).toBeVisible();
-    await expect(page.locator('#world-detail .level-node')).toHaveCount(7);
+    await expect(page.locator('#grove-carousel .grove-card.is-selected')).toBeVisible();
+    await expect(page.locator('#grove-carousel .grove-card.is-locked')).toBeVisible();
+    await expect(page.locator('#grove-detail')).toBeVisible();
+    await expect(page.locator('#grove-detail .patch-node')).toHaveCount(7);
 });
 
-test('world navigation surfaces a recommended level and one missing medal target', async ({ page }) => {
+test('grove navigation surfaces a recommended level and one missing medal target', async ({ page }) => {
     await page.addInitScript(seedProgress);
     await page.goto('/');
     await expect(page.locator('#continue-hero')).toBeVisible();
-    await expect(page.locator('#world-detail .world-next-callout')).toContainText(/Recommended next/i);
-    await page.locator('.world-card[data-world="0"]').click();
-    const goal = page.locator('#world-detail .level-node.has-goal .level-meta').first();
+    await expect(page.locator('#grove-detail .grove-next-callout')).toContainText(/Recommended next/i);
+    await page.locator('.grove-card[data-grove="0"]').click();
+    const goal = page.locator('#grove-detail .patch-node.has-goal .patch-meta').first();
     await expect(goal).toBeVisible();
     await expect(goal).toHaveText(/^(SAVE \d+|SK<=\d+|T<\d+:\d{2})$/);
-    const aria = await page.locator('#world-detail .level-node.has-goal').first().getAttribute('aria-label');
+    const aria = await page.locator('#grove-detail .patch-node.has-goal').first().getAttribute('aria-label');
     expect(aria).toContain('next target:');
 
-    await page.locator('#world-carousel').focus();
+    await page.locator('#grove-carousel').focus();
     await page.keyboard.press('ArrowRight');
-    await expect(page.locator('#world-carousel .world-card.is-selected')).toContainText('Trial Hollows');
+    await expect(page.locator('#grove-carousel .grove-card.is-selected')).toContainText('Trial Hollows');
 });
 
 test('starting a level shows the board and the full 8-skill toolbar', async ({ page }) => {
@@ -153,26 +153,26 @@ test('onboarding paces feature reveals by progression instead of dumping them at
     await page.goto('/');
     await expect(page.locator('#start-screen')).toHaveClass(/first-run/);
     await expect(page.locator('#btn-start')).toHaveText(/start playing/i);
-    await expect(page.locator('#world-menu')).toBeHidden();
+    await expect(page.locator('#grove-menu')).toBeHidden();
     await expect(page.locator('#menu-secondary-actions')).toBeHidden();
     await expect(page.locator('#btn-editor')).toBeHidden();
     await expect(page.locator('.controls-disc')).toBeHidden();
 
-    // Learning (cleared Level 1, still inside World 1): the carousel and controls
+    // Learning (cleared Level 1, still inside Grove 1): the carousel and controls
     // arrive, but the daily and editor are deliberately still withheld.
     await page.evaluate(() => storage.setUnlocked(1));
     await page.reload();
     await expect(page.locator('#start-screen')).not.toHaveClass(/first-run/);
     await expect(page.locator('#btn-start')).toBeHidden();
     await expect(page.locator('#continue-hero')).toBeVisible();
-    await expect(page.locator('#world-menu')).toBeVisible();
-    await expect(page.locator('#world-carousel .world-card')).toHaveCount(3);
+    await expect(page.locator('#grove-menu')).toBeVisible();
+    await expect(page.locator('#grove-carousel .grove-card')).toHaveCount(3);
     await expect(page.locator('.controls-disc')).toBeVisible();
     await expect(page.locator('#daily-card')).toBeHidden();
     await expect(page.locator('#btn-editor')).toBeHidden();
     await expect(page.locator('#menu-secondary-actions')).toBeHidden();
 
-    // Explorer (reached World 2): the daily/ghost loop unlocks with a NEW badge;
+    // Explorer (reached Grove 2): the daily/ghost loop unlocks with a NEW badge;
     // the editor stays gated for a same-day sprinter.
     await page.evaluate(() => storage.setUnlocked(7));
     await page.reload();
@@ -180,7 +180,7 @@ test('onboarding paces feature reveals by progression instead of dumping them at
     await expect(page.locator('#daily-card')).toHaveClass(/menu-new/);
     await expect(page.locator('#btn-editor')).toBeHidden();
 
-    // Veteran (reached World 3): the editor finally unlocks, also flagged NEW.
+    // Veteran (reached Grove 3): the editor finally unlocks, also flagged NEW.
     await page.evaluate(() => storage.setUnlocked(14));
     await page.reload();
     await expect(page.locator('#btn-editor')).toBeVisible();

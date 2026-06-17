@@ -74,7 +74,7 @@ Object.assign(ui, {
         this.clearNextLevelCountdown();
         const node = document.getElementById('msg-next-teaser');
         if (!node || nextIdx < 0 || nextIdx >= LEVELS.length) return;
-        let remaining = this.isChapterCompleteLevel(nextIdx - 1) ? 5 : 3;
+        let remaining = this.isGroveCompleteLevel(nextIdx - 1) ? 5 : 3;
         const tick = () => {
             const el = document.getElementById('msg-autoadvance');
             if (el) el.innerText = remaining <= 0 ? 'Opening…' : `Continuing in ${remaining}…`;
@@ -98,12 +98,12 @@ Object.assign(ui, {
         if (!win || game.runMode !== 'campaign' || game.levelIdx < 0 || game.levelIdx + 1 >= LEVELS.length) return;
         const nextIdx = game.levelIdx + 1;
         const next = LEVELS[nextIdx];
-        const chapter = this.chapterMeta(nextIdx);
+        const grove = this.groveMeta(nextIdx);
         const hook = next.headlineSkill != null ? `${SKILL_NAMES[next.headlineSkill]} leads here` : 'Fresh route ahead';
-        const chapterLead = this.isChapterCompleteLevel(game.levelIdx)
-            ? `<span class="teaser-kicker chapter-kicker">${chapter.title} unlocked</span>`
+        const groveLead = this.isGroveCompleteLevel(game.levelIdx)
+            ? `<span class="teaser-kicker grove-kicker">${grove.title} unlocked</span>`
             : `<span class="teaser-kicker">Next puzzle</span>`;
-        node.innerHTML = `${chapterLead}<strong>${nextIdx + 1}. ${next.name}</strong><span>${hook}</span><span id="msg-autoadvance" class="teaser-autoadvance"></span>`;
+        node.innerHTML = `${groveLead}<strong>${nextIdx + 1}. ${next.name}</strong><span>${hook}</span><span id="msg-autoadvance" class="teaser-autoadvance"></span>`;
         node.classList.remove('hidden');
         this.scheduleNextLevelAdvance(nextIdx);
     },
@@ -164,8 +164,8 @@ Object.assign(ui, {
 
         const progress = document.getElementById('msg-progress');
         if (progress) {
-            const chapterBits = win && game.runMode === 'campaign' && game.levelIdx >= 0 ? this.chapterSummaryHtml(game.levelIdx) : '';
-            progress.innerHTML = this.runStreakHtml(streak) + this.resultTargetHtml(target, allMedals) + chapterBits;
+            const groveBits = win && game.runMode === 'campaign' && game.levelIdx >= 0 ? this.groveSummaryHtml(game.levelIdx) : '';
+            progress.innerHTML = this.runStreakHtml(streak) + this.resultTargetHtml(target, allMedals) + groveBits;
             progress.classList.toggle('hidden', progress.innerHTML === '');
         }
         const showLegend = !!(win && game.level.par && !storage.load('medalLegendSeen', false));
@@ -240,8 +240,8 @@ Object.assign(ui, {
         else if (game.runMode === 'daily') label = 'Done';
         else if (hasNext) {
             const nm = LEVELS[game.levelIdx + 1].name;
-            label = this.isChapterCompleteLevel(game.levelIdx)
-                ? `Open ${this.chapterMeta(game.levelIdx + 1).title}`
+            label = this.isGroveCompleteLevel(game.levelIdx)
+                ? `Open ${this.groveMeta(game.levelIdx + 1).title}`
                 : `Next ▸ ${game.levelIdx + 2}. ${nm.length > 16 ? nm.slice(0, 15) + '…' : nm}`;
         } else label = 'Next Level';
         primary.innerText = label;
@@ -251,10 +251,10 @@ Object.assign(ui, {
         if (typeof primary.focus === 'function') { try { primary.focus(); } catch (e) {} }
 
         if (win && game.runMode === 'campaign' && game.levelIdx >= 0) {
-            if (this.isChapterCompleteLevel(game.levelIdx)) {
-                const meta = this.chapterMeta(game.levelIdx);
-                const nextMeta = this.chapterMeta(Math.min(LEVELS.length - 1, game.levelIdx + 1));
-                document.getElementById('msg-title').innerText = `CHAPTER ${meta.chapter + 1} CLEAR!`;
+            if (this.isGroveCompleteLevel(game.levelIdx)) {
+                const meta = this.groveMeta(game.levelIdx);
+                const nextMeta = this.groveMeta(Math.min(LEVELS.length - 1, game.levelIdx + 1));
+                document.getElementById('msg-title').innerText = `GROVE ${meta.grove + 1} CLEAR!`;
                 document.getElementById('msg-text').innerText = `${meta.title} complete. ${nextMeta.title} is now open.`;
             }
             this.renderNextTeaser(game, win);

@@ -217,7 +217,7 @@ const LEVELS = [
             par: { time: 165, skills: 3, saved: 16 },
             headlineSkill: SKILLS.BLOCK,
             theme: 'FOREST',
-            tut: 'Machine chapter begins. Turn one mossling into a BLOCKER [1] on the switch to hold the gate open.',
+            tut: 'Machine Reaches begin. Turn one mossling into a BLOCKER [1] on the switch to hold the gate open.',
             inventory: { [SKILLS.BLOCK]: 4, [SKILLS.BUILD]: 2 },
             spawn: { x: 80, y: 320 }, exit: { x: 850, y: 420 },
             commands: [

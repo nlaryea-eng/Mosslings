@@ -1,6 +1,6 @@
 'use strict';
 /**
- * MOSSLINGS - campaign menu and world carousel.
+ * MOSSLINGS - campaign menu and grove carousel.
  *
  * ui.js owns shared orchestration. This module owns campaign menu data,
  * rendering, and menu-only interactions so the main UI surface does not grow
@@ -9,30 +9,30 @@
 class MenuUI {
     constructor(host) {
         this.host = host;
-        this.selectedWorld = null;
-        this.pendingRewardWorld = null;
-        this.worldSize = 7;
-        this.worldThemes = [
+        this.selectedGrove = null;
+        this.pendingRewardGrove = null;
+        this.groveSize = 7;
+        this.groveThemes = [
             {
                 name: 'Foundations',
                 theme: 'Forest on-ramp',
-                unlock: 'World 1 is your on-ramp.',
+                unlock: 'Grove 1 is your on-ramp.',
                 flavor: 'Builders, diggers, floaters, and the first lava leap.',
-                badges: ['Core tools', 'Bridge, dig, float', 'Levels 1-7']
+                badges: ['Core tools', 'Bridge, dig, float', 'Patches 1-7']
             },
             {
                 name: 'Trial Hollows',
                 theme: 'Caves and lava routes',
                 unlock: 'The middle stretch tightens route planning.',
                 flavor: 'Bash lines, miner routes, athlete gates, and harsher lava carries.',
-                badges: ['Route control', 'Athlete checks', 'Levels 8-14']
+                badges: ['Route control', 'Athlete checks', 'Patches 8-14']
             },
             {
-                name: 'Machine Grove',
+                name: 'Machine Reaches',
                 theme: 'Switches and ferries',
                 unlock: 'The endgame region is live.',
                 flavor: 'Switches, ferries, remixed gates, the tower ascent, and the gauntlet.',
-                badges: ['Switch logic', 'Platform timing', 'Levels 15-21']
+                badges: ['Switch logic', 'Platform timing', 'Patches 15-21']
             }
         ];
     }
@@ -41,22 +41,21 @@ class MenuUI {
         return this.host.game;
     }
 
-    worldCount() {
-        return Math.ceil(LEVELS.length / this.worldSize);
+    groveCount() {
+        return Math.ceil(LEVELS.length / this.groveSize);
     }
 
-    worldMeta(levelIdx) {
+    groveMeta(levelIdx) {
         const clamped = Math.max(0, Math.min(LEVELS.length - 1, levelIdx || 0));
-        const world = Math.floor(clamped / this.worldSize);
-        const start = world * this.worldSize;
-        const end = Math.min(LEVELS.length - 1, start + this.worldSize - 1);
-        const theme = this.worldTheme(world);
+        const grove = Math.floor(clamped / this.groveSize);
+        const start = grove * this.groveSize;
+        const end = Math.min(LEVELS.length - 1, start + this.groveSize - 1);
+        const theme = this.groveTheme(grove);
         return {
-            world,
-            chapter: world, // compatibility for result-ui/storage naming.
+            grove,
             start,
             end,
-            title: `World ${world + 1}`,
+            title: `Grove ${grove + 1}`,
             name: theme.name,
             theme: theme.theme,
             region: theme.name,
@@ -64,29 +63,29 @@ class MenuUI {
         };
     }
 
-    worldMetaByWorld(world) {
-        return this.worldMeta(Math.max(0, Math.min(this.worldCount() - 1, world)) * this.worldSize);
+    groveMetaByGrove(grove) {
+        return this.groveMeta(Math.max(0, Math.min(this.groveCount() - 1, grove)) * this.groveSize);
     }
 
-    worldTheme(world) {
-        return this.worldThemes[world] || this.worldThemes[this.worldThemes.length - 1];
+    groveTheme(grove) {
+        return this.groveThemes[grove] || this.groveThemes[this.groveThemes.length - 1];
     }
 
-    isWorldCompleteLevel(idx) {
-        return idx >= 0 && idx < LEVELS.length - 1 && ((idx + 1) % this.worldSize === 0);
+    isGroveCompleteLevel(idx) {
+        return idx >= 0 && idx < LEVELS.length - 1 && ((idx + 1) % this.groveSize === 0);
     }
 
-    worldSummaryHtml(idx) {
-        const meta = this.worldMeta(idx);
-        const nextMeta = this.worldMeta(Math.min(LEVELS.length - 1, idx + 1));
-        if (this.isWorldCompleteLevel(idx)) {
-            return `<span class="msg-progress-chip msg-chapter complete">${meta.title} complete - ${meta.name}</span>` +
-                `<span class="msg-progress-chip msg-chapter unlock">${nextMeta.title} unlocked</span>`;
+    groveSummaryHtml(idx) {
+        const meta = this.groveMeta(idx);
+        const nextMeta = this.groveMeta(Math.min(LEVELS.length - 1, idx + 1));
+        if (this.isGroveCompleteLevel(idx)) {
+            return `<span class="msg-progress-chip msg-grove complete">${meta.title} complete - ${meta.name}</span>` +
+                `<span class="msg-progress-chip msg-grove unlock">${nextMeta.title} unlocked</span>`;
         }
-        return `<span class="msg-progress-chip msg-chapter">${meta.title} - level ${(idx - meta.start) + 1}/${(meta.end - meta.start) + 1}</span>`;
+        return `<span class="msg-progress-chip msg-grove">${meta.title} - patch ${(idx - meta.start) + 1}/${(meta.end - meta.start) + 1}</span>`;
     }
 
-    worldMasteryData(meta, unlocked = storage.getUnlocked()) {
+    groveMasteryData(meta, unlocked = storage.getUnlocked()) {
         const totals = {
             rescue: 0,
             efficiency: 0,
@@ -117,9 +116,9 @@ class MenuUI {
         return { ...totals, levels };
     }
 
-    worldCompletionStats(meta, unlocked = storage.getUnlocked()) {
+    groveCompletionStats(meta, unlocked = storage.getUnlocked()) {
         const levelCount = (meta.end - meta.start) + 1;
-        const mastery = this.worldMasteryData(meta, unlocked);
+        const mastery = this.groveMasteryData(meta, unlocked);
         let cleared = 0;
         let bestSum = 0;
         let bestCount = 0;
@@ -145,115 +144,115 @@ class MenuUI {
         };
     }
 
-    worldCompletionRibbonHtml(meta, unlocked = storage.getUnlocked()) {
-        const stats = this.worldCompletionStats(meta, unlocked);
-        const cls = ['chapter-reward-ribbon', stats.masteryComplete ? 'mastery-complete' : '', 'hidden'].filter(Boolean).join(' ');
-        const kicker = stats.masteryComplete ? 'World mastered' : 'World complete';
+    groveCompletionRibbonHtml(meta, unlocked = storage.getUnlocked()) {
+        const stats = this.groveCompletionStats(meta, unlocked);
+        const cls = ['grove-reward-ribbon', stats.masteryComplete ? 'mastery-complete' : '', 'hidden'].filter(Boolean).join(' ');
+        const kicker = stats.masteryComplete ? 'Grove mastered' : 'Grove complete';
         const copy = stats.masteryComplete
             ? `<strong>${meta.title}</strong> wrapped with ${stats.medalCount}/${stats.medalTotal} medals and ${stats.avg !== null ? `${stats.avg}% avg rescue` : 'a clean run'}.`
             : `<strong>${meta.title}</strong> closed at ${stats.cleared}/${stats.levelCount} cleared - ${stats.medalCount}/${stats.medalTotal} medals${stats.avg !== null ? ` - ${stats.avg}% avg rescue` : ''}.`;
         const pill = stats.masteryComplete
             ? `<span class="ribbon-pill">Mastery complete</span>`
             : `<span class="ribbon-pill">${stats.cleared}/${stats.levelCount} clear</span>`;
-        return `<div id="chapter-reward-ribbon" class="${cls}" aria-live="polite"><span class="ribbon-kicker">${kicker}</span><span class="ribbon-copy">${copy}</span>${pill}</div>`;
+        return `<div id="grove-reward-ribbon" class="${cls}" aria-live="polite"><span class="ribbon-kicker">${kicker}</span><span class="ribbon-copy">${copy}</span>${pill}</div>`;
     }
 
-    worldMasterySummaryHtml(meta, unlocked = storage.getUnlocked()) {
-        const data = this.worldMasteryData(meta, unlocked);
+    groveMasterySummaryHtml(meta, unlocked = storage.getUnlocked()) {
+        const data = this.groveMasteryData(meta, unlocked);
         const locked = unlocked < meta.start;
         // Progressive disclosure: one compact summary line + the track + a single
         // next-target chip, instead of four competing rescue/efficiency/speed/
         // mastered chips fighting for first-glance attention.
         const medals = data.rescue + data.efficiency + data.speed;
         const summary = locked
-            ? `<span class="world-mastery-line">Locked - clear earlier worlds</span>`
-            : `<span class="world-mastery-line">Mastered ${data.mastered}/${data.levelCount} · ${medals}/${data.levelCount * 3} medals</span>`;
+            ? `<span class="grove-mastery-line">Locked - clear earlier groves</span>`
+            : `<span class="grove-mastery-line">Mastered ${data.mastered}/${data.levelCount} · ${medals}/${data.levelCount * 3} medals</span>`;
         const nextChip = locked
             ? ''
             : (data.nextGoal
-                ? `<span class="world-mastery-chip next" title="${data.nextGoal.label}">Next: L${data.nextGoal.level} ${data.nextGoal.short}</span>`
-                : `<span class="world-mastery-chip next complete">World mastered</span>`);
+                ? `<span class="grove-mastery-chip next" title="${data.nextGoal.label}">Next: P${data.nextGoal.level} ${data.nextGoal.short}</span>`
+                : `<span class="grove-mastery-chip next complete">Grove mastered</span>`);
         const chips = `${summary}${nextChip}`;
         const nodes = data.levels.map((entry) => {
-            const cls = ['world-mastery-node', entry.locked ? 'locked' : `m${entry.medalCount}`, entry.mastered ? 'mastered' : ''].filter(Boolean).join(' ');
+            const cls = ['grove-mastery-node', entry.locked ? 'locked' : `m${entry.medalCount}`, entry.mastered ? 'mastered' : ''].filter(Boolean).join(' ');
             const status = entry.locked ? 'Locked' : `${entry.medalCount}/3 mastery`;
             const goal = entry.goal ? ` - ${entry.goal.short}` : (entry.mastered ? ' - mastered' : '');
-            return `<span class="${cls}" title="Level ${entry.level}: ${status}${goal}"><span>${entry.level}</span></span>`;
+            return `<span class="${cls}" title="Patch ${entry.level}: ${status}${goal}"><span>${entry.level}</span></span>`;
         }).join('');
         const complete = data.masteryComplete
-            ? `<div class="world-mastery-complete"><strong>${meta.title} mastery complete</strong><span>All rescue, efficiency, and speed medals secured.</span></div>`
+            ? `<div class="grove-mastery-complete"><strong>${meta.title} mastery complete</strong><span>All rescue, efficiency, and speed medals secured.</span></div>`
             : '';
-        return `<div class="world-mastery ${data.masteryComplete ? 'is-complete' : ''}">` +
+        return `<div class="grove-mastery ${data.masteryComplete ? 'is-complete' : ''}">` +
             `${complete}` +
-            `<div class="world-mastery-track" aria-hidden="true">${nodes}</div>` +
-            `<div class="world-mastery-chips">${chips}</div>` +
+            `<div class="grove-mastery-track" aria-hidden="true">${nodes}</div>` +
+            `<div class="grove-mastery-chips">${chips}</div>` +
         `</div>`;
     }
 
-    pendingWorldReward(unlocked) {
-        const maxWorld = Math.floor(Math.min(unlocked, LEVELS.length - 1) / this.worldSize);
-        for (let world = maxWorld; world >= 1; world--) {
-            if (!storage.hasChapterRewardSeen(world)) return world;
+    pendingGroveReward(unlocked) {
+        const maxGrove = Math.floor(Math.min(unlocked, LEVELS.length - 1) / this.groveSize);
+        for (let grove = maxGrove; grove >= 1; grove--) {
+            if (!storage.hasGroveRewardSeen(grove)) return grove;
         }
         return null;
     }
 
-    renderWorldReward(unlocked) {
-        const card = document.getElementById('chapter-reward-card');
+    renderGroveReward(unlocked) {
+        const card = document.getElementById('grove-reward-card');
         if (!card) return;
-        const world = this.pendingWorldReward(unlocked);
-        this.pendingRewardWorld = world;
-        if (world == null) {
+        const grove = this.pendingGroveReward(unlocked);
+        this.pendingRewardGrove = grove;
+        if (grove == null) {
             card.classList.add('hidden');
             return;
         }
-        const meta = this.worldMetaByWorld(world);
-        const theme = this.worldTheme(world);
+        const meta = this.groveMetaByGrove(grove);
+        const theme = this.groveTheme(grove);
         const firstLevel = meta.start;
         const lastLevel = meta.end;
-        document.getElementById('chapter-reward-kicker').innerText = `${meta.title} unlocked - ${theme.name}`;
-        document.getElementById('chapter-reward-title').innerText = `${firstLevel + 1}. ${LEVELS[firstLevel].name} is ready`;
-        document.getElementById('chapter-reward-meta').innerText = `${theme.flavor} ${theme.unlock}`;
-        document.getElementById('btn-chapter-open').innerText = `Play ${meta.title}`;
-        let ribbon = document.getElementById('chapter-reward-ribbon');
-        const prevMeta = world > 0 ? this.worldMetaByWorld(world - 1) : null;
+        document.getElementById('grove-reward-kicker').innerText = `${meta.title} unlocked - ${theme.name}`;
+        document.getElementById('grove-reward-title').innerText = `${firstLevel + 1}. ${LEVELS[firstLevel].name} is ready`;
+        document.getElementById('grove-reward-meta').innerText = `${theme.flavor} ${theme.unlock}`;
+        document.getElementById('btn-grove-open').innerText = `Play ${meta.title}`;
+        let ribbon = document.getElementById('grove-reward-ribbon');
+        const prevMeta = grove > 0 ? this.groveMetaByGrove(grove - 1) : null;
         if (ribbon) {
             if (prevMeta) {
-                ribbon.outerHTML = this.worldCompletionRibbonHtml(prevMeta, unlocked);
-                ribbon = document.getElementById('chapter-reward-ribbon');
+                ribbon.outerHTML = this.groveCompletionRibbonHtml(prevMeta, unlocked);
+                ribbon = document.getElementById('grove-reward-ribbon');
                 ribbon.classList.remove('hidden');
             } else {
                 ribbon.classList.add('hidden');
                 ribbon.innerHTML = '';
             }
         }
-        const badges = document.getElementById('chapter-reward-badges');
+        const badges = document.getElementById('grove-reward-badges');
         badges.innerHTML = '';
-        const items = [...theme.badges, `Levels ${firstLevel + 1}-${lastLevel + 1}`];
+        const items = [...theme.badges, `Patches ${firstLevel + 1}-${lastLevel + 1}`];
         items.forEach((label, idx) => {
             const span = document.createElement('span');
-            span.className = `chapter-reward-badge badge-${idx % 3}`;
+            span.className = `grove-reward-badge badge-${idx % 3}`;
             span.innerText = label;
             badges.appendChild(span);
         });
         card.classList.remove('hidden');
     }
 
-    dismissPendingWorldReward() {
-        if (this.pendingRewardWorld == null) return;
-        storage.markChapterRewardSeen(this.pendingRewardWorld);
-        this.pendingRewardWorld = null;
-        const card = document.getElementById('chapter-reward-card');
+    dismissPendingGroveReward() {
+        if (this.pendingRewardGrove == null) return;
+        storage.markGroveRewardSeen(this.pendingRewardGrove);
+        this.pendingRewardGrove = null;
+        const card = document.getElementById('grove-reward-card');
         if (card) card.classList.add('hidden');
     }
 
-    openPendingWorldReward() {
-        if (this.pendingRewardWorld == null) return;
-        const world = this.pendingRewardWorld;
-        const meta = this.worldMetaByWorld(world);
-        storage.markChapterRewardSeen(world);
-        this.pendingRewardWorld = null;
-        this.selectedWorld = world;
+    openPendingGroveReward() {
+        if (this.pendingRewardGrove == null) return;
+        const grove = this.pendingRewardGrove;
+        const meta = this.groveMetaByGrove(grove);
+        storage.markGroveRewardSeen(grove);
+        this.pendingRewardGrove = null;
+        this.selectedGrove = grove;
         this.game.levelIdx = meta.start;
         this.buildMenu();
         this.host.armAudioForPlay();
@@ -270,14 +269,14 @@ class MenuUI {
         return unlocked;
     }
 
-    syncSelectedWorld(unlocked) {
-        const count = this.worldCount();
-        if (this.selectedWorld == null || this.selectedWorld < 0 || this.selectedWorld >= count) {
+    syncSelectedGrove(unlocked) {
+        const count = this.groveCount();
+        if (this.selectedGrove == null || this.selectedGrove < 0 || this.selectedGrove >= count) {
             const rec = this.recommendedLevelIdx();
             const basis = rec == null ? Math.min(this.game.levelIdx || 0, unlocked) : rec;
-            this.selectedWorld = this.worldMeta(Math.max(0, basis)).world;
+            this.selectedGrove = this.groveMeta(Math.max(0, basis)).grove;
         }
-        this.selectedWorld = Math.max(0, Math.min(count - 1, this.selectedWorld));
+        this.selectedGrove = Math.max(0, Math.min(count - 1, this.selectedGrove));
     }
 
     renderContinueHero() {
@@ -288,14 +287,14 @@ class MenuUI {
             hero.classList.add('hidden');
             return;
         }
-        const meta = this.worldMeta(idx);
+        const meta = this.groveMeta(idx);
         const lvl = LEVELS[idx];
         const cleared = storage.getBest(idx) !== null;
         const hook = lvl.headlineSkill != null ? `${SKILL_NAMES[lvl.headlineSkill]} leads here` : 'Fresh route ahead';
         document.getElementById('continue-kicker').innerText = `${cleared ? 'Replay' : 'Continue'} - ${meta.title} - ${meta.name}`;
         document.getElementById('continue-title').innerText = `${idx + 1}. ${lvl.name}`;
         document.getElementById('continue-sub').innerText = cleared ? `${hook} - best ${storage.getBest(idx)}%` : hook;
-        if (hero.setAttribute) hero.setAttribute('aria-label', `Continue: level ${idx + 1}, ${lvl.name}, ${meta.title}`);
+        if (hero.setAttribute) hero.setAttribute('aria-label', `Continue: patch ${idx + 1}, ${lvl.name}, ${meta.title}`);
         hero.classList.remove('hidden');
     }
 
@@ -310,7 +309,7 @@ class MenuUI {
             unlocked: storage.getUnlocked(),
             daysSinceFirstPlay,
             customLevelCount: storage.getCustomLevels().length,
-            worldSize: this.worldSize,
+            groveSize: this.groveSize,
         });
     }
 
@@ -324,9 +323,9 @@ class MenuUI {
             start.innerText = firstRun ? 'Start Playing' : 'Play';
             start.classList.toggle('hidden', !firstRun);
         }
-        this.renderWorldReward(firstRun ? -1 : unlocked);
+        this.renderGroveReward(firstRun ? -1 : unlocked);
         this.renderContinueHero();
-        this.renderWorldMenu(features.worldMenu, unlocked);
+        this.renderGroveMenu(features.groveMenu, unlocked);
         this.refreshDailyCard(features.daily);
         this.applyMenuSurfaces(features);
     }
@@ -350,8 +349,8 @@ class MenuUI {
         badge('btn-editor', features.editor && !storage.hasMenuRevealSeen('editor'));
     }
 
-    renderWorldMenu(show, unlocked) {
-        const root = document.getElementById('world-menu');
+    renderGroveMenu(show, unlocked) {
+        const root = document.getElementById('grove-menu');
         if (!root) return;
         if (!show) {
             root.classList.add('hidden');
@@ -359,46 +358,46 @@ class MenuUI {
             return;
         }
         root.classList.remove('hidden');
-        this.syncSelectedWorld(unlocked);
+        this.syncSelectedGrove(unlocked);
         const recommended = this.recommendedLevelIdx();
-        // Render only a bounded window of worlds around the selection so the
-        // carousel costs the same at 3 worlds or 300.
-        const cards = carouselWindow(this.selectedWorld, this.worldCount())
-            .map((world) => this.worldCardHtml(this.worldMetaByWorld(world), unlocked, recommended));
-        const detail = this.worldDetailHtml(this.worldMetaByWorld(this.selectedWorld), unlocked, recommended);
+        // Render only a bounded window of groves around the selection so the
+        // carousel costs the same at 3 groves or 300.
+        const cards = carouselWindow(this.selectedGrove, this.groveCount())
+            .map((grove) => this.groveCardHtml(this.groveMetaByGrove(grove), unlocked, recommended));
+        const detail = this.groveDetailHtml(this.groveMetaByGrove(this.selectedGrove), unlocked, recommended);
         root.innerHTML =
-            `<section class="world-carousel-shell" aria-label="Campaign worlds">` +
-                `<button id="world-prev" class="world-nav-btn" aria-label="Previous world">${UI_ICONS.undo}</button>` +
-                `<div id="world-carousel" class="world-carousel" role="listbox" tabindex="0" aria-label="World carousel">` +
+            `<section class="grove-carousel-shell" aria-label="Campaign groves">` +
+                `<button id="grove-prev" class="grove-nav-btn" aria-label="Previous grove">${UI_ICONS.undo}</button>` +
+                `<div id="grove-carousel" class="grove-carousel" role="listbox" tabindex="0" aria-label="Grove carousel">` +
                     cards.join('') +
                 `</div>` +
-                `<button id="world-next" class="world-nav-btn" aria-label="Next world">${UI_ICONS.play}</button>` +
+                `<button id="grove-next" class="grove-nav-btn" aria-label="Next grove">${UI_ICONS.play}</button>` +
             `</section>` +
             detail;
-        this.bindWorldMenu(root);
+        this.bindGroveMenu(root);
     }
 
-    worldCardHtml(meta, unlocked, recommended) {
+    groveCardHtml(meta, unlocked, recommended) {
         const locked = unlocked < meta.start;
-        const selected = meta.world === this.selectedWorld;
-        const stats = this.worldCompletionStats(meta, unlocked);
-        const recInWorld = recommended != null && recommended >= meta.start && recommended <= meta.end;
+        const selected = meta.grove === this.selectedGrove;
+        const stats = this.groveCompletionStats(meta, unlocked);
+        const recInGrove = recommended != null && recommended >= meta.start && recommended <= meta.end;
         const availableEnd = locked ? meta.start - 1 : Math.min(unlocked, meta.end);
         const available = locked ? 0 : Math.max(1, availableEnd - meta.start + 1);
         const progress = locked
             ? 'Locked'
             : `${stats.cleared}/${stats.levelCount} clear - ${stats.medalCount}/${stats.medalTotal} medals`;
         const sub = locked
-            ? `Unlock after World ${meta.world}`
+            ? `Unlock after Grove ${meta.grove}`
             : `${available}/${stats.levelCount} available${stats.avg !== null ? ` - ${stats.avg}% avg` : ''}`;
-        const cls = ['world-card', selected ? 'is-selected' : '', locked ? 'is-locked' : '', recInWorld ? 'has-recommended' : ''].filter(Boolean).join(' ');
-        return `<button class="${cls}" data-world="${meta.world}" role="option" aria-selected="${selected ? 'true' : 'false'}" aria-label="${meta.title}: ${meta.name}, ${progress}">` +
-            `<span class="world-card-num">W${meta.world + 1}</span>` +
+        const cls = ['grove-card', selected ? 'is-selected' : '', locked ? 'is-locked' : '', recInGrove ? 'has-recommended' : ''].filter(Boolean).join(' ');
+        return `<button class="${cls}" data-grove="${meta.grove}" role="option" aria-selected="${selected ? 'true' : 'false'}" aria-label="${meta.title}: ${meta.name}, ${progress}">` +
+            `<span class="grove-card-num">G${meta.grove + 1}</span>` +
             `<strong>${meta.name}</strong>` +
-            `<span class="world-card-theme">${meta.theme}</span>` +
-            `<span class="world-card-progress">${progress}</span>` +
-            `<span class="world-card-sub">${sub}</span>` +
-            (recInWorld ? `<span class="world-card-next">Next L${recommended + 1}</span>` : '') +
+            `<span class="grove-card-theme">${meta.theme}</span>` +
+            `<span class="grove-card-progress">${progress}</span>` +
+            `<span class="grove-card-sub">${sub}</span>` +
+            (recInGrove ? `<span class="grove-card-next">Next P${recommended + 1}</span>` : '') +
         `</button>`;
     }
 
@@ -410,37 +409,37 @@ class MenuUI {
         return bits.join('');
     }
 
-    worldDetailHtml(meta, unlocked, recommended) {
-        const lockedWorld = unlocked < meta.start;
-        const data = this.worldMasteryData(meta, unlocked);
-        const stats = this.worldCompletionStats(meta, unlocked);
-        const recommendedInWorld = recommended != null && recommended >= meta.start && recommended <= meta.end;
-        const recommendedLevel = recommendedInWorld ? LEVELS[recommended] : null;
+    groveDetailHtml(meta, unlocked, recommended) {
+        const lockedGrove = unlocked < meta.start;
+        const data = this.groveMasteryData(meta, unlocked);
+        const stats = this.groveCompletionStats(meta, unlocked);
+        const recommendedInGrove = recommended != null && recommended >= meta.start && recommended <= meta.end;
+        const recommendedLevel = recommendedInGrove ? LEVELS[recommended] : null;
         const levelButtons = data.levels.map((entry) => this.levelNodeHtml(entry, recommended)).join('');
-        const summary = lockedWorld
-            ? `Locked - clear World ${meta.world}`
+        const summary = lockedGrove
+            ? `Locked - clear Grove ${meta.grove}`
             : `${stats.cleared}/${stats.levelCount} cleared - ${stats.medalCount}/${stats.medalTotal} medals${stats.avg !== null ? ` - ${stats.avg}% avg rescue` : ''}`;
-        const reward = lockedWorld
-            ? `<div class="world-state is-locked">Locked world - keep clearing the previous route.</div>`
+        const reward = lockedGrove
+            ? `<div class="grove-state is-locked">Locked grove - keep clearing the previous route.</div>`
             : stats.masteryComplete
-                ? `<div class="world-state is-complete">Reward state: ${meta.title} mastered.</div>`
+                ? `<div class="grove-state is-complete">Reward state: ${meta.title} mastered.</div>`
                 : stats.cleared === stats.levelCount
-                    ? `<div class="world-state">Completion state: ${meta.title} cleared. Mastery targets remain.</div>`
-                    : `<div class="world-state">Completion state: ${stats.cleared}/${stats.levelCount} cleared.</div>`;
-        const next = recommendedInWorld
-            ? `<button class="world-next-callout" data-level="${recommended}" aria-label="Play recommended level ${recommended + 1}">` +
-                `<span>Recommended next</span><strong>L${recommended + 1} ${recommendedLevel.name}</strong>` +
+                    ? `<div class="grove-state">Completion state: ${meta.title} cleared. Mastery targets remain.</div>`
+                    : `<div class="grove-state">Completion state: ${stats.cleared}/${stats.levelCount} cleared.</div>`;
+        const next = recommendedInGrove
+            ? `<button class="grove-next-callout" data-patch="${recommended}" aria-label="Play recommended patch ${recommended + 1}">` +
+                `<span>Recommended next</span><strong>P${recommended + 1} ${recommendedLevel.name}</strong>` +
                 `<em>${recommendedLevel.headlineSkill != null ? SKILL_NAMES[recommendedLevel.headlineSkill] : 'Route'} focus</em>` +
             `</button>`
-            : `<div class="world-next-callout is-muted"><span>Recommended next</span><strong>Choose a level in this world</strong><em>Adjacent worlds stay available in the carousel.</em></div>`;
-        return `<section id="world-detail" class="world-detail ${lockedWorld ? 'is-locked' : ''}" aria-label="Selected world detail">` +
-            `<div class="world-detail-head">` +
-                `<div><span class="world-detail-kicker">${meta.title} - ${meta.theme}</span><h2>${meta.name}</h2></div>` +
-                `<div class="world-detail-summary">${summary}</div>` +
+            : `<div class="grove-next-callout is-muted"><span>Recommended next</span><strong>Choose a patch in this grove</strong><em>Adjacent groves stay available in the carousel.</em></div>`;
+        return `<section id="grove-detail" class="grove-detail ${lockedGrove ? 'is-locked' : ''}" aria-label="Selected grove detail">` +
+            `<div class="grove-detail-head">` +
+                `<div><span class="grove-detail-kicker">${meta.title} - ${meta.theme}</span><h2>${meta.name}</h2></div>` +
+                `<div class="grove-detail-summary">${summary}</div>` +
             `</div>` +
             `${next}` +
-            `<div class="level-rail" aria-label="${meta.title} levels">${levelButtons}</div>` +
-            `${this.worldMasterySummaryHtml(meta, unlocked)}` +
+            `<div class="patch-rail" aria-label="${meta.title} patches">${levelButtons}</div>` +
+            `${this.groveMasterySummaryHtml(meta, unlocked)}` +
             `${reward}` +
         `</section>`;
     }
@@ -451,7 +450,7 @@ class MenuUI {
         const rec = idx === recommended;
         const goal = entry.goal;
         const cls = [
-            'level-node',
+            'patch-node',
             selected ? 'is-selected' : '',
             rec ? 'is-recommended' : '',
             entry.locked ? 'is-locked' : '',
@@ -465,52 +464,52 @@ class MenuUI {
                 entry.best !== null ? `best ${entry.best}% rescued` : 'not yet cleared',
                 goal ? goal.label.toLowerCase() : (entry.medalCount === 3 ? 'all medal targets cleared' : 'medal targets available')
             ].join(', ');
-        const label = `Level ${idx + 1}: ${LEVELS[idx].name}, ${progress}${selected ? ', selected' : ''}`;
-        return `<button class="${cls}" data-level="${idx}" aria-label="${label}" aria-disabled="${entry.locked ? 'true' : 'false'}">` +
-            `<span class="level-num">L${idx + 1}</span>` +
-            `<span class="level-name">${LEVELS[idx].name}</span>` +
-            `<span class="level-meta">${entry.locked ? UI_ICONS.lock : (goal ? goal.short : (entry.best !== null ? `${entry.best}%` : 'New'))}</span>` +
-            `<span class="level-medals">${this.medalBits(entry.medals)}</span>` +
+        const label = `Patch ${idx + 1}: ${LEVELS[idx].name}, ${progress}${selected ? ', selected' : ''}`;
+        return `<button class="${cls}" data-patch="${idx}" aria-label="${label}" aria-disabled="${entry.locked ? 'true' : 'false'}">` +
+            `<span class="patch-num">P${idx + 1}</span>` +
+            `<span class="patch-name">${LEVELS[idx].name}</span>` +
+            `<span class="patch-meta">${entry.locked ? UI_ICONS.lock : (goal ? goal.short : (entry.best !== null ? `${entry.best}%` : 'New'))}</span>` +
+            `<span class="patch-medals">${this.medalBits(entry.medals)}</span>` +
         `</button>`;
     }
 
-    bindWorldMenu(root) {
-        const prev = root.querySelector('#world-prev');
-        const next = root.querySelector('#world-next');
-        const carousel = root.querySelector('#world-carousel');
-        if (prev) prev.onclick = () => this.moveWorld(-1);
-        if (next) next.onclick = () => this.moveWorld(1);
+    bindGroveMenu(root) {
+        const prev = root.querySelector('#grove-prev');
+        const next = root.querySelector('#grove-next');
+        const carousel = root.querySelector('#grove-carousel');
+        if (prev) prev.onclick = () => this.moveGrove(-1);
+        if (next) next.onclick = () => this.moveGrove(1);
         if (carousel) {
-            carousel.onkeydown = (e) => this.handleWorldKey(e);
-            // Trackpad/horizontal-wheel intent advances the selected world and lets
+            carousel.onkeydown = (e) => this.handleGroveKey(e);
+            // Trackpad/horizontal-wheel intent advances the selected grove and lets
             // scrollIntoView re-center it — a calmer snap than free overflow scroll.
             carousel.onwheel = (e) => {
                 const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
                 const dir = this.wheelNavIntent(e.deltaX, e.deltaY, now);
-                if (dir) { if (e.preventDefault) e.preventDefault(); this.moveWorld(dir); }
+                if (dir) { if (e.preventDefault) e.preventDefault(); this.moveGrove(dir); }
             };
         }
-        root.querySelectorAll('.world-card').forEach((card) => {
-            card.onclick = () => this.selectWorld(parseInt(card.dataset.world, 10));
+        root.querySelectorAll('.grove-card').forEach((card) => {
+            card.onclick = () => this.selectGrove(parseInt(card.dataset.grove, 10));
         });
-        root.querySelectorAll('.level-node, .world-next-callout[data-level]').forEach((btn) => {
-            btn.onclick = () => this.pickLevel(parseInt(btn.dataset.level, 10), false);
-            btn.ondblclick = () => this.pickLevel(parseInt(btn.dataset.level, 10), true);
+        root.querySelectorAll('.patch-node, .grove-next-callout[data-patch]').forEach((btn) => {
+            btn.onclick = () => this.pickLevel(parseInt(btn.dataset.patch, 10), false);
+            btn.ondblclick = () => this.pickLevel(parseInt(btn.dataset.patch, 10), true);
         });
-        const selected = root.querySelector('.world-card.is-selected');
+        const selected = root.querySelector('.grove-card.is-selected');
         if (selected && selected.scrollIntoView) {
             requestAnimationFrame(() => selected.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' }));
         }
     }
 
-    selectWorld(world) {
-        this.selectedWorld = Math.max(0, Math.min(this.worldCount() - 1, world));
-        // The carousel is, by definition, already shown when a world is selected.
-        this.renderWorldMenu(true, storage.getUnlocked());
+    selectGrove(grove) {
+        this.selectedGrove = Math.max(0, Math.min(this.groveCount() - 1, grove));
+        // The carousel is, by definition, already shown when a grove is selected.
+        this.renderGroveMenu(true, storage.getUnlocked());
     }
 
-    moveWorld(delta) {
-        this.selectWorld((this.selectedWorld == null ? 0 : this.selectedWorld) + delta);
+    moveGrove(delta) {
+        this.selectGrove((this.selectedGrove == null ? 0 : this.selectedGrove) + delta);
     }
 
     pickLevel(idx, forceStart) {
@@ -522,7 +521,7 @@ class MenuUI {
             return;
         }
         this.game.levelIdx = idx;
-        this.selectedWorld = this.worldMeta(idx).world;
+        this.selectedGrove = this.groveMeta(idx).grove;
         this.buildMenu();
     }
 
@@ -538,7 +537,7 @@ class MenuUI {
      * Decide whether a wheel/trackpad gesture should step the carousel. Returns
      * -1 (prev), 1 (next), or 0 (ignore). Pure enough to unit-test: a dominantly
      * vertical or tiny gesture is ignored so page scroll still works, and a
-     * cooldown stops one flick from skating across every world at once.
+     * cooldown stops one flick from skating across every grove at once.
      */
     wheelNavIntent(deltaX, deltaY, now) {
         if (Math.abs(deltaX) <= Math.abs(deltaY)) return 0; // vertical → leave page scroll alone
@@ -548,29 +547,29 @@ class MenuUI {
         return deltaX > 0 ? 1 : -1;
     }
 
-    handleWorldKey(e) {
+    handleGroveKey(e) {
         const start = document.getElementById('start-screen');
         if (!start || start.classList.contains('hidden') || start.classList.contains('first-run')) return false;
         if (e.key === 'ArrowLeft') {
-            this.moveWorld(-1);
+            this.moveGrove(-1);
             e.preventDefault();
             if (e.stopPropagation) e.stopPropagation();
             return true;
         }
         if (e.key === 'ArrowRight') {
-            this.moveWorld(1);
+            this.moveGrove(1);
             e.preventDefault();
             if (e.stopPropagation) e.stopPropagation();
             return true;
         }
         if (e.key === 'Home') {
-            this.selectWorld(0);
+            this.selectGrove(0);
             e.preventDefault();
             if (e.stopPropagation) e.stopPropagation();
             return true;
         }
         if (e.key === 'End') {
-            this.selectWorld(this.worldCount() - 1);
+            this.selectGrove(this.groveCount() - 1);
             e.preventDefault();
             if (e.stopPropagation) e.stopPropagation();
             return true;
