@@ -241,17 +241,44 @@ function computeMedals(par, stats) {
 
 ### Menu Rendering
 
-The level select menu shows icons for each earned medal. The next unearned medal target is disclosed as a goal (e.g., "SAVE 8" or "T<0:55").
+The campaign menu is now a world carousel instead of a stacked level grid.
+`js/menu-ui.js` owns the menu model and DOM rendering; `js/ui.js` keeps small
+delegating wrappers so existing `ui.*` call sites stay stable.
 
+- `#continue-hero` is the strongest CTA and starts the first unlocked campaign
+  level that has not been cleared, falling back to replaying the current edge.
+- `#world-menu` contains `#world-carousel`, where `.world-card` buttons expose
+  one selected world, adjacent available/locked worlds, compact progress, and
+  `aria-selected` state.
+- `#world-detail` is rendered only for the selected world. It shows the world
+  number/name/theme, compact progress, `.world-next-callout`, `.level-rail`,
+  `.level-node` buttons, mastery chips, and completion/reward state.
+- Locked levels use `aria-disabled="true"` and remain visible in the selected
+  world's level rail; locked worlds remain visible and subdued in the carousel.
+- The next unearned medal target is disclosed on the relevant level node with
+  compact labels such as `SAVE 8`, `SK<=3`, or `T<0:55`.
+
+The browser e2e contract deliberately no longer uses `.lvl-btn` or
+`#level-select-container`. It asserts `#world-menu`, `.world-card`,
+`#world-detail .level-node`, the Continue hero, first-run gating, keyboard world
+navigation, level starting, daily entry, and locked/unlocked progression. Unit
+tests cover the world mastery helpers and static menu asset contract.
+
+World reward seen-state intentionally persists through the compatible
+`mosslings_chapterRewardSeen` storage key. The user-facing language is "World";
+the key remains legacy-compatible for existing saves.
 
 ---
 
 ## Summary
 
-These three systems layer cleanly:
+These systems layer cleanly:
 
 - **Serialization**: compact, versioned binary format for any level object
 - **URL Importing**: query-param bootstrap with validation and graceful fallback
 - **Par Medals**: per-level par targets with real-time skill tracking and persistent tier storage
+- **World Carousel Menu**: scalable campaign navigation with selected-world
+  detail and a stable Playwright selector contract
 
-All three respect the existing game architecture (StorageManager, level shape, game lifecycle) and add no new compile step.
+All of them respect the existing game architecture (StorageManager, level shape,
+game lifecycle) and add no new compile step.

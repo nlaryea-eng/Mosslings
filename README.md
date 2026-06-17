@@ -55,7 +55,9 @@ browser game):
 ```
 js/constants.js   shared enums + PHYS tuning table (single source of truth)
 js/icons.js       inline pixel-SVG glyphs for the toolbar/HUD (no emoji fonts)
+js/utils.js       level + replay (de)serialization, solvability check, medal logic
 js/audio.js       synthesized SFX, master gain, AudioContext-clock scheduling
+js/haptics.js     optional vibration feedback wrapper
 js/music.js       generative ambient score (per-theme pad/bass/melody)
 js/particles.js   particle engine + ambient spore drift
 js/terrain.js     per-pixel collision mask + layered canvas rendering
@@ -65,15 +67,18 @@ js/daily.js       deterministic UTC daily challenge selection + scoring helper
 js/result-card.js result overlay snippets + deterministic PNG share-card export
 js/overlays.js    render-only readability overlays (danger probe + hints)
 js/game.js        engine: fixed-timestep loop, skills, ghost replay, HUD, juice
-js/ui.js          core DOM bindings, menu, level editor, pointer input
+js/ui.js          core DOM bindings, shared UI orchestration, editor, pointer input
+js/menu-ui.js     campaign menu: Continue hero, world carousel, level rail
 js/result-ui.js   result overlay, run summary, sharing, ghost-replay export
-js/utils.js       level + replay (de)serialization, solvability check, medal logic
 js/main.js        bootstrap (constructs Game + ui, starts the loop), loads last
 ```
 
-The `ui` object is split across `ui.js` (core/menu/editor) and `result-ui.js`
-(the result overlay + sharing), which mixes its methods onto the same object via
-`Object.assign` — so call sites stay stable while the monolith keeps shrinking.
+The `ui` object is split across `ui.js` (core orchestration/editor/input),
+`menu-ui.js` (campaign menu + world carousel), and `result-ui.js` (result
+overlay + sharing). `menu-ui.js` is instantiated as `ui.menu`; `ui.js` keeps
+small wrapper methods for the public `ui.*` calls that existing game/result code
+uses. `result-ui.js` still mixes methods onto the same object via
+`Object.assign`, so call sites stay stable while the monolith keeps shrinking.
 
 Design principles:
 
@@ -108,8 +113,9 @@ npm install && npm run test:e2e  # 17 Playwright browser smoke tests (dev-only)
 The unit suite (175 tests, no test framework needed) loads the real game scripts
 into Node with stubbed canvas/DOM. A separate **Playwright** smoke suite
 (`tests/e2e/`) drives a real Chromium against the static site to catch
-boot/layout regressions (e.g. level-select card overflow) and is gated in CI
-before deploy. The unit suite covers:
+boot/layout regressions (world-carousel overflow, first-run menu gating,
+level-rail selection, play-next flow) and is gated in CI before deploy. The unit
+suite covers:
 
 1. **Terrain semantics** — destructibility rules, world-edge walls, one-way
    membranes (probe-direction aware, indestructible, never a floor)
@@ -209,7 +215,11 @@ determinism invariant (presentation lives outside `update()`):
   Consecutive wins also build a local streak chip and best-streak memory.
 - **Onboarding** — dismissible/auto-hiding tutorial card, portrait rotate hint.
 - **Continue hero** — the menu leads with one strong CTA that resumes the first
-  unlocked level you haven't cleared (the start of the world-carousel redesign).
+  unlocked level you haven't cleared.
+- **World carousel menu** (`js/menu-ui.js`) — after the first clear, the start
+  screen becomes a campaign navigator: a dominant selected world, subdued locked
+  worlds, compact adjacent progress, and a selected-world detail panel with a
+  level rail, recommended level, mastery chips, and completion/reward state.
 - **Ghost replays** — any run packs into a `?replay=` link off the existing
   action log; opening it plays the run back deterministically (the same machinery
   as rewind), with player input locked out and the viewer's save untouched. This
@@ -229,6 +239,11 @@ once Level 2 is cleared, and are always present on custom/shared/editor levels.
 The keyboard shortcuts (`N`, `+`/`−`) keep working throughout, so power users
 lose nothing.
 
+Once Level 1 is cleared, the menu expands in three layers: the Continue hero is
+the strongest action, Daily/Editor are secondary, and the world carousel exposes
+only the selected world's detail. Locked worlds remain visible for orientation
+but do not expose dense mastery data.
+
 ## Known limitations
 
 Honest gaps, not bugs — most need a human, not more code:
@@ -245,8 +260,10 @@ Honest gaps, not bugs — most need a human, not more code:
   whether a gate's switch is itself reachable. A clean result means "no obvious
   dead end found," never "guaranteed solvable" — which is why it advises instead
   of blocking a save/share.
-- **Menu redesign is partial.** The Continue hero is in; the full horizontal
-  world carousel that replaces the stacked chapter dashboard is still to come.
+- **World labels share a legacy storage key.** World reward seen-state persists
+  through the older `mosslings_chapterRewardSeen` key so existing saves keep
+  working. The UI copy says "World"; the storage name is intentionally
+  compatible.
 
 ### Real-device check (do before each release)
 
@@ -273,7 +290,7 @@ Free, build-free helpers (run from the repo root):
 
 ## Ideas for later
 
-The horizontal world carousel (replacing the stacked chapter dashboard) ·
-"race the ghost" concurrent replays + a baked daily dev-ghost · level-complete
-confetti · a colourblind-friendly palette toggle · continuing to split the menu
-code out of `ui.js` as it grows.
+More campaign worlds now that the menu scales horizontally · "race the ghost"
+concurrent replays + a baked daily dev-ghost · level-complete confetti · a
+colourblind-friendly palette toggle · continuing to split shared UI/editor code
+out of `ui.js` as it grows.
