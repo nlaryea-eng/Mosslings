@@ -657,6 +657,24 @@ const ui = {
         document.getElementById('msg-title').className = win ? 'win' : 'fail';
         document.getElementById('msg-text').innerText = text;
 
+        // P0 Failure Diagnosis: one actionable reason on a loss, and arm the
+        // Retry Ghost Hint for the next attempt. Reasons are derived from
+        // recorded counts (no user input) so innerHTML is safe. Win clears both.
+        const diag = document.getElementById('msg-diagnosis');
+        if (diag) {
+            if (!win) {
+                const dg = game.diagnoseFailure();
+                diag.innerHTML = `<b>${dg.label}</b>` + (dg.detail ? `<span>${dg.detail}</span>` : '');
+                diag.classList.remove('hidden');
+                game.retryHint = dg.zone
+                    ? { key: game.levelKey(), x: dg.zone.x, y: dg.zone.y, kind: dg.zone.kind }
+                    : null;
+            } else {
+                diag.classList.add('hidden');
+                game.retryHint = null;
+            }
+        }
+
         const result = ResultView.buildRunResult(game, win);
         result.url = this.resultUrlFor(result);
         document.getElementById('msg-stats').innerHTML = ResultView.statsHtml(result);

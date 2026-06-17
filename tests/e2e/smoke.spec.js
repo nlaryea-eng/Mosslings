@@ -251,6 +251,55 @@ test('a loss leads with Retry (no brag card); a win shows the next-level pull', 
     expect(await page.evaluate(() => document.getElementById('msg-btn-primary').classList.contains('primary-next'))).toBe(true);
 });
 
+test('a loss shows a failure diagnosis chip and arms a render-only retry hint', async ({ page }) => {
+    await page.addInitScript(seedProgress);
+    await page.goto('/');
+    await page.locator('#btn-start').click();
+    // Record a deterministic fatal-fall, then end the level as a loss.
+    await page.evaluate(() => {
+        const g = ui.game;
+        g.recordDeath('cliff', 300, 250);
+        g.savedCount = 0; g.time = 0; g.spawnCounter = g.level.totalSpawn; g.mosslings = []; g.update();
+    });
+    await expect(page.locator('#message-overlay')).toBeVisible();
+    await expect(page.locator('#msg-diagnosis')).toBeVisible();
+    await expect(page.locator('#msg-diagnosis')).toContainText(/fatal fall/i);
+    expect(await page.evaluate(() => !!(ui.game.retryHint && ui.game.retryHint.key))).toBe(true);
+
+    // Retry arms a render-only marker that is NEVER written to the action log.
+    await page.locator('#msg-btn-primary').click();
+    const hint = await page.evaluate(() => ({
+        has: !!ui.game.failHint,
+        kind: ui.game.failHint && ui.game.failHint.kind,
+        logged: ui.game.actionLog.some(a => a.type === 'hint'),
+    }));
+    expect(hint.has).toBe(true);
+    expect(hint.kind).toBe('cliff');
+    expect(hint.logged).toBe(false);
+});
+
+test('landscape-phone result makes the primary action visually dominant', async ({ page }) => {
+    await page.setViewportSize({ width: 667, height: 375 });
+    await page.addInitScript(seedProgress);
+    await page.goto('/');
+    await page.locator('#btn-start').click();
+    await page.evaluate(() => { const g = ui.game; g.savedCount = g.level.totalSpawn; g.endLevel(); });
+    await expect(page.locator('#message-overlay')).toBeVisible();
+    const m = await page.evaluate(() => {
+        const fs = (id) => parseFloat(getComputedStyle(document.getElementById(id)).fontSize);
+        const menu = document.getElementById('msg-btn-menu');
+        const primary = document.getElementById('msg-btn-primary');
+        return {
+            primaryFs: fs('msg-btn-primary'), menuFs: fs('msg-btn-menu'),
+            menuFits: menu.getBoundingClientRect().bottom <= window.innerHeight + 1,
+            primaryFits: primary.getBoundingClientRect().right <= window.innerWidth + 1,
+        };
+    });
+    expect(m.primaryFs).toBeGreaterThan(m.menuFs);   // Next/Retry dominant over Menu
+    expect(m.menuFits).toBeTruthy();                 // everything still on-screen
+    expect(m.primaryFits).toBeTruthy();
+});
+
 test('editor refuses to save a structurally invalid level', async ({ page }) => {
     await page.addInitScript(seedProgress);
     await page.goto('/');
