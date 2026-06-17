@@ -51,6 +51,62 @@ function dailyGhostSummaryText(record) {
     return `Best ${pct}% · ${fmtGhostTime(time)} · ${skills} skill${skills === 1 ? '' : 's'}`;
 }
 
+function dailyGhostTargetText(record) {
+    if (!record) return '';
+    const saved = Number(record.saved ?? (record.summary && record.summary.saved) ?? 0);
+    const total = Number(record.total ?? (record.summary && record.summary.total) ?? 0);
+    const pct = total ? Math.round(saved / total * 100) : Number(record.pct ?? (record.summary && record.summary.pct) ?? 0);
+    const time = Number(record.timeSeconds ?? (record.summary && record.summary.timeSeconds) ?? 0);
+    const skills = Number(record.skills ?? (record.summary && record.summary.skills) ?? 0);
+    return `Beat ${pct}% · ${fmtGhostTime(time)} · ${skills} skill${skills === 1 ? '' : 's'}`;
+}
+
+/**
+ * Pure view-model for the menu's daily card. Centralizing the ghost/fingerprint
+ * branching here keeps menu-ui.js a thin renderer and makes the "Beat the Ghost"
+ * states unit-testable without a DOM.
+ */
+function dailyCardModel({ challenge, ghost, fingerprint } = {}) {
+    if (!challenge) return null;
+    const ghostMatches = !!(ghost && ghost.fingerprint && fingerprint && ghost.fingerprint === fingerprint);
+    const ghostMismatch = !!(ghost && !ghostMatches);
+    const base = {
+        title: `${challenge.key} · L${challenge.levelIdx + 1} ${challenge.levelName}`,
+        ghostMatches,
+        ghostMismatch,
+    };
+    if (ghostMatches) {
+        return {
+            ...base,
+            // Race state shows a short motivator + a single target chip rather
+            // than repeating the same numbers in two places.
+            state: 'race',
+            kicker: 'Beat the Ghost',
+            meta: 'Your run is on the clock.',
+            target: dailyGhostTargetText(ghost),
+            cta: 'Beat Your Ghost',
+        };
+    }
+    if (ghostMismatch) {
+        return {
+            ...base,
+            state: 'stale',
+            kicker: 'Daily Challenge',
+            meta: "Ghost unavailable: today's puzzle changed.",
+            target: '',
+            cta: "Play Today's Puzzle",
+        };
+    }
+    return {
+        ...base,
+        state: 'fresh',
+        kicker: 'Daily Challenge',
+        meta: "Your first clear becomes today's ghost.",
+        target: '',
+        cta: "Play Today's Puzzle",
+    };
+}
+
 function dailyGhostDelta(candidate, previous) {
     if (!candidate || !previous) return null;
     const saved = Number(candidate.saved || 0) - Number(previous.saved || 0);
@@ -125,6 +181,8 @@ if (typeof module !== 'undefined' && module.exports) {
         pruneDailyGhostHistory,
         fmtGhostTime,
         dailyGhostSummaryText,
+        dailyGhostTargetText,
+        dailyCardModel,
         dailyGhostDelta,
         makeDailyGhostRecord,
         dailyGhostOutcome,

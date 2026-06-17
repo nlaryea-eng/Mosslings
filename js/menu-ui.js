@@ -528,18 +528,23 @@ class MenuUI {
         if (firstRun || !challenge) return;
 
         const ghost = storage.getDailyGhost(challenge.key);
-        const actualFingerprint = typeof levelFingerprint === 'function' ? levelFingerprint(LEVELS[challenge.levelIdx]) : null;
-        const ghostMatches = !!(ghost && ghost.fingerprint && ghost.fingerprint === actualFingerprint);
-        const ghostMismatch = !!(ghost && !ghostMatches);
-        document.getElementById('daily-title').innerText =
-            `${challenge.key} - L${challenge.levelIdx + 1} ${challenge.levelName}`;
-        document.getElementById('daily-meta').innerText = ghostMismatch
-            ? 'Ghost unavailable: today\'s puzzle changed.'
-            : ghostMatches
-                ? dailyGhostSummaryText(ghost)
-                : 'Your first clear becomes today\'s ghost.';
+        const fingerprint = typeof levelFingerprint === 'function' ? levelFingerprint(LEVELS[challenge.levelIdx]) : null;
+        const model = dailyCardModel({ challenge, ghost, fingerprint });
+        if (!model) { card.classList.add('hidden'); return; }
+
+        // A live ghost turns the card into an explicit race, not just an entry.
+        card.classList.toggle('is-race', model.state === 'race');
+        const kicker = document.getElementById('daily-kicker');
+        if (kicker) kicker.innerText = model.kicker;
+        document.getElementById('daily-title').innerText = model.title;
+        document.getElementById('daily-meta').innerText = model.meta;
+        const target = document.getElementById('daily-target');
+        if (target) {
+            target.innerText = model.target;
+            target.classList.toggle('hidden', !model.target);
+        }
         const btn = document.getElementById('btn-daily');
-        if (btn) btn.innerText = ghostMatches ? 'Beat Your Ghost' : 'Play Today\'s Puzzle';
+        if (btn) btn.innerText = model.cta;
     }
 }
 

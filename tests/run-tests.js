@@ -885,6 +885,36 @@ test('daily ghost storage replaces only better records and prunes history', () =
     assert(pruned['2030-02-20'], 'latest ghost kept');
     assert(!pruned['2030-02-01'], 'oldest ghost pruned');
 });
+test('dailyGhostTargetText frames the stored ghost as a beatable goal', () => {
+    const rec = { saved: 8, total: 10, timeSeconds: 84, skills: 3 };
+    eq(dailyGhostTargetText(rec), 'Beat 80% · 1:24 · 3 skills', 'target line reads as a race goal');
+    eq(dailyGhostTargetText({ saved: 5, total: 5, timeSeconds: 60, skills: 1 }), 'Beat 100% · 1:00 · 1 skill', 'singular skill is grammatical');
+    eq(dailyGhostTargetText(null), '', 'no record yields no target');
+});
+test('dailyCardModel drives the three Beat-the-Ghost menu states', () => {
+    const challenge = { key: '2030-03-01', levelIdx: 2, levelName: 'Cavern Climb' };
+    // No ghost yet — the card invites a first clear, not a race.
+    const fresh = dailyCardModel({ challenge, ghost: null, fingerprint: 'abc' });
+    eq(fresh.state, 'fresh');
+    eq(fresh.kicker, 'Daily Challenge');
+    eq(fresh.cta, "Play Today's Puzzle");
+    eq(fresh.target, '');
+    assert(fresh.title.includes('L3 Cavern Climb'), 'title names the level');
+    // Matching ghost — the card becomes an explicit race with a target chip.
+    const ghost = { fingerprint: 'abc', saved: 9, total: 10, timeSeconds: 72, skills: 4 };
+    const race = dailyCardModel({ challenge, ghost, fingerprint: 'abc' });
+    eq(race.state, 'race');
+    eq(race.kicker, 'Beat the Ghost');
+    eq(race.cta, 'Beat Your Ghost');
+    eq(race.target, 'Beat 90% · 1:12 · 4 skills');
+    assert(race.ghostMatches && !race.ghostMismatch, 'matching fingerprint flags a live ghost');
+    // Stale ghost (puzzle changed) — race copy is suppressed, no false target.
+    const stale = dailyCardModel({ challenge, ghost, fingerprint: 'zzz' });
+    eq(stale.state, 'stale');
+    eq(stale.target, '');
+    assert(stale.ghostMismatch, 'fingerprint drift is reported as a mismatch');
+    eq(dailyCardModel({ challenge: null }), null, 'no challenge yields no card');
+});
 test('daily wins do not unlock campaign progress', () => {
     storage.save('unlocked', 0);
     storage.save('daily', {});
