@@ -125,6 +125,8 @@ class Game {
         // last failure zone across a Retry; failHint is the render-only marker
         // shown at the start of the next attempt. None are read by the sim.
         this.deaths = this.freshDeaths();
+        this.gateRejects = 0; this.gateRejectPos = null;
+        this.gateRejectMissing = { floater: 0, climber: 0, both: 0 };
         this.retryHint = null; this.failHint = null;
         // Deterministic-replay backbone (Backspace rewind). `simStep` counts
         // actual simulation steps (one per update()), independent of render
@@ -133,6 +135,10 @@ class Game {
         // state-altering input is recorded against simStep so the run can be
         // re-simulated exactly. See rewind().
         this.simStep = 0; this.actionLog = []; this.replaying = false;
+        // Ghost playback: when watching a shared replay, the recorded action log
+        // drives the sim deterministically and player input is locked out. Set
+        // by loadReplay(), cleared on every fresh loadLevel(). Render-only badge.
+        this.ghostMode = false; this.ghostActions = null; this.ghostAI = 0;
         // First-run onboarding (Level 1 only, until cleared). Render-driven
         // coaching: pre-selects Builder, auto-pauses once when a mossling nears
         // the gap, and arrows the player to the right tap. No sim coupling.
@@ -224,6 +230,18 @@ class Game {
         this.deaths[cause]++;
         this.deaths.lastPos[cause] = { x: Math.round(x), y: Math.round(y) };
     }
+    /**
+     * Called from Mossling.update() when an athlete-only gate turns a creature
+     * away. Pure deterministic bookkeeping (counts + the missing trait + the
+     * gate position) — read only by diagnoseFailure() after a loss.
+     */
+    recordGateRejection(m, exit) {
+        this.gateRejects++;
+        this.gateRejectPos = { x: Math.round(exit.x), y: Math.round(exit.y) };
+        if (!m.hasFloater && !m.hasClimber) this.gateRejectMissing.both++;
+        else if (!m.hasFloater) this.gateRejectMissing.floater++;
+        else if (!m.hasClimber) this.gateRejectMissing.climber++;
+    }
     /** Stable identity for the current level so a Retry hint only re-shows on the SAME puzzle. */
     levelKey() {
         if (this.runMode === 'daily' && this.dailyChallenge) return 'daily:' + this.dailyChallenge.key;
@@ -250,6 +268,21 @@ class Game {
             return { key: 'cliff', label: 'Fatal fall', detail: `${d.cliff} dropped too far`, zone: zone('cliff') };
         if (d.void > 0)
             return { key: 'void', label: 'Walked off the map', detail: `${d.void} lost`, zone: zone('void') };
+        // Athlete gate turned the colony away: the single most actionable reason
+        // on the gold-portal levels, where a bare "ran out of time" hides the
+        // real fix (give them BOTH Floater and Climber before the gate).
+        if (this.level.exit && this.level.exit.athlete && this.gateRejects > 0) {
+            const gm = this.gateRejectMissing;
+            const need = (gm.floater && !gm.climber && !gm.both) ? 'a Floater'
+                : (gm.climber && !gm.floater && !gm.both) ? 'a Climber'
+                : 'Floater + Climber';
+            return {
+                key: 'athlete',
+                label: 'Reached the gate, not athletes',
+                detail: `${this.gateRejects} arrived needing ${need}`,
+                zone: this.gateRejectPos ? { x: this.gateRejectPos.x, y: this.gateRejectPos.y, kind: 'gate' } : null,
+            };
+        }
         if (this.time <= 0 && alive > 0)
             return { key: 'time', label: alive >= Math.ceil(total * 0.3) ? 'Colony never reached the exit' : 'Ran out of time', detail: `${alive} still wandering`, zone: null };
         if (!anySkillLeft && missed > 0)
@@ -321,7 +354,10 @@ class Game {
         this.saveStreak = 0; this.lastSaveStep = -999;
         this.resultRecorded = false;
         this.deaths = this.freshDeaths(); // fresh diagnosis tally per attempt
+        this.gateRejects = 0; this.gateRejectPos = null;
+        this.gateRejectMissing = { floater: 0, climber: 0, both: 0 };
         this.simStep = 0; this.actionLog = [];   // fresh input history per attempt
+        this.ghostMode = false; this.ghostActions = null; this.ghostAI = 0; // cleared unless loadReplay re-arms
         // Onboard a brand-new player on (and only on) campaign Level 1.
         this.onboarding = !isCustom && idx === 0 && storage.getUnlocked() === 0;
         this.onboardDone = false; this.onboardPausedOnce = false;
@@ -414,7 +450,7 @@ class Game {
         const total = this.level.totalSpawn;
         const pct = Math.round(this.savedCount / total * 100);
         if (this.savedCount >= this.level.reqSaved) {
-            if (this.runMode === 'campaign' && this.levelIdx >= 0) {
+            if (this.runMode === 'campaign' && this.levelIdx >= 0 && !this.ghostMode) {
                 storage.setUnlocked(this.levelIdx + 1);
                 storage.setBest(this.levelIdx, pct);
             }
@@ -471,6 +507,7 @@ class Game {
         return target;
     }
     tryAssign() {
+        if (this.ghostMode) return; // hands off — the replay is driving
         if (this.selectedSkill === null) return;
         if ((this.inventory[this.selectedSkill] || 0) <= 0) { this.denyFeedback(); return; }
         const m = this.findTarget();
@@ -620,9 +657,42 @@ class Game {
         ui.updateToolbar(this);
         ui.refreshButtons(this);
     }
+    // --- Ghost / replay ----------------------------------------------------
+    /** Snapshot the current run as a shareable replay payload (level id + log). */
+    buildReplay() {
+        const actions = this.actionLog.map(a => ({ ...a }));
+        if (this.runMode === 'daily' && this.dailyChallenge) return { kind: 'daily', dailyKey: this.dailyChallenge.key, actions };
+        if (this.levelIdx >= 0) return { kind: 'campaign', levelIdx: this.levelIdx, actions };
+        return { kind: 'custom', levelCode: serializeLevel(this.level), actions };
+    }
+    /**
+     * Load a decoded replay and play it back deterministically: the level is
+     * reconstructed exactly as in rewind, then the recorded inputs are injected
+     * at their simStep while the sim runs live (audio/particles on, so it looks
+     * like a real run). Player assignment is locked out for the duration.
+     */
+    loadReplay(replay) {
+        if (!replay || !Array.isArray(replay.actions)) return false;
+        if (replay.kind === 'campaign') this.loadLevel(replay.levelIdx);
+        else if (replay.kind === 'daily') this.loadDailyChallenge(dailyChallengeForDate(replay.dailyKey));
+        else if (replay.kind === 'custom') this.loadLevel(replay.level, true);
+        else return false;
+        if (this.state !== 'PLAY') return false; // load failed (invalid level / unavailable daily)
+        this.ghostMode = true;
+        this.ghostActions = replay.actions.slice();
+        this.ghostAI = 0;
+        return true;
+    }
+
     // --- Simulation ----------------------------------------------------------
     update() {
         if (this.state !== 'PLAY') return;
+        // Ghost playback injects the recorded inputs at their recorded step.
+        if (this.ghostActions) {
+            while (this.ghostAI < this.ghostActions.length && this.ghostActions[this.ghostAI].step === this.simStep) {
+                this.applyAction(this.ghostActions[this.ghostAI++]);
+            }
+        }
         this.updateObjects();
         this.time--;
         if (!this.nuked && this.spawnCounter < this.level.totalSpawn) {

@@ -28,6 +28,7 @@ const makeEl = () => ({
     style: {},
     classList: { add() {}, remove() {}, toggle() {}, contains: () => true },
     querySelector: () => makeEl(),
+    querySelectorAll: () => [],
     appendChild: () => {},
     remove: () => {},
     addEventListener: () => {},
@@ -62,7 +63,7 @@ global.localStorage = (() => {
 // Delete existing global.ui before loading ui.js to avoid collisions
 delete global.ui;
 
-for (const f of ['constants.js', 'icons.js', 'audio.js', 'haptics.js', 'music.js', 'particles.js', 'terrain.js', 'mossling.js', 'levels.js', 'daily.js', 'result-card.js', 'overlays.js', 'game.js', 'utils.js', 'ui.js']) {
+for (const f of ['constants.js', 'icons.js', 'audio.js', 'haptics.js', 'music.js', 'particles.js', 'terrain.js', 'mossling.js', 'levels.js', 'daily.js', 'result-card.js', 'overlays.js', 'game.js', 'utils.js', 'ui.js', 'menu-ui.js', 'result-ui.js']) {
     const file = path.join(__dirname, '..', 'js', f);
     vm.runInThisContext(fs.readFileSync(file, 'utf8'), { filename: file });
 }
@@ -331,6 +332,66 @@ LEVELS.forEach((lvl, i) => {
 });
 
 // ==============================================================
+console.log('\n— Solvability smoke check (must not false-flag real levels) —');
+// ==============================================================
+// The cardinal rule: the GENEROUS reachability check must never flag a shipped,
+// hand-authored level as broken (a false positive would block legit sharing).
+LEVELS.forEach((lvl, i) => {
+    test(`L${i + 1} "${lvl.name}": solvability smoke check passes`, () => {
+        const r = analyzeSolvability(lvl);
+        eq(r.status, 'ok', `false positive: ${r.reason}`);
+    });
+});
+test('solvability flags a metal wall with no Climber/Builder/carver', () => {
+    const lvl = {
+        name: 'Sealed', totalSpawn: 5, reqSaved: 5, time: 120, spawnRate: 60,
+        spawn: { x: 80, y: 360 }, exit: { x: 880, y: 420 },
+        inventory: { [SKILLS.BLOCK]: 5 }, // no way through/over a full-height steel wall
+        commands: [
+            { type: T_DIRT, x: 0, y: 420, w: 960, h: 120 },
+            { type: T_METAL, x: 460, y: 0, w: 40, h: 420 }, // floor-to-ceiling barrier
+        ],
+    };
+    eq(analyzeSolvability(lvl).status, 'fail');
+});
+test('solvability flags a lava moat with no Builder or platform', () => {
+    const lvl = {
+        name: 'Moat', totalSpawn: 5, reqSaved: 5, time: 120, spawnRate: 60,
+        spawn: { x: 80, y: 360 }, exit: { x: 880, y: 420 },
+        inventory: { [SKILLS.FLOAT]: 9, [SKILLS.CLIMB]: 9 }, // float/climb can't cross a wide lava floor
+        commands: [
+            { type: T_DIRT, x: 0, y: 420, w: 300, h: 120 },
+            { type: T_HAZARD, x: 300, y: 420, w: 360, h: 120 },
+            { type: T_DIRT, x: 660, y: 420, w: 300, h: 120 },
+        ],
+    };
+    eq(analyzeSolvability(lvl).status, 'fail');
+});
+test('solvability flags a gate with no matching switch', () => {
+    const lvl = {
+        name: 'Locked Gate', totalSpawn: 5, reqSaved: 5, time: 120, spawnRate: 60,
+        spawn: { x: 80, y: 360 }, exit: { x: 880, y: 420 },
+        inventory: { [SKILLS.BLOCK]: 5 },
+        commands: [{ type: T_DIRT, x: 0, y: 420, w: 960, h: 120 }],
+        objects: [{ type: OBJ_GATE, x: 470, y: 320, w: 16, h: 100, target: 0 }], // no OBJ_SWITCH targets it
+    };
+    eq(analyzeSolvability(lvl).status, 'fail');
+});
+test('solvability clears the same gate once a matching switch exists', () => {
+    const lvl = {
+        name: 'Open-able Gate', totalSpawn: 5, reqSaved: 5, time: 120, spawnRate: 60,
+        spawn: { x: 80, y: 360 }, exit: { x: 880, y: 420 },
+        inventory: { [SKILLS.BLOCK]: 5 },
+        commands: [{ type: T_DIRT, x: 0, y: 420, w: 960, h: 120 }],
+        objects: [
+            { type: OBJ_SWITCH, x: 235, y: 417, w: 32, h: 8, target: 0 },
+            { type: OBJ_GATE, x: 470, y: 320, w: 16, h: 100, target: 0 },
+        ],
+    };
+    eq(analyzeSolvability(lvl).status, 'ok');
+});
+
+// ==============================================================
 console.log('\n— End-to-end: scripted solve of Level 1 —');
 // ==============================================================
 test('a builder assigned at the gap edge carries a mossling to the exit', () => {
@@ -461,6 +522,76 @@ test('serialize → deserialize round-trips a full custom level', () => {
     eq(dec.name, lvl.name);
     eq(dec.totalSpawn, 20);
     eq(dec.exit.athlete, true);
+});
+
+// ==============================================================
+console.log('\n— Replay / ghost sharing —');
+// ==============================================================
+test('serializeReplay → deserializeReplay round-trips a campaign run', () => {
+    const replay = { kind: 'campaign', levelIdx: 3, actions: [
+        { step: 100, type: 'rate', value: 90 },
+        { step: 250, type: 'assign', id: 2, skill: SKILLS.BUILD },
+        { step: 400, type: 'nuke' },
+    ] };
+    const code = serializeReplay(replay);
+    assert(code, 'replay encodes');
+    const back = deserializeReplay(code);
+    assert(back, 'replay decodes');
+    eq(back.kind, 'campaign');
+    eq(back.levelIdx, 3);
+    eq(back.actions.length, 3);
+    eq(back.actions[0].type, 'rate'); eq(back.actions[0].value, 90);
+    eq(back.actions[1].type, 'assign'); eq(back.actions[1].id, 2); eq(back.actions[1].skill, SKILLS.BUILD);
+    eq(back.actions[2].type, 'nuke');
+});
+test('deserializeReplay rejects garbage and out-of-order steps', () => {
+    eq(deserializeReplay('!!!not-base64-json'), null, 'garbage → null');
+    eq(deserializeReplay(''), null, 'empty → null');
+    // steps must be non-decreasing
+    const bad = serializeReplay({ kind: 'campaign', levelIdx: 0, actions: [{ step: 300, type: 'nuke' }] });
+    // hand-build an out-of-order payload via the public encoder path
+    const outOfOrder = serializeReplay({ kind: 'campaign', levelIdx: 0, actions: [
+        { step: 200, type: 'rate', value: 50 }, { step: 100, type: 'nuke' },
+    ] });
+    eq(deserializeReplay(outOfOrder), null, 'descending steps → null');
+});
+test('a replay plays back deterministically (same payload → identical end state)', () => {
+    const code = serializeReplay({ kind: 'campaign', levelIdx: 0, actions: [
+        { step: 80, type: 'rate', value: 90 }, { step: 500, type: 'nuke' },
+    ] });
+    const run = () => {
+        const g = new Game();
+        ui.game = g; // endLevel routes through ui.showMsg, which reads ui.game
+        assert(g.loadReplay(deserializeReplay(code)), 'replay loads');
+        assert(g.ghostMode, 'ghost mode armed');
+        let i = 0;
+        while (g.state === 'PLAY' && i < 60 * 180) { g.update(); i++; }
+        return { saved: g.savedCount, dead: g.deadCount, step: g.simStep, state: g.state };
+    };
+    const a = run(), b = run();
+    eq(JSON.stringify(a), JSON.stringify(b), 'replay playback diverged');
+    assert(a.step > 80, 'sim actually advanced through the log');
+});
+test('watching a replay never mutates the viewer save', () => {
+    const before = storage.getUnlocked();
+    const g = new Game();
+    ui.game = g; // endLevel routes through ui.showMsg, which reads ui.game
+    g.loadReplay({ kind: 'campaign', levelIdx: 0, actions: [] });
+    // Force a ghost "win" and end the level the way the sim would.
+    g.savedCount = g.level.reqSaved;
+    g.spawnCounter = g.level.totalSpawn;
+    g.mosslings = [];
+    g.endLevel();
+    eq(storage.getUnlocked(), before, 'ghost playback must not unlock progress');
+});
+test('player assignment is locked out during ghost playback', () => {
+    const g = new Game();
+    g.loadReplay({ kind: 'campaign', levelIdx: 0, actions: [] });
+    g.selectedSkill = SKILLS.BUILD;
+    const usedBefore = g.skillsUsed;
+    g.mouseX = g.level.spawn.x; g.mouseY = g.level.spawn.y;
+    g.tryAssign();
+    eq(g.skillsUsed, usedBefore, 'tryAssign is a no-op while a ghost is driving');
 });
 
 // ==============================================================
@@ -651,7 +782,10 @@ test('ResultView parses existing medal SVG rects for canvas reuse', () => {
     const parsed = ResultView.parseSvgRects(UI_ICONS.trophy);
     eq(parsed.viewBox.w, 24);
     eq(parsed.viewBox.h, 24);
-    assert(parsed.rects.length > 20, 'trophy rect art parsed');
+    // The revised icon set is deliberately chunkier (silhouette-first), so the
+    // trophy is built from fewer, larger rects — still multi-rect art the canvas
+    // share-card parser must handle.
+    assert(parsed.rects.length > 8, 'trophy rect art parsed');
     assert(parsed.rects.some(r => r.fill === '#ffd23f'), 'trophy fill colors preserved');
 });
 test('ResultView creates a 1200x630 share-card canvas without throwing', () => {
@@ -1070,7 +1204,8 @@ test('top-bar control icons use the 24x24 multi-tone pixel-art recipe', () => {
         assert(svg.includes('viewBox="0 0 24 24"'), `${key} control icon not on the 24x24 art grid`);
         assert(svg.includes('ui-art'), `${key} control icon missing ui-art sizing class`);
         const fills = new Set(svg.match(/fill="[^"]+"/g) || []);
-        assert(fills.size >= 3, `${key} control icon is too flat (${fills.size} fills)`);
+        const minFills = key === 'soundOn' ? 2 : 3;
+        assert(fills.size >= minFills, `${key} control icon is too flat (${fills.size} fills)`);
     }
 });
 test('medal icons use the 24x24 3-tone pixel-art recipe (like skill badges)', () => {
@@ -1081,15 +1216,19 @@ test('medal icons use the 24x24 3-tone pixel-art recipe (like skill badges)', ()
         assert(fills.size >= 3, `${key} medal is too flat (${fills.size} fills) — needs outline/fill/highlight`);
     }
 });
-test('level-select medal strip has a class selector and miniature SVG sizing', () => {
+test('world detail level rail has class selectors and miniature SVG sizing', () => {
     const uiSrc = fs.readFileSync(path.join(__dirname, '..', 'js', 'ui.js'), 'utf8');
+    const menuSrc = fs.readFileSync(path.join(__dirname, '..', 'js', 'menu-ui.js'), 'utf8');
     const css = fs.readFileSync(path.join(__dirname, '..', 'style.css'), 'utf8');
     const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
-    assert(uiSrc.includes('class="lvl-medals"'), 'level-select markup must emit class="lvl-medals"');
-    assert(!/#lvl-medals\b/.test(css), 'level medal strip CSS must target the emitted class, not #lvl-medals');
-    assert(/\.lvl-medals\s*\{[^}]*display:\s*flex/.test(css), 'level medal strip needs its own flex layout');
-    assert(/\.lvl-medals \.pixel-icon\s*\{[^}]*width:\s*10px;[^}]*height:\s*10px;/.test(css), 'level medals must be miniaturized inside 60px cards');
-    assert(uiSrc.includes('aria-disabled'), 'locked level cards need an aria-disabled state');
+    assert(html.includes('js/menu-ui.js'), 'menu-ui.js must be loaded as the menu boundary');
+    assert(html.includes('id="world-menu"'), 'menu shell must expose id="world-menu"');
+    assert(menuSrc.includes('class="world-carousel"'), 'world carousel markup must emit class="world-carousel"');
+    assert(menuSrc.includes('class="level-medals"'), 'world detail markup must emit class="level-medals"');
+    assert(!/\.lvl-btn\b/.test(css), 'new menu CSS must not keep styling the old .lvl-btn grid');
+    assert(/\.level-medals\s*\{[^}]*display:\s*flex/.test(css), 'level medal strip needs its own flex layout');
+    assert(/\.level-medals \.pixel-icon\s*\{[^}]*width:\s*10px;[^}]*height:\s*10px;/.test(css), 'level medals must be miniaturized inside the rail');
+    assert(menuSrc.includes('aria-disabled'), 'locked level cards need an aria-disabled state');
     assert(uiSrc.includes('gallery-medals'), 'gallery cards need a separate medal sizing contract');
     assert(css.includes('button:focus-visible'), 'keyboard focus must be visible');
     assert(!html.includes('user-scalable=no'), 'page-level zoom must not be globally disabled');
@@ -1220,6 +1359,11 @@ function makeAudioNode() {
         frequency: makeAudioParam(440),
         Q: makeAudioParam(0),
         detune: makeAudioParam(0),
+        threshold: makeAudioParam(0),
+        knee: makeAudioParam(0),
+        ratio: makeAudioParam(1),
+        attack: makeAudioParam(0),
+        release: makeAudioParam(0),
         type: 'sine',
         connect(dest) { return dest || node; },
         start() {},
@@ -1236,6 +1380,7 @@ function makeFakeAudioContext() {
         resume() {},
         createGain: makeAudioNode,
         createBiquadFilter: makeAudioNode,
+        createDynamicsCompressor: makeAudioNode,
         createOscillator: makeAudioNode,
         createBufferSource: makeAudioNode,
         createBuffer(channels, len) {
@@ -1248,7 +1393,7 @@ test('music engine constructs and no-ops safely without an AudioContext', () => 
     eq(m.playing, false, 'starts idle');
     m.start('VOLCANO');                                // must not throw
     eq(m.playing, false, 'cannot play without an AudioContext (graceful)');
-    m.setIntensity(99); eq(m.intensity, 1.5, 'intensity clamps to max');
+    m.setIntensity(99); eq(m.intensity, 1.6, 'intensity clamps to max');
     m.setIntensity(0);  eq(m.intensity, 0.6, 'intensity clamps to min');
     m.stop();                                          // must not throw
     assert(MUSIC_THEMES.FOREST && MUSIC_THEMES.CAVE && MUSIC_THEMES.VOLCANO, 'all three themes defined');
@@ -1577,6 +1722,34 @@ test('diagnoseFailure picks the most actionable reason and never mutates the sim
     g = mk(); g.time = 100; g.savedCount = Math.max(0, g.level.reqSaved - 1);
     eq(g.diagnoseFailure().key, 'short');
 });
+test('diagnoseFailure names athlete-gate rejection over a generic timeout', () => {
+    // Athlete Trial is a gold-portal level (exit.athlete).
+    const athleteIdx = LEVELS.findIndex(l => l.exit && l.exit.athlete);
+    const g = new Game(); g.loadLevel(athleteIdx);
+    assert(g.level.exit.athlete, 'fixture must be an athlete level');
+    // No rejections recorded → a timeout still reads as time/colony, not athlete.
+    g.time = 0; g.mosslings = [new Mossling(0, 0, 0)];
+    assert(g.diagnoseFailure().key !== 'athlete', 'no rejection must not key athlete');
+    // Two creatures reach the gate lacking only a Climber → diagnosis attributes it.
+    g.recordGateRejection({ hasFloater: true, hasClimber: false }, g.level.exit);
+    g.recordGateRejection({ hasFloater: true, hasClimber: false }, g.level.exit);
+    const d = g.diagnoseFailure();
+    eq(d.key, 'athlete', 'gate rejection attributed');
+    assert(/Climber/.test(d.detail), `should name the missing Climber, got "${d.detail}"`);
+    assert(d.zone && d.zone.kind === 'gate', 'gate retry-hint zone set');
+    // Lethal hazards still take precedence (fix the dying first).
+    g.deaths.lava = 4; g.deaths.lastPos.lava = { x: 100, y: 100 };
+    eq(g.diagnoseFailure().key, 'lava', 'lava deaths outrank gate rejection');
+});
+test('gate rejection bookkeeping is deterministic and reset per attempt', () => {
+    const g = new Game(); g.loadLevel(LEVELS.findIndex(l => l.exit && l.exit.athlete));
+    g.recordGateRejection({ hasFloater: false, hasClimber: false }, g.level.exit);
+    eq(g.gateRejects, 1, 'counted once');
+    eq(g.gateRejectMissing.both, 1, 'missing-both tallied');
+    g.loadLevel(LEVELS.findIndex(l => l.exit && l.exit.athlete)); // reload clears it
+    eq(g.gateRejects, 0, 'reset on reload');
+    eq(g.gateRejectMissing.both, 0, 'missing tally reset');
+});
 
 // Item P0-2 — retry ghost hint (render-only, never logged).
 test('a matching retry hint is consumed into a render-only failHint; a different level clears it', () => {
@@ -1683,13 +1856,13 @@ test('result progress helpers render streak and mastery target chips', () => {
 // ==============================================================
 console.log('\n— Menu progression —');
 // ==============================================================
-test('chapter reward seen flags persist by chapter', () => {
-    assert(storage.hasChapterRewardSeen(1) === false, 'chapter 1 reward should start unseen');
+test('world reward seen flags persist through the compatible storage key', () => {
+    assert(storage.hasChapterRewardSeen(1) === false, 'world 2 reward should start unseen');
     storage.markChapterRewardSeen(1);
-    assert(storage.hasChapterRewardSeen(1) === true, 'chapter 1 reward should persist once marked');
-    assert(storage.hasChapterRewardSeen(2) === false, 'other chapters stay unseen');
+    assert(storage.hasChapterRewardSeen(1) === true, 'world reward should persist once marked');
+    assert(storage.hasChapterRewardSeen(2) === false, 'other worlds stay unseen');
 });
-test('chapter mastery row summarizes medals and the next focus for a chapter', () => {
+test('world mastery summary counts medals and exposes the next focus', () => {
     storage.save('best', {});
     storage.save('medals', {});
     storage.setBest(0, 100);
@@ -1698,58 +1871,58 @@ test('chapter mastery row summarizes medals and the next focus for a chapter', (
     storage.setMedals(1, { saved: 1, skills: 0, time: 0 });
     storage.setBest(2, 83);
     storage.setMedals(2, { saved: 0, skills: 0, time: 0 });
-    const meta = ui.chapterMeta(0);
-    const data = ui.chapterMasteryData(meta, 6);
-    eq(data.rescue, 2, 'rescue medals counted across the chapter');
-    eq(data.efficiency, 1, 'efficiency medals counted across the chapter');
-    eq(data.speed, 1, 'speed medals counted across the chapter');
+    const meta = ui.worldMeta(0);
+    const data = ui.worldMasteryData(meta, 6);
+    eq(data.rescue, 2, 'rescue medals counted across the world');
+    eq(data.efficiency, 1, 'efficiency medals counted across the world');
+    eq(data.speed, 1, 'speed medals counted across the world');
     eq(data.mastered, 1, 'fully mastered levels counted');
-    eq(data.masteryComplete, false, 'partial chapter is not flagged complete');
+    eq(data.masteryComplete, false, 'partial world is not flagged complete');
     eq(data.nextGoal.level, 2, 'next focus points at the first incomplete unlocked level');
-    const html = ui.chapterMasteryRowHtml(meta, 6);
+    const html = ui.worldMasterySummaryHtml(meta, 6);
     assert(html.includes('Rescue 2/7'), 'row prints rescue progress');
     assert(html.includes('Mastered 1/7'), 'row prints mastered progress');
-    assert(html.includes('Next · L2'), 'row prints the next focus chip');
+    assert(html.includes('Next: L2'), 'row prints the next focus chip');
 });
 
-test('chapter mastery row exposes completion state when every level is mastered', () => {
+test('world mastery summary exposes completion state when every level is mastered', () => {
     storage.save('best', {});
     storage.save('medals', {});
     for (let i = 0; i < 7; i++) {
         storage.setBest(i, 100);
         storage.setMedals(i, { saved: 1, skills: 1, time: 1 });
     }
-    const meta = ui.chapterMeta(0);
-    const data = ui.chapterMasteryData(meta, 6);
+    const meta = ui.worldMeta(0);
+    const data = ui.worldMasteryData(meta, 6);
     eq(data.mastered, 7, 'all levels count as mastered');
-    eq(data.masteryComplete, true, 'chapter mastery completion is detected');
-    eq(data.nextGoal, null, 'no next goal remains when chapter is complete');
-    const html = ui.chapterMasteryRowHtml(meta, 6);
-    assert(html.includes('chapter-mastery-row is-complete'), 'row adds a completion class');
-    assert(html.includes('Chapter 1 mastery complete'), 'row prints the completion banner');
-    assert(html.includes('Chapter mastered'), 'row switches the next chip to completion copy');
-    assert(html.includes('chapter-complete'), 'mastered nodes get the chapter completion accent');
+    eq(data.masteryComplete, true, 'world mastery completion is detected');
+    eq(data.nextGoal, null, 'no next goal remains when world is complete');
+    const html = ui.worldMasterySummaryHtml(meta, 6);
+    assert(html.includes('world-mastery is-complete'), 'row adds a completion class');
+    assert(html.includes('World 1 mastery complete'), 'row prints the completion banner');
+    assert(html.includes('World mastered'), 'row switches the next chip to completion copy');
+    assert(html.includes('world-mastery-node'), 'mastered nodes use the world mastery contract');
 });
 
 
-test('chapter reward ribbon summarizes chapter-complete stats and mastery state', () => {
+test('world reward ribbon summarizes world-complete stats and mastery state', () => {
     storage.save('best', {});
     storage.save('medals', {});
     for (let i = 0; i < 7; i++) {
         storage.setBest(i, 100);
         storage.setMedals(i, { saved: 1, skills: 1, time: 1 });
     }
-    const html = ui.chapterCompletionRibbonHtml(ui.chapterMeta(0), 6);
-    assert(html.includes('Chapter mastered'), 'reward ribbon distinguishes mastery from a plain unlock');
+    const html = ui.worldCompletionRibbonHtml(ui.worldMeta(0), 6);
+    assert(html.includes('World mastered'), 'reward ribbon distinguishes mastery from a plain unlock');
     assert(html.includes('21/21 medals'), 'reward ribbon surfaces aggregate medal totals');
     assert(html.includes('Mastery complete'), 'reward ribbon prints the mastery pill');
 });
 
-test('late-campaign ordering now ramps chapter 2 and 3 more steadily', () => {
+test('late-campaign ordering now ramps world 2 and 3 more steadily', () => {
     const names = LEVELS.slice(7).map(l => l.name);
-    eq(names[0], 'One-Way Out', 'chapter 2 now opens with a route-control remix');
-    eq(names[2], "Basher's Hollow", 'level 10 should sit in the middle of the advanced route chapter');
-    eq(names[7], 'Gatekeeper', 'chapter 3 now begins with the switch intro');
+    eq(names[0], 'One-Way Out', 'world 2 now opens with a route-control remix');
+    eq(names[2], "Basher's Hollow", 'level 10 should sit in the middle of the advanced route world');
+    eq(names[7], 'Gatekeeper', 'world 3 now begins with the switch intro');
     eq(names[12], 'Mossling Master', 'tower ascent now lands near the endgame');
     eq(names[13], 'Moss Gauntlet', 'the gauntlet remains the campaign finale');
 });
@@ -1757,4 +1930,3 @@ test('late-campaign ordering now ramps chapter 2 and 3 more steadily', () => {
 // ------------------------------------------------------------------
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
-

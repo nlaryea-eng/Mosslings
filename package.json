@@ -1,6 +1,6 @@
 {
   "name": "mosslings",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "Lemmings-inspired browser puzzle. The shipped game is dependency-free and build-free; these devDependencies are for tests/CI only.",
   "scripts": {
