@@ -90,6 +90,7 @@ const ui = {
         $('msg-btn-retry').onclick = () => this.restartLevel();
         $('msg-btn-share').onclick = () => this.shareResult();
         $('msg-btn-card').onclick = () => this.shareResultCard();
+        $('msg-btn-replay').onclick = () => this.shareReplay();
         $('msg-btn-menu').onclick = () => this.backToMenu();
 
         document.querySelectorAll('.skill-btn').forEach(btn => {
@@ -238,6 +239,7 @@ const ui = {
     /** On load, a ?level=… (or #level=…) param plays a shared level straight away. */
     tryImportSharedLevel() {
         const params = new URLSearchParams(location.search);
+        if (this.tryImportReplay(params)) return;
         let code = params.get('level');
         if (!code && location.hash.startsWith('#level=')) code = location.hash.slice(7);
         if (!code && this.tryImportDaily(params)) return;
@@ -268,6 +270,23 @@ const ui = {
         const level = deserializeLevel(code);
         if (!level || !level.name || !Array.isArray(level.commands)) return null;
         return level;
+    },
+    /** A ?replay=… (or #replay=…) link plays the recorded run back as a ghost. */
+    tryImportReplay(params) {
+        let code = params.get('replay');
+        if (!code && location.hash.startsWith('#replay=')) code = location.hash.slice(8);
+        if (!code) return false;
+        const replay = deserializeReplay(code);
+        history.replaceState(null, '', location.pathname);
+        if (!replay) { this.toast('That replay link is invalid or corrupted.', true); return true; }
+        this.armAudioForPlay();
+        if (this.game.loadReplay(replay)) {
+            this.setTutorial('▶ Watching a shared replay — press Esc or Menu to take over.');
+            this.toast('Playing shared replay');
+        } else {
+            this.toast('Could not load that replay.', true);
+        }
+        return true;
     },
     tryImportDaily(params) {
         let key = params.get('daily');

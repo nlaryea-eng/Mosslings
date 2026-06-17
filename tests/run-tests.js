@@ -524,6 +524,76 @@ test('serialize → deserialize round-trips a full custom level', () => {
 });
 
 // ==============================================================
+console.log('\n— Replay / ghost sharing —');
+// ==============================================================
+test('serializeReplay → deserializeReplay round-trips a campaign run', () => {
+    const replay = { kind: 'campaign', levelIdx: 3, actions: [
+        { step: 100, type: 'rate', value: 90 },
+        { step: 250, type: 'assign', id: 2, skill: SKILLS.BUILD },
+        { step: 400, type: 'nuke' },
+    ] };
+    const code = serializeReplay(replay);
+    assert(code, 'replay encodes');
+    const back = deserializeReplay(code);
+    assert(back, 'replay decodes');
+    eq(back.kind, 'campaign');
+    eq(back.levelIdx, 3);
+    eq(back.actions.length, 3);
+    eq(back.actions[0].type, 'rate'); eq(back.actions[0].value, 90);
+    eq(back.actions[1].type, 'assign'); eq(back.actions[1].id, 2); eq(back.actions[1].skill, SKILLS.BUILD);
+    eq(back.actions[2].type, 'nuke');
+});
+test('deserializeReplay rejects garbage and out-of-order steps', () => {
+    eq(deserializeReplay('!!!not-base64-json'), null, 'garbage → null');
+    eq(deserializeReplay(''), null, 'empty → null');
+    // steps must be non-decreasing
+    const bad = serializeReplay({ kind: 'campaign', levelIdx: 0, actions: [{ step: 300, type: 'nuke' }] });
+    // hand-build an out-of-order payload via the public encoder path
+    const outOfOrder = serializeReplay({ kind: 'campaign', levelIdx: 0, actions: [
+        { step: 200, type: 'rate', value: 50 }, { step: 100, type: 'nuke' },
+    ] });
+    eq(deserializeReplay(outOfOrder), null, 'descending steps → null');
+});
+test('a replay plays back deterministically (same payload → identical end state)', () => {
+    const code = serializeReplay({ kind: 'campaign', levelIdx: 0, actions: [
+        { step: 80, type: 'rate', value: 90 }, { step: 500, type: 'nuke' },
+    ] });
+    const run = () => {
+        const g = new Game();
+        ui.game = g; // endLevel routes through ui.showMsg, which reads ui.game
+        assert(g.loadReplay(deserializeReplay(code)), 'replay loads');
+        assert(g.ghostMode, 'ghost mode armed');
+        let i = 0;
+        while (g.state === 'PLAY' && i < 60 * 180) { g.update(); i++; }
+        return { saved: g.savedCount, dead: g.deadCount, step: g.simStep, state: g.state };
+    };
+    const a = run(), b = run();
+    eq(JSON.stringify(a), JSON.stringify(b), 'replay playback diverged');
+    assert(a.step > 80, 'sim actually advanced through the log');
+});
+test('watching a replay never mutates the viewer save', () => {
+    const before = storage.getUnlocked();
+    const g = new Game();
+    ui.game = g; // endLevel routes through ui.showMsg, which reads ui.game
+    g.loadReplay({ kind: 'campaign', levelIdx: 0, actions: [] });
+    // Force a ghost "win" and end the level the way the sim would.
+    g.savedCount = g.level.reqSaved;
+    g.spawnCounter = g.level.totalSpawn;
+    g.mosslings = [];
+    g.endLevel();
+    eq(storage.getUnlocked(), before, 'ghost playback must not unlock progress');
+});
+test('player assignment is locked out during ghost playback', () => {
+    const g = new Game();
+    g.loadReplay({ kind: 'campaign', levelIdx: 0, actions: [] });
+    g.selectedSkill = SKILLS.BUILD;
+    const usedBefore = g.skillsUsed;
+    g.mouseX = g.level.spawn.x; g.mouseY = g.level.spawn.y;
+    g.tryAssign();
+    eq(g.skillsUsed, usedBefore, 'tryAssign is a no-op while a ghost is driving');
+});
+
+// ==============================================================
 console.log('\n— Phase 0: Ecosystem Audit & Baseline —');
 // ==============================================================
 

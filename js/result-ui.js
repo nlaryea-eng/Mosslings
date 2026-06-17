@@ -140,9 +140,14 @@ Object.assign(ui, {
             }
         }
 
-        const streak = game.resultRecorded
+        // Watching a shared replay must never mutate the viewer's own save
+        // (streak, medals, unlocks, daily best). Read current streak for display
+        // only; skip the record.
+        const streak = game.ghostMode
             ? { ...storage.getRunStreak(), previous: storage.getRunStreak().current, win }
-            : storage.recordRunOutcome(win);
+            : game.resultRecorded
+                ? { ...storage.getRunStreak(), previous: storage.getRunStreak().current, win }
+                : storage.recordRunOutcome(win);
         game.resultRecorded = true;
 
         const result = ResultView.buildRunResult(game, win);
@@ -150,7 +155,7 @@ Object.assign(ui, {
         document.getElementById('msg-stats').innerHTML = ResultView.statsHtml(result);
 
         const mWrap = document.getElementById('msg-medals-wrap');
-        if (win && game.level.par) {
+        if (win && game.level.par && !game.ghostMode) {
             storage.setMedals(this.medalStorageKey(game), result.medals);
         }
         const storedMedals = win && game.level.par ? storage.getMedals(this.medalStorageKey(game)) : result.medals;
@@ -167,7 +172,7 @@ Object.assign(ui, {
         mWrap.innerHTML = ResultView.medalsHtml(result, { showLegend });
         if (showLegend) storage.save('medalLegendSeen', true);
 
-        if (result.isDaily) {
+        if (result.isDaily && !game.ghostMode) {
             const dailyPayload = {
                 key: result.dailyKey,
                 levelIdx: game.levelIdx,
@@ -203,6 +208,10 @@ Object.assign(ui, {
 
         // The shareable PNG brag card is a win-only flourish; demote it on a loss.
         document.getElementById('msg-btn-card').classList.toggle('hidden', !win);
+        // "Copy replay" shares the deterministic action log of THIS run. Offer it
+        // for any run the player actually drove (hidden while watching a ghost).
+        const replayBtn = document.getElementById('msg-btn-replay');
+        if (replayBtn) replayBtn.classList.toggle('hidden', !!game.ghostMode);
 
         // Forward pull: on a campaign win, name the reward you're heading to.
         const primary = document.getElementById('msg-btn-primary');
@@ -261,6 +270,23 @@ Object.assign(ui, {
             return;
         }
         this.copyText(ResultView.buildShareText(r, { url: this.resultUrlFor(r) }), 'Result text copied to clipboard!');
+    },
+    /**
+     * Share the deterministic replay of the just-finished run. Reuses the game's
+     * existing action log — no extra recording — so a friend can watch the exact
+     * run reproduce step-for-step (the sticky "beat my run" loop).
+     */
+    shareReplay() {
+        const code = serializeReplay(this.game.buildReplay());
+        if (!code) { this.toast('This run is too long to share as a replay.', true); return; }
+        if (location.protocol === 'file:') {
+            this.promptCopy(code);
+            this.toast('Copied replay code. Host the game to share a clickable link.');
+            return;
+        }
+        const url = this.currentShareUrl();
+        url.searchParams.set('replay', code);
+        this.copyText(url.toString(), 'Replay link copied — share it to show your run!');
     },
     resultUrlFor(r) {
         if (!r || location.protocol === 'file:') return null;
