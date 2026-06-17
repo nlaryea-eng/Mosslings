@@ -53,6 +53,12 @@ class StorageManager {
         const best = Math.max(0, Number(s.best) | 0, current);
         return { current, best };
     }
+    getChapterRewardSeen() { return this.load('chapterRewardSeen', {}); }
+    hasChapterRewardSeen(chapter) { return !!this.getChapterRewardSeen()[chapter]; }
+    markChapterRewardSeen(chapter) {
+        const seen = this.getChapterRewardSeen();
+        if (!seen[chapter]) { seen[chapter] = 1; this.save('chapterRewardSeen', seen); }
+    }
     recordRunOutcome(win) {
         const prev = this.getRunStreak();
         const current = win ? prev.current + 1 : 0;
@@ -439,6 +445,7 @@ class Game {
     canAssign(m, s) {
         if (!m.alive()) return false;
         switch (s) {
+            case SKILLS.BLOCK: return m.state === STATE.WALK || m.state === STATE.SHRUG || m.state === STATE.BLOCK;
             case SKILLS.FLOAT: return !m.hasFloater;
             case SKILLS.CLIMB: return !m.hasClimber;
             case SKILLS.EXPLODE: return !m.isExploding;
@@ -512,7 +519,7 @@ class Game {
     }
     assignSkill(m, s) {
         switch (s) {
-            case SKILLS.BLOCK: m.state = STATE.BLOCK; break;
+            case SKILLS.BLOCK: m.state = (m.state === STATE.BLOCK ? STATE.WALK : STATE.BLOCK); break;
             case SKILLS.BUILD: m.state = STATE.BUILD; m.bricksLeft = PHYS.BUILD_BRICKS; break;
             case SKILLS.BASH: m.state = STATE.BASH; break;
             case SKILLS.MINE: m.state = STATE.MINE; break;

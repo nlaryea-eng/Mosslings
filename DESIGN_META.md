@@ -4,188 +4,83 @@ Design for meta-game features: level serialization, URL importing, par medals, a
 
 **Status:** All listed features are **implemented** and covered by tests.
 
-- **§1 Level Serialization / §2 URL Importing** live in `js/utils.js` and `js/ui.js`. The shipped binary format is **version `0x03`** (this doc's §1 sketch describes the original `0x01`). Refinements made during implementation: base64 is URL-*safe* (`+/=` → `-_`, padding stripped) so it survives a query string intact; the metadata byte carries flags (bit 0 = athlete portal, bit 1 = par data present, bit 2 = object data present); command types span the full tile range incl. one-way membranes (0–6); `0x02` appended optional par data; and `0x03` appends fixed-width editor objects for moving platforms, pressure switches, and switch gates. The deserializer accepts `0x01`, `0x02`, and `0x03`.
-- **§3 Par Medals** is implemented, but with a different (simpler) data model than the `parTime`/`parSavedPct`/`parSkills` sketch below. Levels carry a `par: { time, skills, saved }` object (`js/levels.js`); `computeMedals(par, stats)` in `js/utils.js` awards three **independent** medals — Rescue/Gold (saved ≥ target), Efficiency/Silver (skills ≤ par), Speed/Bronze (time ≤ par) — and `StorageManager.getMedals/setMedals` (`js/game.js`) persists the best of each tier per level. The §3 pseudocode below is the original sketch, retained for context only; treat the code as source of truth.
+- **§1 Level Serialization / §2 URL Importing** live in `js/utils.js` and `js/ui.js`. The shipped binary format is **version `0x03`**. Refinements made during implementation: base64 is URL-*safe* (`+/=` → `-_`, padding stripped) so it survives a query string intact; the metadata byte carries flags (bit 0 = athlete portal, bit 1 = par data present, bit 2 = object data present); command types span the full tile range incl. one-way membranes (0–6); and `0x03` appends fixed-width editor objects for moving platforms, pressure switches, and switch gates. The deserializer accepts `0x01`, `0x02`, and `0x03`.
+- **§3 Par Medals** is implemented as three **independent** medals per level — Rescue (saved ≥ par.saved), Efficiency (skills ≤ par.skills), and Speed (time ≤ par.time). `computeMedals(par, stats)` in `js/utils.js` evaluates them, and `StorageManager.getMedals/setMedals` (`js/game.js`) persists whether each medal has ever been earned for that level. The §3 pseudocode below describes the final implementation.
 - **Advanced editor objects** are implemented as optional `level.objects` entries. `OBJ_PLATFORM` moves deterministically on the simulation step and carries riders; `OBJ_SWITCH` is a pressure trigger; `OBJ_GATE` is solid until a matching switch target is held. The editor exposes Platform, Switch, and Gate tools, and v03 sharing preserves those objects without breaking older terrain-only links.
 
 ---
 
 ## 1. Level Serialization (Base64)
 
-Custom levels created in the editor must be shareable as compact, URL-safe strings. This section specifies a versioned binary format that encodes the full level object.
+Custom levels are packed into a compact, versioned binary buffer and encoded as URL-safe base64.
 
-### Format Specification
+### Format Specification (Version 0x03)
 
 **Version Byte (1 byte)**
-- `0x01` = current format
-- Future versions increment; deserializer rejects unknown versions with graceful fallback
+- `0x03` = current format (handles terrain, pars, and editor objects)
 
-**Metadata (variable)**
-- Version 0x01 layout:
-  - `name` (UTF-8 C-string, null-terminated) — max 64 chars
-  - `totalSpawn` (1 byte) — 0–255 mosslings
-  - `reqSaved` (1 byte) — 0–255
-  - `time` (2 bytes, big-endian) — 0–65535 frames (~273 seconds at 60Hz)
-  - `spawnRate` (1 byte) — clamped to RATE_MIN..RATE_MAX (15–120)
-  - Reserved padding (1 byte) — 0x00 for forward compat
+**Name (variable)**
+- UTF-8 C-string, null-terminated — max 64 chars
 
-**Spawn & Exit (6 bytes)**
-- `spawnX` (2 bytes, big-endian) — 0–960
-- `spawnY` (2 bytes, big-endian) — 0–540
-- `exitX` (2 bytes, big-endian) — 0–960
-- `exitY` (2 bytes, big-endian) — 0–540
+**Metadata (6 bytes)**
+- `totalSpawn` (1 byte) — 0–255 mosslings
+- `reqSaved` (1 byte) — 0–255
+- `time` (2 bytes, big-endian) — 0–65535 frames
+- `spawnRate` (1 byte) — 15–120 frames between spawns
+- `flags` (1 byte) — bit 0: athlete portal, bit 1: has par data, bit 2: has objects
+
+**Spawn & Exit (8 bytes)**
+- `spawnX`, `spawnY` (2 bytes each, big-endian)
+- `exitX`, `exitY` (2 bytes each, big-endian)
 
 **Inventory (8 bytes, one per skill)**
 - One byte per SKILLS slot (BLOCK, BUILD, BASH, MINE, DIG, FLOAT, CLIMB, EXPLODE)
-- Each byte is 0–255 (count of items)
+
+**Par Data (4 bytes, optional — if flags bit 1 set)**
+- `parTime` (2 bytes, big-endian) — seconds
+- `parSkills` (1 byte)
+- `parSaved` (1 byte)
 
 **Command Array (variable)**
 - Count (1 byte) — 0–255 commands
-- For each command:
-  - `type` (1 byte) — T_AIR (0), T_DIRT (1), T_METAL (2), T_HAZARD (3), T_BRIDGE (4)
-  - `x`, `y`, `w`, `h` (2 bytes each, big-endian) — packed {x: 0–960, y: 0–540, w: 1–960, h: 1–540}
+- For each command (9 bytes):
+  - `type` (1 byte) — 0–6 (Air, Dirt, Metal, Lava, Bridge, One-way R/L)
+  - `x`, `y`, `w`, `h` (2 bytes each, big-endian)
 
-**Encoding Path**
-```
-binary buffer
-  ↓ (Uint8Array)
-encodeURIComponent(String.fromCharCode(...))
-  ↓ (percent-encoded UTF-8)
-btoa() [or custom base64]
-  ↓ (base64, 33% smaller than percent-encoded)
-→ query string parameter
-```
+**Object Array (variable, optional — if flags bit 2 set)**
+- Count (1 byte) — 0–80 objects
+- For each object (19 bytes, big-endian):
+  - `type` (1 byte) — 0: Platform, 1: Switch, 2: Gate
+  - `x`, `y`, `w`, `h` (2 bytes each)
+  - `dx`, `dy` (2 bytes each, signed i16) — movement offset
+  - `period` (2 bytes) — frames
+  - `phase` (2 bytes)
+  - `target` (1 byte) — trigger channel
+  - `flags` (1 byte)
+
+### Size & Forward Compatibility
+
+- **Typical level** (~10 commands): ~300–400 base64 chars
+- **URL-safe**: `+/=` replaced with `-_` and padding stripped to survive query strings.
+- **Limits**: rejected if base64 > 1500 chars.
 
 ### API Signatures
+
+Actual signatures in `js/utils.js`:
 
 ```javascript
 /**
  * Serialize a level object to a URL-safe base64 string.
- * @param {Object} level - { name, totalSpawn, reqSaved, time, spawnRate, 
- *                            spawn: {x,y}, exit: {x,y}, inventory: {0..7: count}, 
- *                            commands: [{type, x, y, w, h}, ...] }
- * @returns {string} Base64-encoded level (or null if invalid)
+ * @returns {string|null} encoded level
  */
-function serializeLevel(level) {
-    // Validate inputs
-    if (!level.name || level.name.length > 64) return null;
-    if (!Array.isArray(level.commands)) return null;
-    if (level.commands.length > 255) return null;
-
-    const buf = [];
-    
-    // Version byte
-    buf.push(0x01);
-    
-    // Name (UTF-8 C-string, null-terminated)
-    const nameBytes = new TextEncoder().encode(level.name.slice(0, 64));
-    buf.push(...nameBytes, 0x00);
-    
-    // Metadata
-    buf.push(Math.min(255, level.totalSpawn ?? 0));
-    buf.push(Math.min(255, level.reqSaved ?? 0));
-    buf.push((level.time >> 8) & 0xFF, level.time & 0xFF);
-    buf.push(Math.min(RATE_MAX, Math.max(RATE_MIN, level.spawnRate ?? 60)));
-    buf.push(0x00); // reserved
-    
-    // Spawn & exit
-    const spawn = level.spawn || {x: 0, y: 0};
-    const exit = level.exit || {x: W-1, y: H-1};
-    buf.push((spawn.x >> 8) & 0xFF, spawn.x & 0xFF);
-    buf.push((spawn.y >> 8) & 0xFF, spawn.y & 0xFF);
-    buf.push((exit.x >> 8) & 0xFF, exit.x & 0xFF);
-    buf.push((exit.y >> 8) & 0xFF, exit.y & 0xFF);
-    
-    // Inventory (8 skills)
-    for (let s = 0; s < 8; s++) {
-        buf.push(Math.min(255, level.inventory?.[s] ?? 0));
-    }
-    
-    // Commands
-    buf.push(level.commands.length);
-    for (const cmd of level.commands) {
-        buf.push(cmd.type ?? T_AIR);
-        buf.push((cmd.x >> 8) & 0xFF, cmd.x & 0xFF);
-        buf.push((cmd.y >> 8) & 0xFF, cmd.y & 0xFF);
-        buf.push((cmd.w >> 8) & 0xFF, cmd.w & 0xFF);
-        buf.push((cmd.h >> 8) & 0xFF, cmd.h & 0xFF);
-    }
-    
-    // Convert to base64
-    return btoa(String.fromCharCode(...buf));
-}
+function serializeLevel(level)
 
 /**
- * Deserialize a base64 level string.
- * @param {string} encoded - Base64 string from serializeLevel()
- * @returns {Object|null} Level object, or null if invalid/malformed
+ * Deserialize a base64 level string back into a level object.
+ * @returns {Object|null} level
  */
-function deserializeLevel(encoded) {
-    try {
-        const binary = atob(encoded);
-        const buf = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) buf[i] = binary.charCodeAt(i);
-        
-        let offset = 0;
-        
-        // Version
-        const version = buf[offset++];
-        if (version !== 0x01) return null; // unknown version
-        
-        // Name (read until null byte)
-        let nameEnd = offset;
-        while (nameEnd < buf.length && buf[nameEnd] !== 0x00) nameEnd++;
-        if (nameEnd >= buf.length) return null;
-        const name = new TextDecoder().decode(buf.slice(offset, nameEnd));
-        offset = nameEnd + 1;
-        
-        // Metadata
-        const totalSpawn = buf[offset++];
-        const reqSaved = buf[offset++];
-        const time = (buf[offset] << 8) | buf[offset + 1]; offset += 2;
-        const spawnRate = buf[offset++];
-        offset++; // skip reserved
-        
-        // Spawn & exit
-        const spawn = {
-            x: (buf[offset] << 8) | buf[offset + 1],
-            y: (buf[offset + 2] << 8) | buf[offset + 3]
-        }; offset += 4;
-        const exit = {
-            x: (buf[offset] << 8) | buf[offset + 1],
-            y: (buf[offset + 2] << 8) | buf[offset + 3]
-        }; offset += 4;
-        
-        // Inventory
-        const inventory = {};
-        for (let s = 0; s < 8; s++) inventory[s] = buf[offset++];
-        
-        // Commands
-        const cmdCount = buf[offset++];
-        const commands = [];
-        for (let i = 0; i < cmdCount; i++) {
-            if (offset + 9 > buf.length) return null;
-            commands.push({
-                type: buf[offset++],
-                x: (buf[offset] << 8) | buf[offset + 1], offset += 2,
-                y: (buf[offset] << 8) | buf[offset + 1], offset += 2,
-                w: (buf[offset] << 8) | buf[offset + 1], offset += 2,
-                h: (buf[offset] << 8) | buf[offset + 1], offset += 2
-            });
-        }
-        
-        return { name, totalSpawn, reqSaved, time, spawnRate, spawn, exit, inventory, commands };
-    } catch (e) {
-        return null;
-    }
-}
+function deserializeLevel(encoded)
 ```
-
-### Size & Forward Compatibility
-
-- **Typical level** (~10 commands): ~200–300 bytes → 270–400 base64 chars (practical URL limit ~2000 chars)
-- **Unknown version**: deserializer returns null; UI shows "unsupported level format"
-- **Oversized payload**: reject if base64 > 1500 chars or decompressed > 10KB
 
 ---
 
@@ -291,156 +186,61 @@ parseSharedLevel(encoded) {
 
 ## 3. Par Medals
 
-Each campaign level defines par targets (time, saved %, skills used). Players earn Bronze/Silver/Gold based on how many pars they beat.
+Each campaign level defines par targets (time, saved %, skills used). Players earn three independent medals (Rescue, Efficiency, Speed).
 
 ### Par Definitions
 
-Add optional fields to each LEVELS[i]:
+Levels carry a `par` object in `js/levels.js`:
 
 ```javascript
-// In levels.js, example level 0:
 {
     name: 'The First March',
-    // ... existing fields ...
-    parTime: 90,       // seconds (beat time limit in 90s or less)
-    parSavedPct: 60,   // beat 60% or more
-    parSkills: 4,      // use 4 or fewer distinct skills
-}
-
-// Level 1:
-{ ..., parTime: 120, parSavedPct: 75, parSkills: 3 }
-
-// Level 7 (final):
-{ ..., parTime: 240, parSavedPct: 95, parSkills: 6 }
-```
-
-### Tracking Skills Used
-
-In `game.js`, track assignments during a run:
-
-```javascript
-class Game {
-    constructor() {
-        // ... existing ...
-        this.skillsUsedThisRun = new Set(); // track unique skills assigned
-    }
-    
-    loadLevel(idx, isCustom = false) {
-        // ... existing ...
-        this.skillsUsedThisRun = new Set();
-    }
-    
-    tryAssign() {
-        // ... existing skill selection logic ...
-        if (this.selectedSkill !== null) {
-            this.skillsUsedThisRun.add(this.selectedSkill); // track
-            // ... rest of assignment ...
-        }
+    totalSpawn: 8,
+    reqSaved: 4,
+    par: {
+        time: 55,    // seconds (Speed medal)
+        skills: 3,   // total assignments (Efficiency medal)
+        saved: 8     // total rescued (Rescue medal)
     }
 }
 ```
 
 ### Medal Computation
 
-In `game.js`, add method to `endLevel()`:
+Medals are computed by comparing run stats against the par object. They are **independent** achievements, not tiered.
 
 ```javascript
-endLevel(won) {
-    // ... existing end logic ...
-    
-    if (won && this.levelIdx >= 0) {
-        const level = LEVELS[this.levelIdx];
-        const medal = this.computeMedal(level);
-        if (medal) storage.setMedal(this.levelIdx, medal);
-    }
-}
-
-computeMedal(level) {
-    // If par fields are missing, no medal
-    if (!level.parTime || !level.parSavedPct || !level.parSkills) return null;
-    
-    const pactMet = [];
-    
-    // Beat par time?
-    if (this.time >= 0) pactMet.push(true); // time remaining >= 0
-    
-    // Beat par saved %?
-    const savedPct = Math.round(100 * this.savedCount / level.totalSpawn);
-    if (savedPct >= level.parSavedPct) pactMet.push(true);
-    
-    // Beat par skills used?
-    if (this.skillsUsedThisRun.size <= level.parSkills) pactMet.push(true);
-    
-    // Tier: Gold = all 3, Silver = 2, Bronze = 1, None = 0
-    const metCount = pactMet.filter(Boolean).length;
-    if (metCount === 3) return 'GOLD';
-    if (metCount === 2) return 'SILVER';
-    if (metCount === 1) return 'BRONZE';
-    return null;
+/**
+ * @param {Object} par   { saved, skills, time } targets
+ * @param {Object} stats { saved, skills, time } achieved
+ * @returns {{saved:boolean, skills:boolean, time:boolean}}
+ */
+function computeMedals(par, stats) {
+    if (!par) return { saved: false, skills: false, time: false };
+    return {
+        saved: stats.saved >= par.saved,
+        skills: stats.skills <= par.skills,
+        time: stats.time <= par.time,
+    };
 }
 ```
 
 ### Storage
 
-Extend `StorageManager` in `game.js`:
+`StorageManager` persists the best result for each medal per level:
 
 ```javascript
-class StorageManager {
-    // ... existing methods ...
-    
-    getMedal(idx) { return this.load('medals', {})[idx] ?? null; }
-    
-    setMedal(idx, tier) {
-        const medals = this.load('medals', {});
-        medals[idx] = tier;
-        this.save('medals', medals);
-    }
+{
+    time: 1,   // 1 = Speed medal earned
+    skills: 1, // 1 = Efficiency medal earned
+    saved: 0   // 0 = Rescue medal not yet earned
 }
 ```
 
 ### Menu Rendering
 
-In `ui.js`, update `buildMenu()`:
+The level select menu shows icons for each earned medal. The next unearned medal target is disclosed as a goal (e.g., "SAVE 8" or "T<0:55").
 
-```javascript
-buildMenu() {
-    const c = document.getElementById('level-select-container');
-    c.innerHTML = '';
-    const unlocked = storage.getUnlocked();
-    for (let i = 0; i < LEVELS.length; i++) {
-        const b = document.createElement('button');
-        b.className = 'lvl-btn' + (i === this.game.levelIdx ? ' selected' : '');
-        b.disabled = i > unlocked;
-        const best = storage.getBest(i);
-        const medal = storage.getMedal(i);
-        
-        let badgeHtml = '';
-        if (medal === 'GOLD') badgeHtml = '<span class="medal gold">★</span>';
-        else if (medal === 'SILVER') badgeHtml = '<span class="medal silver">✦</span>';
-        else if (medal === 'BRONZE') badgeHtml = '<span class="medal bronze">◆</span>';
-        
-        b.innerHTML = `<span class="lvl-num">${i + 1}</span>` +
-            (best !== null ? `<span class="lvl-best">${best}%</span>` : '') +
-            badgeHtml;
-        b.title = i <= unlocked ? LEVELS[i].name : 'Locked';
-        b.onclick = () => { this.game.levelIdx = i; this.buildMenu(); };
-        c.appendChild(b);
-    }
-    document.getElementById('btn-play-custom').classList.toggle('hidden', storage.getCustomLevels().length === 0);
-}
-```
-
-### CSS (minimal example)
-
-```css
-.medal {
-    font-size: 0.8em;
-    margin-left: 4px;
-}
-.medal.gold { color: #FFD700; }
-.medal.silver { color: #C0C0C0; }
-.medal.bronze { color: #CD7F32; }
-```
 
 ---
 

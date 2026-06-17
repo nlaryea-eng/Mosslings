@@ -13,6 +13,13 @@ const ui = {
     editHistory: [], // command array snapshots
     brushSize: { w: 40, h: 40 },
     snapToGrid: false,
+    nextLevelCountdown: null,
+    chapterSize: 7,
+    chapterThemes: [
+        { region: 'Foundations', unlock: 'Chapter 1 is your on-ramp.', flavor: 'Builders, diggers, floaters, and the first lava leap.', badges: ['Learn the core tools', 'Bridge, dig, float', '7-level starter run'] },
+        { region: 'Trials', unlock: 'The middle stretch tightens the route planning.', flavor: 'Bash lines, miner routes, athlete gates, and harsher lava carries.', badges: ['Route control', 'Athlete checks', 'Open levels 8–14'] },
+        { region: 'Machines', unlock: 'The endgame region is now live.', flavor: 'Switches, ferries, remixed gates, the tower ascent, and the gauntlet.', badges: ['Switch logic', 'Platform timing', 'Open levels 15–21'] }
+    ],
 
     init(game) {
         this.game = game;
@@ -32,6 +39,8 @@ const ui = {
         $('btn-editor').onclick = () => { audio.init(); this.startEditor(); };
         $('btn-start').onclick = () => { this.armAudioForPlay(); game.loadLevel(game.levelIdx); };
         $('btn-daily').onclick = () => { audio.init(); game.loadDailyChallenge(); };
+        $('btn-chapter-open').onclick = () => this.openPendingChapterReward();
+        $('btn-chapter-dismiss').onclick = () => this.dismissPendingChapterReward();
         $('btn-edit-save').onclick = () => this.saveCustomLevel();
         $('btn-edit-settings').onclick = () => this.openEditorSettings();
         $('btn-edit-share').onclick = () => this.shareCustomLevel();
@@ -66,7 +75,9 @@ const ui = {
             if (!audio.muted) this.armAudioForPlay();
             this.refreshMuteButton();
         };
+        $('btn-menu-home').onclick = () => this.backToMenu();
         $('msg-btn-primary').onclick = () => {
+            this.clearNextLevelCountdown();
             if (game.state === 'VICTORY') this.backToMenu();
             else if (game.runMode === 'daily') {
                 if (this.lastWin) this.backToMenu();
@@ -131,7 +142,12 @@ const ui = {
             else if (k === 'n') game.nuke();
             else if (e.key === '+' || e.key === '=') game.adjustRate(1);
             else if (e.key === '-') game.adjustRate(-1);
-            else if (e.key === 'Escape') game.selectSkill(null);
+            else if (e.key === 'Escape') {
+                if (game.state === 'PLAY' || game.state === 'PAUSE') {
+                    if (game.selectedSkill !== null) game.selectSkill(null);
+                    else this.backToMenu();
+                } else game.selectSkill(null);
+            }
             else if (e.key === 'Backspace') { game.rewind(); e.preventDefault(); }
             else if (k === 'd') game.debug = !game.debug;
             else if (k === 't') this.toggleTutorial();
@@ -163,6 +179,7 @@ const ui = {
     },
     refreshMuteButton() {
         setIconHtml(document.getElementById('btn-mute'), audio.muted ? UI_ICONS.soundOff : UI_ICONS.soundOn, audio.muted ? 'Unmute' : 'Mute');
+        setIconHtml(document.getElementById('btn-menu-home'), UI_ICONS.close, 'Back to menu');
     },
     // --- CRT scanline/vignette toggle (persisted display preference) ---------
     _crtOn() { try { return localStorage.getItem('mosslings.crt') !== '0'; } catch (e) { return true; } },
@@ -409,76 +426,345 @@ const ui = {
         return '';
     },
 
+    chapterMeta(idx) {
+        const chapter = Math.floor(idx / this.chapterSize);
+        const start = chapter * this.chapterSize;
+        const end = Math.min(LEVELS.length - 1, start + this.chapterSize - 1);
+        return {
+            chapter,
+            start,
+            end,
+            title: `Chapter ${chapter + 1}`,
+            label: `${start + 1}–${end + 1}`
+        };
+    },
+
+    isChapterCompleteLevel(idx) {
+        return idx >= 0 && idx < LEVELS.length - 1 && ((idx + 1) % this.chapterSize === 0);
+    },
+
+    chapterSummaryHtml(idx) {
+        const meta = this.chapterMeta(idx);
+        const nextMeta = this.chapterMeta(Math.min(LEVELS.length - 1, idx + 1));
+        if (this.isChapterCompleteLevel(idx)) {
+            return `<span class="msg-progress-chip msg-chapter complete">${meta.title} complete · ${meta.label}</span>` +
+                `<span class="msg-progress-chip msg-chapter unlock">${nextMeta.title} unlocked</span>`;
+        }
+        return `<span class="msg-progress-chip msg-chapter">${meta.title} · level ${(idx - meta.start) + 1}/${(meta.end - meta.start) + 1}</span>`;
+    },
+
+    chapterMasteryData(meta, unlocked = storage.getUnlocked()) {
+        const totals = { rescue: 0, efficiency: 0, speed: 0, mastered: 0, cleared: 0, levelCount: (meta.end - meta.start) + 1, nextGoal: null };
+        const levels = [];
+        for (let i = meta.start; i <= meta.end; i++) {
+            const locked = i > unlocked;
+            const best = storage.getBest(i);
+            const medals = storage.getMedals(i);
+            const medalCount = (medals.saved ? 1 : 0) + (medals.skills ? 1 : 0) + (medals.time ? 1 : 0);
+            const goal = !locked ? this.nextMedalGoal(LEVELS[i], medals) : null;
+            if (!locked && best !== null) totals.cleared++;
+            if (!locked && medals.saved) totals.rescue++;
+            if (!locked && medals.skills) totals.efficiency++;
+            if (!locked && medals.time) totals.speed++;
+            if (!locked && medalCount === 3) totals.mastered++;
+            if (!totals.nextGoal && !locked && goal) {
+                totals.nextGoal = { level: i + 1, short: goal.short, label: goal.label };
+            }
+            levels.push({ level: i + 1, locked, best, medalCount, mastered: medalCount === 3, goal });
+        }
+        totals.masteryComplete = totals.mastered === totals.levelCount;
+        return { ...totals, levels };
+    },
+
+    chapterCompletionStats(meta, unlocked = storage.getUnlocked()) {
+        const levelCount = (meta.end - meta.start) + 1;
+        const mastery = this.chapterMasteryData(meta, unlocked);
+        let cleared = 0;
+        let bestSum = 0;
+        let bestCount = 0;
+        let medalCount = 0;
+        for (let i = meta.start; i <= meta.end; i++) {
+            const best = storage.getBest(i);
+            if (best !== null) {
+                cleared++;
+                bestSum += best;
+                bestCount++;
+            }
+            const medals = storage.getMedals(i);
+            medalCount += (medals.saved ? 1 : 0) + (medals.skills ? 1 : 0) + (medals.time ? 1 : 0);
+        }
+        return {
+            levelCount,
+            cleared,
+            avg: bestCount ? Math.round(bestSum / bestCount) : null,
+            medalCount,
+            medalTotal: levelCount * 3,
+            masteryComplete: mastery.masteryComplete,
+            mastered: mastery.mastered,
+        };
+    },
+
+    chapterCompletionRibbonHtml(meta, unlocked = storage.getUnlocked()) {
+        const stats = this.chapterCompletionStats(meta, unlocked);
+        const cls = ['chapter-reward-ribbon', stats.masteryComplete ? 'mastery-complete' : '', 'hidden'].filter(Boolean).join(' ');
+        const kicker = stats.masteryComplete ? 'Chapter mastered' : 'Chapter complete';
+        const copy = stats.masteryComplete
+            ? `<strong>${meta.title}</strong> wrapped with ${stats.medalCount}/${stats.medalTotal} medals and ${stats.avg !== null ? `${stats.avg}% avg rescue` : 'a clean run'}.`
+            : `<strong>${meta.title}</strong> closed at ${stats.cleared}/${stats.levelCount} cleared · ${stats.medalCount}/${stats.medalTotal} medals${stats.avg !== null ? ` · ${stats.avg}% avg rescue` : ''}.`;
+        const pill = stats.masteryComplete
+            ? `<span class="ribbon-pill">Mastery complete</span>`
+            : `<span class="ribbon-pill">${stats.cleared}/${stats.levelCount} clear</span>`;
+        return `<div id="chapter-reward-ribbon" class="${cls}" aria-live="polite"><span class="ribbon-kicker">${kicker}</span><span class="ribbon-copy">${copy}</span>${pill}</div>`;
+    },
+
+    chapterMasteryRowHtml(meta, unlocked = storage.getUnlocked()) {
+        const data = this.chapterMasteryData(meta, unlocked);
+        const rowCls = ['chapter-mastery-row', data.masteryComplete ? 'is-complete' : ''].filter(Boolean).join(' ');
+        const nodes = data.levels.map((entry) => {
+            const cls = ['mastery-node', entry.locked ? 'locked' : `m${entry.medalCount}`, entry.mastered ? 'mastered' : '', data.masteryComplete && entry.mastered ? 'chapter-complete' : ''].filter(Boolean).join(' ');
+            const status = entry.locked ? 'Locked' : `${entry.medalCount}/3 mastery`;
+            const goal = entry.goal ? ` · ${entry.goal.short}` : (entry.mastered ? ' · mastered' : '');
+            return `<span class="${cls}" title="Level ${entry.level}: ${status}${goal}"><span>${entry.level}</span></span>`;
+        }).join('');
+        const nextGoal = data.nextGoal
+            ? `<span class="chapter-mastery-chip next" title="${data.nextGoal.label}">Next · L${data.nextGoal.level} ${data.nextGoal.short}</span>`
+            : `<span class="chapter-mastery-chip next complete">Chapter mastered</span>`;
+        const completion = data.masteryComplete
+            ? `<div class="chapter-mastery-complete"><span class="chapter-mastery-crown">★</span><strong>${meta.title} mastery complete</strong><span>All rescue, efficiency, and speed medals secured.</span></div>`
+            : '';
+        return `<div class="${rowCls}">` +
+            `${completion}` +
+            `<div class="chapter-mastery-track" aria-hidden="true">${nodes}</div>` +
+            `<div class="chapter-mastery-chips">` +
+                `<span class="chapter-mastery-chip rescue">Rescue ${data.rescue}/${data.levelCount}</span>` +
+                `<span class="chapter-mastery-chip efficiency">Efficiency ${data.efficiency}/${data.levelCount}</span>` +
+                `<span class="chapter-mastery-chip speed">Speed ${data.speed}/${data.levelCount}</span>` +
+                `<span class="chapter-mastery-chip mastered">Mastered ${data.mastered}/${data.levelCount}</span>` +
+                `${nextGoal}` +
+            `</div>` +
+        `</div>`;
+    },
+
+    clearNextLevelCountdown() {
+        if (this.nextLevelCountdown) {
+            clearInterval(this.nextLevelCountdown);
+            this.nextLevelCountdown = null;
+        }
+    },
+
+    scheduleNextLevelAdvance(nextIdx) {
+        this.clearNextLevelCountdown();
+        const node = document.getElementById('msg-next-teaser');
+        if (!node || nextIdx < 0 || nextIdx >= LEVELS.length) return;
+        let remaining = this.isChapterCompleteLevel(nextIdx - 1) ? 5 : 3;
+        const tick = () => {
+            const el = document.getElementById('msg-autoadvance');
+            if (el) el.innerText = remaining <= 0 ? 'Opening…' : `Continuing in ${remaining}…`;
+            if (remaining <= 0) {
+                this.clearNextLevelCountdown();
+                if (!document.getElementById('message-overlay').classList.contains('hidden')) this.game.loadLevel(nextIdx);
+                return;
+            }
+            remaining--;
+        };
+        tick();
+        this.nextLevelCountdown = setInterval(tick, 1000);
+    },
+
+    renderNextTeaser(game, win) {
+        const node = document.getElementById('msg-next-teaser');
+        if (!node) return;
+        this.clearNextLevelCountdown();
+        node.classList.add('hidden');
+        node.innerHTML = '';
+        if (!win || game.runMode !== 'campaign' || game.levelIdx < 0 || game.levelIdx + 1 >= LEVELS.length) return;
+        const nextIdx = game.levelIdx + 1;
+        const next = LEVELS[nextIdx];
+        const chapter = this.chapterMeta(nextIdx);
+        const hook = next.headlineSkill != null ? `${SKILL_NAMES[next.headlineSkill]} leads here` : 'Fresh route ahead';
+        const chapterLead = this.isChapterCompleteLevel(game.levelIdx)
+            ? `<span class="teaser-kicker chapter-kicker">${chapter.title} unlocked</span>`
+            : `<span class="teaser-kicker">Next puzzle</span>`;
+        node.innerHTML = `${chapterLead}<strong>${nextIdx + 1}. ${next.name}</strong><span>${hook}</span><span id="msg-autoadvance" class="teaser-autoadvance"></span>`;
+        node.classList.remove('hidden');
+        this.scheduleNextLevelAdvance(nextIdx);
+    },
+
+    chapterTheme(chapter) {
+        return this.chapterThemes[chapter] || this.chapterThemes[this.chapterThemes.length - 1];
+    },
+
+    pendingChapterReward(unlocked) {
+        const maxChapter = Math.floor(Math.min(unlocked, LEVELS.length - 1) / this.chapterSize);
+        for (let chapter = maxChapter; chapter >= 1; chapter--) {
+            if (!storage.hasChapterRewardSeen(chapter)) return chapter;
+        }
+        return null;
+    },
+
+    renderChapterReward(unlocked) {
+        const card = document.getElementById('chapter-reward-card');
+        if (!card) return;
+        const chapter = this.pendingChapterReward(unlocked);
+        this.pendingRewardChapter = chapter;
+        if (chapter == null) {
+            card.classList.add('hidden');
+            return;
+        }
+        const meta = this.chapterMeta(chapter * this.chapterSize);
+        const theme = this.chapterTheme(chapter);
+        const firstLevel = meta.start;
+        const lastLevel = meta.end;
+        document.getElementById('chapter-reward-kicker').innerText = `${meta.title} unlocked · ${theme.region}`;
+        document.getElementById('chapter-reward-title').innerText = `${firstLevel + 1}. ${LEVELS[firstLevel].name} is ready`;
+        document.getElementById('chapter-reward-meta').innerText = `${theme.flavor} ${theme.unlock}`;
+        document.getElementById('btn-chapter-open').innerText = `Play ${meta.title}`;
+        let ribbon = document.getElementById('chapter-reward-ribbon');
+        const prevMeta = chapter > 0 ? this.chapterMeta((chapter - 1) * this.chapterSize) : null;
+        if (ribbon) {
+            if (prevMeta) {
+                ribbon.outerHTML = this.chapterCompletionRibbonHtml(prevMeta, unlocked);
+                ribbon = document.getElementById('chapter-reward-ribbon');
+                ribbon.classList.remove('hidden');
+            } else {
+                ribbon.classList.add('hidden');
+                ribbon.innerHTML = '';
+            }
+        }
+        const badges = document.getElementById('chapter-reward-badges');
+        badges.innerHTML = '';
+        const items = [...theme.badges, `Levels ${firstLevel + 1}–${lastLevel + 1}`];
+        items.forEach((label, idx) => {
+            const span = document.createElement('span');
+            span.className = `chapter-reward-badge badge-${idx % 3}`;
+            span.innerText = label;
+            badges.appendChild(span);
+        });
+        card.classList.remove('hidden');
+    },
+
+    dismissPendingChapterReward() {
+        if (this.pendingRewardChapter == null) return;
+        storage.markChapterRewardSeen(this.pendingRewardChapter);
+        this.pendingRewardChapter = null;
+        const card = document.getElementById('chapter-reward-card');
+        if (card) card.classList.add('hidden');
+    },
+
+    openPendingChapterReward() {
+        if (this.pendingRewardChapter == null) return;
+        const chapter = this.pendingRewardChapter;
+        const meta = this.chapterMeta(chapter * this.chapterSize);
+        storage.markChapterRewardSeen(chapter);
+        this.pendingRewardChapter = null;
+        this.game.levelIdx = meta.start;
+        this.buildMenu();
+        this.armAudioForPlay();
+        this.game.loadLevel(meta.start);
+    },
+
     buildMenu() {
         const c = document.getElementById('level-select-container');
         c.innerHTML = '';
         const unlocked = storage.getUnlocked();
-        // First run = Level 1 not yet cleared. Collapse the menu to a single
-        // dominant Play button (see #start-screen.first-run CSS) so a new player
-        // has exactly one obvious action. Level select + Editor return after L1.
         const firstRun = unlocked === 0;
         document.getElementById('start-screen').classList.toggle('first-run', firstRun);
         document.getElementById('btn-start').innerText = firstRun ? 'Start Playing' : 'Play';
-        for (let i = 0; i < LEVELS.length; i++) {
-            const b = document.createElement('button');
-            const locked = i > unlocked;
-            const best = storage.getBest(i);
-            const medals = storage.getMedals(i);
-            const goal = !locked && best !== null ? this.nextMedalGoal(LEVELS[i], medals) : null;
-            const medalBits = [];
-            const medalNames = [];
-            if (!locked && medals.saved) {
-                medalBits.push(`<span class="medal medal-gold" title="Rescue Medal (100% saved)">${UI_ICONS.trophy}</span>`);
-                medalNames.push('rescue medal');
-            }
-            if (!locked && medals.skills) {
-                medalBits.push(`<span class="medal medal-silver" title="Efficiency Medal (low skills)">${UI_ICONS.medalSilver}</span>`);
-                medalNames.push('efficiency medal');
-            }
-            if (!locked && medals.time) {
-                medalBits.push(`<span class="medal medal-bronze" title="Speed Medal (fast completion)">${UI_ICONS.medalBronze}</span>`);
-                medalNames.push('speed medal');
-            }
-            b.className = [
-                'lvl-btn',
-                i === this.game.levelIdx ? 'selected' : '',
-                locked ? 'is-locked' : '',
-                !locked && best !== null ? 'has-best' : '',
-                goal ? 'has-goal' : '',
-                medalBits.length ? 'has-medals' : ''
-            ].filter(Boolean).join(' ');
-            if (b.setAttribute) b.setAttribute('aria-disabled', locked ? 'true' : 'false');
-            else b.ariaDisabled = locked ? 'true' : 'false';
+        this.renderChapterReward(firstRun ? -1 : unlocked);
 
-            b.innerHTML = `<span class="lvl-num">${i + 1}</span>` +
-                `<span class="lvl-best${locked || best === null ? ' empty' : ''}">${!locked && best !== null ? `${best}%` : ''}</span>` +
-                (locked
-                    ? `<span class="lvl-lock">${UI_ICONS.lock}</span>`
-                    : (goal
-                        ? `<span class="lvl-goal" title="${goal.label}">${goal.short}</span>`
-                        : `<span class="lvl-medals">${medalBits.join('')}</span>`));
-            b.title = i <= unlocked ? LEVELS[i].name : 'Locked';
-            const progress = locked
+        const chapterCount = Math.ceil(LEVELS.length / this.chapterSize);
+        for (let chapter = 0; chapter < chapterCount; chapter++) {
+            const meta = this.chapterMeta(chapter * this.chapterSize);
+            const wrap = document.createElement('section');
+            wrap.className = 'chapter-block';
+            const heading = document.createElement('div');
+            heading.className = 'chapter-heading';
+
+            const chapterUnlocked = unlocked >= meta.start;
+            const chapterBest = [];
+            let cleared = 0;
+            for (let i = meta.start; i <= meta.end; i++) {
+                const best = storage.getBest(i);
+                if (best !== null) { cleared++; chapterBest.push(best); }
+            }
+            const avg = chapterBest.length ? Math.round(chapterBest.reduce((a,b)=>a+b,0)/chapterBest.length) : null;
+            const masteryData = chapterUnlocked ? this.chapterMasteryData(meta, unlocked) : null;
+            wrap.classList.toggle('mastery-complete', !!(masteryData && masteryData.masteryComplete));
+            const summary = !chapterUnlocked
                 ? 'Locked'
-                : [
-                    best !== null ? `best ${best}% rescued` : 'not yet cleared',
-                    medalNames.length ? `earned ${medalNames.join(', ')}` : 'no medals earned',
-                    goal ? goal.label.toLowerCase() : 'all medal targets cleared'
-                ].join(', ');
-            const selected = i === this.game.levelIdx ? ', selected' : '';
-            const aria = `Level ${i + 1}: ${LEVELS[i].name}, ${progress}${selected}`;
-            if (b.setAttribute) b.setAttribute('aria-label', aria);
-            else b.ariaLabel = aria;
-            b.onclick = () => {
-                if (locked) return;
-                this.game.levelIdx = i;
-                this.buildMenu();
-            };
-            c.appendChild(b);
+                : masteryData && masteryData.masteryComplete
+                    ? `Mastery complete · ${cleared}/${(meta.end-meta.start)+1} cleared${avg !== null ? ` · avg ${avg}%` : ''}`
+                    : `${cleared}/${(meta.end-meta.start)+1} cleared${avg !== null ? ` · avg ${avg}%` : ''}`;
+            heading.innerHTML = `<div class="chapter-title-wrap"><span class="chapter-title">${meta.title}</span><span class="chapter-range">Levels ${meta.label}</span></div>` +
+                `<div class="chapter-summary">${summary}</div>`;
+            if (masteryData && masteryData.masteryComplete) {
+                heading.innerHTML += `<span class="chapter-complete-badge" title="All 3 medals earned on every level">Mastery complete</span>`;
+            }
+            wrap.appendChild(heading);
+
+            if (chapterUnlocked) {
+                const mastery = document.createElement('div');
+                mastery.innerHTML = this.chapterMasteryRowHtml(meta, unlocked);
+                wrap.appendChild(mastery.firstElementChild);
+            }
+
+            const grid = document.createElement('div');
+            grid.className = 'chapter-grid';
+            for (let i = meta.start; i <= meta.end; i++) {
+                const b = document.createElement('button');
+                const locked = i > unlocked;
+                const best = storage.getBest(i);
+                const medals = storage.getMedals(i);
+                const goal = !locked && best !== null ? this.nextMedalGoal(LEVELS[i], medals) : null;
+                const medalBits = [];
+                const medalNames = [];
+                if (!locked && medals.saved) { medalBits.push(`<span class="medal medal-gold" title="Rescue Medal (100% saved)">${UI_ICONS.trophy}</span>`); medalNames.push('rescue medal'); }
+                if (!locked && medals.skills) { medalBits.push(`<span class="medal medal-silver" title="Efficiency Medal (low skills)">${UI_ICONS.medalSilver}</span>`); medalNames.push('efficiency medal'); }
+                if (!locked && medals.time) { medalBits.push(`<span class="medal medal-bronze" title="Speed Medal (fast completion)">${UI_ICONS.medalBronze}</span>`); medalNames.push('speed medal'); }
+                b.className = [
+                    'lvl-btn',
+                    i === this.game.levelIdx ? 'selected' : '',
+                    locked ? 'is-locked' : '',
+                    !locked && best !== null ? 'has-best' : '',
+                    goal ? 'has-goal' : '',
+                    medalBits.length ? 'has-medals' : ''
+                ].filter(Boolean).join(' ');
+                b.dataset.level = i;
+                if (b.setAttribute) b.setAttribute('aria-disabled', locked ? 'true' : 'false');
+                b.innerHTML = `<span class="lvl-num">${i + 1}</span>` +
+                    `<span class="lvl-best${locked || best === null ? ' empty' : ''}">${!locked && best !== null ? `${best}%` : ''}</span>` +
+                    (locked
+                        ? `<span class="lvl-lock">${UI_ICONS.lock}</span>`
+                        : (goal
+                            ? `<span class="lvl-goal" title="${goal.label}">${goal.short}</span>`
+                            : `<span class="lvl-medals">${medalBits.join('')}</span>`));
+                b.title = i <= unlocked ? LEVELS[i].name : 'Locked';
+                const progress = locked
+                    ? 'Locked'
+                    : [
+                        best !== null ? `best ${best}% rescued` : 'not yet cleared',
+                        medalNames.length ? `earned ${medalNames.join(', ')}` : 'no medals earned',
+                        goal ? goal.label.toLowerCase() : 'all medal targets cleared'
+                    ].join(', ');
+                const selected = i === this.game.levelIdx ? ', selected' : '';
+                const aria = `Level ${i + 1}: ${LEVELS[i].name}, ${progress}${selected}`;
+                if (b.setAttribute) b.setAttribute('aria-label', aria);
+                b.onclick = () => {
+                    if (locked) return;
+                    if (this.game.levelIdx === i) { this.armAudioForPlay(); this.game.loadLevel(i); return; }
+                    this.game.levelIdx = i;
+                    this.buildMenu();
+                };
+                b.ondblclick = () => { if (!locked) { this.armAudioForPlay(); this.game.loadLevel(i); } };
+                grid.appendChild(b);
+            }
+            wrap.appendChild(grid);
+            c.appendChild(wrap);
         }
         this.refreshDailyCard(firstRun);
         document.getElementById('btn-gallery').classList.toggle('hidden', storage.getCustomLevels().length === 0);
     },
+
     refreshDailyCard(firstRun) {
         const card = document.getElementById('daily-card');
         if (!card) return;
@@ -601,6 +887,7 @@ const ui = {
     },
 
     backToMenu() {
+        this.clearNextLevelCountdown();
         if (typeof music !== 'undefined' && music) music.stop();
         this.setMenuMode(true);
         const returningFromDaily = this.game.runMode === 'daily';
@@ -613,6 +900,7 @@ const ui = {
         document.getElementById('start-screen').classList.remove('hidden');
         document.getElementById('message-overlay').classList.add('hidden');
         document.getElementById('message-overlay').classList.remove('has-result-card');
+        document.getElementById('msg-next-teaser').classList.add('hidden');
         document.getElementById('gallery-screen').classList.add('hidden');
         document.getElementById('tutorial-bar').classList.add('hidden');
         document.getElementById('editor-ui').classList.add('hidden');
@@ -627,10 +915,12 @@ const ui = {
     },
 
     onLevelStart(game, isCustom) {
+        this.clearNextLevelCountdown();
         this.setMenuMode(false);
         document.getElementById('start-screen').classList.add('hidden');
         document.getElementById('message-overlay').classList.add('hidden');
         document.getElementById('message-overlay').classList.remove('has-result-card');
+        document.getElementById('msg-next-teaser').classList.add('hidden');
         document.getElementById('gallery-screen').classList.add('hidden');
         document.getElementById('editor-ui').classList.add('hidden');
         document.getElementById('lbl-level').innerText =
@@ -766,7 +1056,8 @@ const ui = {
 
         const progress = document.getElementById('msg-progress');
         if (progress) {
-            progress.innerHTML = this.runStreakHtml(streak) + this.resultTargetHtml(target, allMedals);
+            const chapterBits = win && game.runMode === 'campaign' && game.levelIdx >= 0 ? this.chapterSummaryHtml(game.levelIdx) : '';
+            progress.innerHTML = this.runStreakHtml(streak) + this.resultTargetHtml(target, allMedals) + chapterBits;
             progress.classList.toggle('hidden', progress.innerHTML === '');
         }
         const showLegend = !!(win && game.level.par && !storage.load('medalLegendSeen', false));
@@ -819,13 +1110,25 @@ const ui = {
         else if (game.runMode === 'daily') label = 'Done';
         else if (hasNext) {
             const nm = LEVELS[game.levelIdx + 1].name;
-            label = `Next ▸ ${game.levelIdx + 2}. ${nm.length > 16 ? nm.slice(0, 15) + '…' : nm}`;
+            label = this.isChapterCompleteLevel(game.levelIdx)
+                ? `Open ${this.chapterMeta(game.levelIdx + 1).title}`
+                : `Next ▸ ${game.levelIdx + 2}. ${nm.length > 16 ? nm.slice(0, 15) + '…' : nm}`;
         } else label = 'Next Level';
         primary.innerText = label;
         primary.classList.toggle('primary-next', hasNext);
         // Autofocus the most likely next action (Next on a win, Retry on a loss)
         // so a keyboard/controller press continues without hunting.
         if (typeof primary.focus === 'function') { try { primary.focus(); } catch (e) {} }
+
+        if (win && game.runMode === 'campaign' && game.levelIdx >= 0) {
+            if (this.isChapterCompleteLevel(game.levelIdx)) {
+                const meta = this.chapterMeta(game.levelIdx);
+                const nextMeta = this.chapterMeta(Math.min(LEVELS.length - 1, game.levelIdx + 1));
+                document.getElementById('msg-title').innerText = `CHAPTER ${meta.chapter + 1} CLEAR!`;
+                document.getElementById('msg-text').innerText = `${meta.title} complete. ${nextMeta.title} is now open.`;
+            }
+            this.renderNextTeaser(game, win);
+        } else this.renderNextTeaser(game, win);
 
         if (win) audio.sfxWin(); else audio.sfxLose();
         if (typeof haptics !== 'undefined') { if (win) haptics.win(); else haptics.fail(); }

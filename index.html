@@ -55,6 +55,7 @@
                     <button id="btn-restart" title="Restart level [R]" aria-label="Restart"></button>
                     <button id="btn-nuke" title="Nuke — detonate everyone (press twice) [N]" aria-label="Nuke"></button>
                     <button id="btn-mute" title="Mute [M]" aria-label="Mute"></button>
+                    <button id="btn-menu-home" title="Back to menu [Esc]" aria-label="Back to menu"></button>
                 </div>
             </div>
         </div>
@@ -146,7 +147,7 @@
 
         <!-- BOTTOM SKILL TOOLBAR — a reserved bar below the board -->
         <div id="toolbar">
-            <button class="skill-btn" data-skill="0" title="Blocker — stands firm, turns others around [1]"><span class="key">1</span><span class="icon"></span><span class="label">Block</span><span class="count">0</span></button>
+            <button class="skill-btn" data-skill="0" title="Blocker — stands firm, turns others around; click the blocker again with Block to release [1]"><span class="key">1</span><span class="icon"></span><span class="label">Block</span><span class="count">0</span></button>
             <button class="skill-btn" data-skill="1" title="Builder — lays a rising 12-brick bridge [2]"><span class="key">2</span><span class="icon"></span><span class="label">Build</span><span class="count">0</span></button>
             <button class="skill-btn" data-skill="2" title="Basher — tunnels horizontally through dirt [3]"><span class="key">3</span><span class="icon"></span><span class="label">Bash</span><span class="count">0</span></button>
             <button class="skill-btn" data-skill="3" title="Miner — digs a diagonal stairway down [4]"><span class="key">4</span><span class="icon"></span><span class="label">Mine</span><span class="count">0</span></button>
@@ -165,6 +166,7 @@
             <div id="msg-medals-wrap"></div>
             <canvas id="result-card-preview" class="hidden" width="1200" height="630" aria-label="Shareable result card preview"></canvas>
             <div id="msg-progress" class="hidden"></div>
+            <div id="msg-next-teaser" class="hidden"></div>
             <div id="msg-btns">
                 <button id="msg-btn-primary">Next Level</button>
                 <button id="msg-btn-retry" class="hidden">Retry for medals</button>
@@ -177,6 +179,19 @@
         <div id="start-screen">
             <div class="logo">MOSSLINGS</div>
             <p class="tagline">The moss folk march without thinking.<br>Lend them your wits and lead them to the portal.</p>
+            <div id="chapter-reward-card" class="chapter-reward-card hidden" aria-live="polite">
+                <div class="chapter-reward-copy">
+                    <span id="chapter-reward-kicker" class="chapter-reward-kicker">New chapter unlocked</span>
+                    <strong id="chapter-reward-title">Chapter reward</strong>
+                    <span id="chapter-reward-meta">A fresh stretch of puzzles is ready.</span>
+                    <div id="chapter-reward-ribbon" class="chapter-reward-ribbon hidden" aria-live="polite"></div>
+                    <div id="chapter-reward-badges" class="chapter-reward-badges"></div>
+                </div>
+                <div class="chapter-reward-actions">
+                    <button id="btn-chapter-open" class="big-btn">Open chapter</button>
+                    <button id="btn-chapter-dismiss" class="toggle-link">Maybe later</button>
+                </div>
+            </div>
             <div id="level-select-container"></div>
             <div id="daily-card" class="daily-card hidden">
                 <div class="daily-copy">
@@ -196,7 +211,7 @@
             <button id="btn-haptics" class="toggle-link hidden" aria-pressed="true">Vibrate: On</button>
             <details class="controls-disc">
                 <summary>⌨ Controls &amp; keys</summary>
-                <p>1-8 skills · click to assign (works paused) · F fast-forward · Backspace rewind 5s · +/- spawn rate · N nuke twice · R restart · Space pause · C crt · M mute</p>
+                <p>1-8 skills · click to assign (works paused) · click Block again to release a blocker · F fast-forward · Backspace rewind 5s · +/- spawn rate · N nuke twice · R restart · Esc menu · Space pause · C crt · M mute</p>
             </details>
         </div>
 

@@ -1680,6 +1680,81 @@ test('result progress helpers render streak and mastery target chips', () => {
     assert(ui.resultTargetHtml(null, true).includes('All medal targets cleared'), 'complete chip renders');
 });
 
+// ==============================================================
+console.log('\n— Menu progression —');
+// ==============================================================
+test('chapter reward seen flags persist by chapter', () => {
+    assert(storage.hasChapterRewardSeen(1) === false, 'chapter 1 reward should start unseen');
+    storage.markChapterRewardSeen(1);
+    assert(storage.hasChapterRewardSeen(1) === true, 'chapter 1 reward should persist once marked');
+    assert(storage.hasChapterRewardSeen(2) === false, 'other chapters stay unseen');
+});
+test('chapter mastery row summarizes medals and the next focus for a chapter', () => {
+    storage.save('best', {});
+    storage.save('medals', {});
+    storage.setBest(0, 100);
+    storage.setMedals(0, { saved: 1, skills: 1, time: 1 });
+    storage.setBest(1, 100);
+    storage.setMedals(1, { saved: 1, skills: 0, time: 0 });
+    storage.setBest(2, 83);
+    storage.setMedals(2, { saved: 0, skills: 0, time: 0 });
+    const meta = ui.chapterMeta(0);
+    const data = ui.chapterMasteryData(meta, 6);
+    eq(data.rescue, 2, 'rescue medals counted across the chapter');
+    eq(data.efficiency, 1, 'efficiency medals counted across the chapter');
+    eq(data.speed, 1, 'speed medals counted across the chapter');
+    eq(data.mastered, 1, 'fully mastered levels counted');
+    eq(data.masteryComplete, false, 'partial chapter is not flagged complete');
+    eq(data.nextGoal.level, 2, 'next focus points at the first incomplete unlocked level');
+    const html = ui.chapterMasteryRowHtml(meta, 6);
+    assert(html.includes('Rescue 2/7'), 'row prints rescue progress');
+    assert(html.includes('Mastered 1/7'), 'row prints mastered progress');
+    assert(html.includes('Next · L2'), 'row prints the next focus chip');
+});
+
+test('chapter mastery row exposes completion state when every level is mastered', () => {
+    storage.save('best', {});
+    storage.save('medals', {});
+    for (let i = 0; i < 7; i++) {
+        storage.setBest(i, 100);
+        storage.setMedals(i, { saved: 1, skills: 1, time: 1 });
+    }
+    const meta = ui.chapterMeta(0);
+    const data = ui.chapterMasteryData(meta, 6);
+    eq(data.mastered, 7, 'all levels count as mastered');
+    eq(data.masteryComplete, true, 'chapter mastery completion is detected');
+    eq(data.nextGoal, null, 'no next goal remains when chapter is complete');
+    const html = ui.chapterMasteryRowHtml(meta, 6);
+    assert(html.includes('chapter-mastery-row is-complete'), 'row adds a completion class');
+    assert(html.includes('Chapter 1 mastery complete'), 'row prints the completion banner');
+    assert(html.includes('Chapter mastered'), 'row switches the next chip to completion copy');
+    assert(html.includes('chapter-complete'), 'mastered nodes get the chapter completion accent');
+});
+
+
+test('chapter reward ribbon summarizes chapter-complete stats and mastery state', () => {
+    storage.save('best', {});
+    storage.save('medals', {});
+    for (let i = 0; i < 7; i++) {
+        storage.setBest(i, 100);
+        storage.setMedals(i, { saved: 1, skills: 1, time: 1 });
+    }
+    const html = ui.chapterCompletionRibbonHtml(ui.chapterMeta(0), 6);
+    assert(html.includes('Chapter mastered'), 'reward ribbon distinguishes mastery from a plain unlock');
+    assert(html.includes('21/21 medals'), 'reward ribbon surfaces aggregate medal totals');
+    assert(html.includes('Mastery complete'), 'reward ribbon prints the mastery pill');
+});
+
+test('late-campaign ordering now ramps chapter 2 and 3 more steadily', () => {
+    const names = LEVELS.slice(7).map(l => l.name);
+    eq(names[0], 'One-Way Out', 'chapter 2 now opens with a route-control remix');
+    eq(names[2], "Basher's Hollow", 'level 10 should sit in the middle of the advanced route chapter');
+    eq(names[7], 'Gatekeeper', 'chapter 3 now begins with the switch intro');
+    eq(names[12], 'Mossling Master', 'tower ascent now lands near the endgame');
+    eq(names[13], 'Moss Gauntlet', 'the gauntlet remains the campaign finale');
+});
+
 // ------------------------------------------------------------------
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
+

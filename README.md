@@ -110,7 +110,7 @@ before deploy. The unit suite covers:
 2. **Every skill's physics** — walking, step-up limits, fatal falls, floating,
    blocking, digging, bashing (incl. metal stop + floor preservation), mining
    slope, building, climbing/cresting, exploding, saving, lava
-3. **Level-integrity invariants for all 9 maps** — spawn drop survivable,
+3. **Level-integrity invariants for all 21 maps** — spawn drop survivable,
    spawn/exit in open air, exit on a walkable surface, sane metadata
 4. **End-to-end scripted solves** — a builder bridges Level 1's gap; the
    one-way gate on Level 9 holds the colony off the cliff and a basher tunnels
@@ -239,4 +239,6 @@ Free, build-free helpers (run from the repo root):
 
 More campaign worlds · level-complete confetti · a colourblind-friendly palette
 toggle · ghost/replay export (the deterministic action log already supports it)
+· extracting the editor code out of `ui.js` as it grows.
+ready supports it)
 · extracting the editor code out of `ui.js` as it grows.
