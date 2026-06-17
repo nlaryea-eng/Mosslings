@@ -28,6 +28,7 @@ const makeEl = () => ({
     style: {},
     classList: { add() {}, remove() {}, toggle() {}, contains: () => true },
     querySelector: () => makeEl(),
+    querySelectorAll: () => [],
     appendChild: () => {},
     remove: () => {},
     addEventListener: () => {},
@@ -62,7 +63,7 @@ global.localStorage = (() => {
 // Delete existing global.ui before loading ui.js to avoid collisions
 delete global.ui;
 
-for (const f of ['constants.js', 'icons.js', 'audio.js', 'haptics.js', 'music.js', 'particles.js', 'terrain.js', 'mossling.js', 'levels.js', 'daily.js', 'result-card.js', 'overlays.js', 'game.js', 'utils.js', 'ui.js', 'result-ui.js']) {
+for (const f of ['constants.js', 'icons.js', 'audio.js', 'haptics.js', 'music.js', 'particles.js', 'terrain.js', 'mossling.js', 'levels.js', 'daily.js', 'result-card.js', 'overlays.js', 'game.js', 'utils.js', 'ui.js', 'menu-ui.js', 'result-ui.js']) {
     const file = path.join(__dirname, '..', 'js', f);
     vm.runInThisContext(fs.readFileSync(file, 'utf8'), { filename: file });
 }
@@ -1215,15 +1216,19 @@ test('medal icons use the 24x24 3-tone pixel-art recipe (like skill badges)', ()
         assert(fills.size >= 3, `${key} medal is too flat (${fills.size} fills) — needs outline/fill/highlight`);
     }
 });
-test('level-select medal strip has a class selector and miniature SVG sizing', () => {
+test('world detail level rail has class selectors and miniature SVG sizing', () => {
     const uiSrc = fs.readFileSync(path.join(__dirname, '..', 'js', 'ui.js'), 'utf8');
+    const menuSrc = fs.readFileSync(path.join(__dirname, '..', 'js', 'menu-ui.js'), 'utf8');
     const css = fs.readFileSync(path.join(__dirname, '..', 'style.css'), 'utf8');
     const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
-    assert(uiSrc.includes('class="lvl-medals"'), 'level-select markup must emit class="lvl-medals"');
-    assert(!/#lvl-medals\b/.test(css), 'level medal strip CSS must target the emitted class, not #lvl-medals');
-    assert(/\.lvl-medals\s*\{[^}]*display:\s*flex/.test(css), 'level medal strip needs its own flex layout');
-    assert(/\.lvl-medals \.pixel-icon\s*\{[^}]*width:\s*10px;[^}]*height:\s*10px;/.test(css), 'level medals must be miniaturized inside 60px cards');
-    assert(uiSrc.includes('aria-disabled'), 'locked level cards need an aria-disabled state');
+    assert(html.includes('js/menu-ui.js'), 'menu-ui.js must be loaded as the menu boundary');
+    assert(html.includes('id="world-menu"'), 'menu shell must expose id="world-menu"');
+    assert(menuSrc.includes('class="world-carousel"'), 'world carousel markup must emit class="world-carousel"');
+    assert(menuSrc.includes('class="level-medals"'), 'world detail markup must emit class="level-medals"');
+    assert(!/\.lvl-btn\b/.test(css), 'new menu CSS must not keep styling the old .lvl-btn grid');
+    assert(/\.level-medals\s*\{[^}]*display:\s*flex/.test(css), 'level medal strip needs its own flex layout');
+    assert(/\.level-medals \.pixel-icon\s*\{[^}]*width:\s*10px;[^}]*height:\s*10px;/.test(css), 'level medals must be miniaturized inside the rail');
+    assert(menuSrc.includes('aria-disabled'), 'locked level cards need an aria-disabled state');
     assert(uiSrc.includes('gallery-medals'), 'gallery cards need a separate medal sizing contract');
     assert(css.includes('button:focus-visible'), 'keyboard focus must be visible');
     assert(!html.includes('user-scalable=no'), 'page-level zoom must not be globally disabled');
@@ -1851,13 +1856,13 @@ test('result progress helpers render streak and mastery target chips', () => {
 // ==============================================================
 console.log('\n— Menu progression —');
 // ==============================================================
-test('chapter reward seen flags persist by chapter', () => {
-    assert(storage.hasChapterRewardSeen(1) === false, 'chapter 1 reward should start unseen');
+test('world reward seen flags persist through the compatible storage key', () => {
+    assert(storage.hasChapterRewardSeen(1) === false, 'world 2 reward should start unseen');
     storage.markChapterRewardSeen(1);
-    assert(storage.hasChapterRewardSeen(1) === true, 'chapter 1 reward should persist once marked');
-    assert(storage.hasChapterRewardSeen(2) === false, 'other chapters stay unseen');
+    assert(storage.hasChapterRewardSeen(1) === true, 'world reward should persist once marked');
+    assert(storage.hasChapterRewardSeen(2) === false, 'other worlds stay unseen');
 });
-test('chapter mastery row summarizes medals and the next focus for a chapter', () => {
+test('world mastery summary counts medals and exposes the next focus', () => {
     storage.save('best', {});
     storage.save('medals', {});
     storage.setBest(0, 100);
@@ -1866,58 +1871,58 @@ test('chapter mastery row summarizes medals and the next focus for a chapter', (
     storage.setMedals(1, { saved: 1, skills: 0, time: 0 });
     storage.setBest(2, 83);
     storage.setMedals(2, { saved: 0, skills: 0, time: 0 });
-    const meta = ui.chapterMeta(0);
-    const data = ui.chapterMasteryData(meta, 6);
-    eq(data.rescue, 2, 'rescue medals counted across the chapter');
-    eq(data.efficiency, 1, 'efficiency medals counted across the chapter');
-    eq(data.speed, 1, 'speed medals counted across the chapter');
+    const meta = ui.worldMeta(0);
+    const data = ui.worldMasteryData(meta, 6);
+    eq(data.rescue, 2, 'rescue medals counted across the world');
+    eq(data.efficiency, 1, 'efficiency medals counted across the world');
+    eq(data.speed, 1, 'speed medals counted across the world');
     eq(data.mastered, 1, 'fully mastered levels counted');
-    eq(data.masteryComplete, false, 'partial chapter is not flagged complete');
+    eq(data.masteryComplete, false, 'partial world is not flagged complete');
     eq(data.nextGoal.level, 2, 'next focus points at the first incomplete unlocked level');
-    const html = ui.chapterMasteryRowHtml(meta, 6);
+    const html = ui.worldMasterySummaryHtml(meta, 6);
     assert(html.includes('Rescue 2/7'), 'row prints rescue progress');
     assert(html.includes('Mastered 1/7'), 'row prints mastered progress');
-    assert(html.includes('Next · L2'), 'row prints the next focus chip');
+    assert(html.includes('Next: L2'), 'row prints the next focus chip');
 });
 
-test('chapter mastery row exposes completion state when every level is mastered', () => {
+test('world mastery summary exposes completion state when every level is mastered', () => {
     storage.save('best', {});
     storage.save('medals', {});
     for (let i = 0; i < 7; i++) {
         storage.setBest(i, 100);
         storage.setMedals(i, { saved: 1, skills: 1, time: 1 });
     }
-    const meta = ui.chapterMeta(0);
-    const data = ui.chapterMasteryData(meta, 6);
+    const meta = ui.worldMeta(0);
+    const data = ui.worldMasteryData(meta, 6);
     eq(data.mastered, 7, 'all levels count as mastered');
-    eq(data.masteryComplete, true, 'chapter mastery completion is detected');
-    eq(data.nextGoal, null, 'no next goal remains when chapter is complete');
-    const html = ui.chapterMasteryRowHtml(meta, 6);
-    assert(html.includes('chapter-mastery-row is-complete'), 'row adds a completion class');
-    assert(html.includes('Chapter 1 mastery complete'), 'row prints the completion banner');
-    assert(html.includes('Chapter mastered'), 'row switches the next chip to completion copy');
-    assert(html.includes('chapter-complete'), 'mastered nodes get the chapter completion accent');
+    eq(data.masteryComplete, true, 'world mastery completion is detected');
+    eq(data.nextGoal, null, 'no next goal remains when world is complete');
+    const html = ui.worldMasterySummaryHtml(meta, 6);
+    assert(html.includes('world-mastery is-complete'), 'row adds a completion class');
+    assert(html.includes('World 1 mastery complete'), 'row prints the completion banner');
+    assert(html.includes('World mastered'), 'row switches the next chip to completion copy');
+    assert(html.includes('world-mastery-node'), 'mastered nodes use the world mastery contract');
 });
 
 
-test('chapter reward ribbon summarizes chapter-complete stats and mastery state', () => {
+test('world reward ribbon summarizes world-complete stats and mastery state', () => {
     storage.save('best', {});
     storage.save('medals', {});
     for (let i = 0; i < 7; i++) {
         storage.setBest(i, 100);
         storage.setMedals(i, { saved: 1, skills: 1, time: 1 });
     }
-    const html = ui.chapterCompletionRibbonHtml(ui.chapterMeta(0), 6);
-    assert(html.includes('Chapter mastered'), 'reward ribbon distinguishes mastery from a plain unlock');
+    const html = ui.worldCompletionRibbonHtml(ui.worldMeta(0), 6);
+    assert(html.includes('World mastered'), 'reward ribbon distinguishes mastery from a plain unlock');
     assert(html.includes('21/21 medals'), 'reward ribbon surfaces aggregate medal totals');
     assert(html.includes('Mastery complete'), 'reward ribbon prints the mastery pill');
 });
 
-test('late-campaign ordering now ramps chapter 2 and 3 more steadily', () => {
+test('late-campaign ordering now ramps world 2 and 3 more steadily', () => {
     const names = LEVELS.slice(7).map(l => l.name);
-    eq(names[0], 'One-Way Out', 'chapter 2 now opens with a route-control remix');
-    eq(names[2], "Basher's Hollow", 'level 10 should sit in the middle of the advanced route chapter');
-    eq(names[7], 'Gatekeeper', 'chapter 3 now begins with the switch intro');
+    eq(names[0], 'One-Way Out', 'world 2 now opens with a route-control remix');
+    eq(names[2], "Basher's Hollow", 'level 10 should sit in the middle of the advanced route world');
+    eq(names[7], 'Gatekeeper', 'world 3 now begins with the switch intro');
     eq(names[12], 'Mossling Master', 'tower ascent now lands near the endgame');
     eq(names[13], 'Moss Gauntlet', 'the gauntlet remains the campaign finale');
 });

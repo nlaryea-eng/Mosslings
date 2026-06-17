@@ -3,9 +3,9 @@
  * MOSSLINGS — browser smoke + layout-regression guard.
  *
  * The Node suite (tests/run-tests.js) covers logic against a stubbed DOM; this
- * is the first *real-browser* net. It directly guards the class of bug that hit
- * the level-select cards (medal art overflowing the card) and confirms the game
- * boots clean, starts, and stays usable at landscape-phone size.
+ * is the first *real-browser* net. It directly guards the world-carousel menu
+ * contract and confirms the game boots clean, starts, and stays usable at
+ * landscape-phone size.
  */
 const { test, expect } = require('@playwright/test');
 
@@ -38,6 +38,19 @@ function stubPngClipboard() {
     });
 }
 
+async function startFromContinue(page) {
+    await expect(page.locator('#continue-hero')).toBeVisible();
+    await page.locator('#continue-hero').click();
+    await expect(page.locator('#gameCanvas')).toBeVisible();
+}
+
+async function startLevelFromRail(page, levelIdx) {
+    const world = Math.floor(levelIdx / 7);
+    await page.locator(`.world-card[data-world="${world}"]`).click();
+    await page.locator(`.level-node[data-level="${levelIdx}"]`).click();
+    await expect(page.locator('#gameCanvas')).toBeVisible();
+}
+
 test('boots with no console/page errors and shows the menu', async ({ page }) => {
     const errors = [];
     page.on('console', (msg) => { if (msg.type() === 'error') errors.push(msg.text()); });
@@ -49,36 +62,47 @@ test('boots with no console/page errors and shows the menu', async ({ page }) =>
     expect(errors, `console/page errors:\n${errors.join('\n')}`).toEqual([]);
 });
 
-test('level-select cards do not overflow their borders', async ({ page }) => {
+test('world carousel cards and selected detail do not overflow their borders', async ({ page }) => {
     await page.addInitScript(seedProgress);
     await page.goto('/');
-    const cards = page.locator('#level-select-container .lvl-btn');
+    const cards = page.locator('#world-carousel .world-card');
     await expect(cards.first()).toBeVisible();
     const count = await cards.count();
-    expect(count).toBeGreaterThan(0);
+    expect(count).toBeGreaterThan(2);
     for (let i = 0; i < count; i++) {
         // scrollHeight/Width report full content size even under overflow:hidden,
         // so this catches clipped overflow too — the exact regression we hit.
         const fits = await cards.nth(i).evaluate((el) =>
             el.scrollHeight <= el.clientHeight + 1 && el.scrollWidth <= el.clientWidth + 1);
-        expect(fits, `level card ${i + 1} content overflows the card`).toBeTruthy();
+        expect(fits, `world card ${i + 1} content overflows the card`).toBeTruthy();
     }
+    await expect(page.locator('#world-carousel .world-card.is-selected')).toBeVisible();
+    await expect(page.locator('#world-carousel .world-card.is-locked')).toBeVisible();
+    await expect(page.locator('#world-detail')).toBeVisible();
+    await expect(page.locator('#world-detail .level-node')).toHaveCount(7);
 });
 
-test('cleared level cards surface one missing medal target', async ({ page }) => {
+test('world navigation surfaces a recommended level and one missing medal target', async ({ page }) => {
     await page.addInitScript(seedProgress);
     await page.goto('/');
-    const goal = page.locator('#level-select-container .lvl-btn.has-goal .lvl-goal').first();
+    await expect(page.locator('#continue-hero')).toBeVisible();
+    await expect(page.locator('#world-detail .world-next-callout')).toContainText(/Recommended next/i);
+    await page.locator('.world-card[data-world="0"]').click();
+    const goal = page.locator('#world-detail .level-node.has-goal .level-meta').first();
     await expect(goal).toBeVisible();
     await expect(goal).toHaveText(/^(SAVE \d+|SK<=\d+|T<\d+:\d{2})$/);
-    const aria = await page.locator('#level-select-container .lvl-btn.has-goal').first().getAttribute('aria-label');
+    const aria = await page.locator('#world-detail .level-node.has-goal').first().getAttribute('aria-label');
     expect(aria).toContain('next target:');
+
+    await page.locator('#world-carousel').focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(page.locator('#world-carousel .world-card.is-selected')).toContainText('Trial Hollows');
 });
 
 test('starting a level shows the board and the full 8-skill toolbar', async ({ page }) => {
     await page.addInitScript(seedProgress);
     await page.goto('/');
-    await page.locator('#btn-start').click();
+    await startFromContinue(page);
     await expect(page.locator('#gameCanvas')).toBeVisible();
     await expect(page.locator('#toolbar')).toBeVisible();
     await expect(page.locator('.skill-btn')).toHaveCount(8);
@@ -88,7 +112,7 @@ test('landscape-phone keeps the toolbar usable with no horizontal overflow', asy
     await page.setViewportSize({ width: 667, height: 375 });
     await page.addInitScript(seedProgress);
     await page.goto('/');
-    await page.locator('#btn-start').click();
+    await startFromContinue(page);
     await expect(page.locator('#toolbar')).toBeVisible();
     const overflows = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
     expect(overflows, 'page overflows horizontally on a landscape phone').toBeFalsy();
@@ -98,7 +122,7 @@ test('landscape-phone board reclaims chrome height (bigger than the old 457x257 
     await page.setViewportSize({ width: 667, height: 375 });
     await page.addInitScript(seedProgress);
     await page.goto('/');
-    await page.locator('#btn-start').click();
+    await startFromContinue(page);
     await expect(page.locator('#gameCanvas')).toBeVisible();
     // The board grows when the landscape chrome budget shrinks. Guard the win so
     // a future regression that re-bloats the HUD/toolbar is caught.
@@ -116,8 +140,8 @@ test('first run shows only Play, then the full menu returns once Level 1 is clea
     await page.goto('/');
     await expect(page.locator('#start-screen')).toHaveClass(/first-run/);
     await expect(page.locator('#btn-start')).toHaveText(/start playing/i);
-    await expect(page.locator('#level-select-container')).toBeHidden();
-    await expect(page.locator('#daily-card')).toBeHidden();
+    await expect(page.locator('#world-menu')).toBeHidden();
+    await expect(page.locator('#menu-secondary-actions')).toBeHidden();
     await expect(page.locator('#btn-editor')).toBeHidden();
     await expect(page.locator('.controls-disc')).toBeHidden();
 
@@ -126,8 +150,10 @@ test('first run shows only Play, then the full menu returns once Level 1 is clea
     await page.evaluate(() => storage.setUnlocked(1));
     await page.reload();
     await expect(page.locator('#start-screen')).not.toHaveClass(/first-run/);
-    await expect(page.locator('#btn-start')).toHaveText(/^play$/i);
-    await expect(page.locator('#level-select-container')).toBeVisible();
+    await expect(page.locator('#btn-start')).toBeHidden();
+    await expect(page.locator('#continue-hero')).toBeVisible();
+    await expect(page.locator('#world-menu')).toBeVisible();
+    await expect(page.locator('#world-carousel .world-card')).toHaveCount(3);
     await expect(page.locator('#daily-card')).toBeVisible();
     await expect(page.locator('#btn-editor')).toBeVisible();
     await expect(page.locator('.controls-disc')).toBeVisible();
@@ -136,7 +162,7 @@ test('first run shows only Play, then the full menu returns once Level 1 is clea
 test('mute preference persists across reload', async ({ page }) => {
     await page.addInitScript(seedProgress);
     await page.goto('/');
-    await page.locator('#btn-start').click();             // user gesture arms audio
+    await startFromContinue(page);                        // user gesture arms audio
     await page.locator('#btn-mute').click();              // mute
     expect(await page.evaluate(() => localStorage.getItem('mosslings.audioMuted'))).toBe('1');
 
@@ -187,7 +213,7 @@ test('result overlay renders and copies a PNG share card', async ({ page }) => {
     await page.addInitScript(seedProgress);
     await page.addInitScript(stubPngClipboard);
     await page.goto('/');
-    await page.locator('#btn-start').click();
+    await startFromContinue(page);
     await page.evaluate(() => {
         ui.game.savedCount = ui.game.level.reqSaved;
         ui.game.skillsUsed = 3;
@@ -226,7 +252,7 @@ test('result overlay shows win-streak momentum and a specific medal retry target
         localStorage.setItem('mosslings_streak', JSON.stringify({ current: 1, best: 1 }));
     });
     await page.goto('/');
-    await page.locator('#btn-start').click();
+    await startLevelFromRail(page, 0);
     await page.evaluate(() => {
         const g = ui.game;
         g.savedCount = g.level.totalSpawn;
@@ -244,7 +270,7 @@ test('result overlay shows win-streak momentum and a specific medal retry target
 test('on-screen Rewind button is available in play and steps the sim back', async ({ page }) => {
     await page.addInitScript(seedProgress);
     await page.goto('/');
-    await page.locator('#btn-start').click();
+    await startFromContinue(page);
     await expect(page.locator('#btn-rewind')).toBeVisible();
     // Advance past the 5s rewind window, then PAUSE so the live RAF loop can't
     // advance simStep between this read and the button click (rewind works while
@@ -264,7 +290,7 @@ test('on-screen Rewind button is available in play and steps the sim back', asyn
 test('a loss leads with Retry (no brag card); a win shows the next-level pull', async ({ page }) => {
     await page.addInitScript(seedProgress);
     await page.goto('/');
-    await page.locator('#btn-start').click();
+    await startFromContinue(page);
     // Force a loss: time out with nobody saved.
     await page.evaluate(() => {
         const g = ui.game;
@@ -287,7 +313,7 @@ test('a loss leads with Retry (no brag card); a win shows the next-level pull', 
 test('a loss shows a failure diagnosis chip and arms a render-only retry hint', async ({ page }) => {
     await page.addInitScript(seedProgress);
     await page.goto('/');
-    await page.locator('#btn-start').click();
+    await startFromContinue(page);
     // Record a deterministic fatal-fall, then end the level as a loss.
     await page.evaluate(() => {
         const g = ui.game;
@@ -315,7 +341,7 @@ test('landscape-phone result makes the primary action visually dominant', async 
     await page.setViewportSize({ width: 667, height: 375 });
     await page.addInitScript(seedProgress);
     await page.goto('/');
-    await page.locator('#btn-start').click();
+    await startFromContinue(page);
     await page.evaluate(() => { const g = ui.game; g.savedCount = g.level.totalSpawn; g.endLevel(); });
     await expect(page.locator('#message-overlay')).toBeVisible();
     const m = await page.evaluate(() => {

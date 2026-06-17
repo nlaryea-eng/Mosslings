@@ -188,6 +188,18 @@
                 </span>
                 <span class="continue-cta" aria-hidden="true">▶</span>
             </button>
+            <div id="menu-secondary-actions" class="menu-secondary-actions">
+                <div id="daily-card" class="daily-card hidden">
+                    <div class="daily-copy">
+                        <span class="daily-kicker">Daily Challenge</span>
+                        <strong id="daily-title">Today</strong>
+                        <span id="daily-meta">One shared puzzle for everyone.</span>
+                    </div>
+                    <button id="btn-daily" class="big-btn">Play Daily</button>
+                </div>
+                <button id="btn-gallery" class="secondary-btn hidden">My Levels</button>
+                <button id="btn-editor" class="secondary-btn">Level Editor</button>
+            </div>
             <div id="chapter-reward-card" class="chapter-reward-card hidden" aria-live="polite">
                 <div class="chapter-reward-copy">
                     <span id="chapter-reward-kicker" class="chapter-reward-kicker">New chapter unlocked</span>
@@ -201,19 +213,9 @@
                     <button id="btn-chapter-dismiss" class="toggle-link">Maybe later</button>
                 </div>
             </div>
-            <div id="level-select-container"></div>
-            <div id="daily-card" class="daily-card hidden">
-                <div class="daily-copy">
-                    <span class="daily-kicker">Daily Challenge</span>
-                    <strong id="daily-title">Today</strong>
-                    <span id="daily-meta">One shared puzzle for everyone.</span>
-                </div>
-                <button id="btn-daily" class="big-btn">Play Daily</button>
-            </div>
+            <div id="world-menu" class="world-menu"></div>
             <div id="start-btns">
                 <button id="btn-start" class="big-btn">Play</button>
-                <button id="btn-gallery" class="big-btn hidden">My Levels</button>
-                <button id="btn-editor" class="big-btn">Level Editor</button>
             </div>
             <p class="first-run-hint">One rule: guide the moss folk to the portal. We'll show you how.</p>
             <button id="btn-crt" class="toggle-link" aria-pressed="true">CRT effect: On</button>
@@ -253,6 +255,7 @@
     <script src="js/overlays.js?v=1.1.0-20260617"></script>
     <script src="js/game.js?v=1.1.0-20260617"></script>
     <script src="js/ui.js?v=1.1.0-20260617"></script>
+    <script src="js/menu-ui.js?v=1.1.0-20260617"></script>
     <script src="js/result-ui.js?v=1.1.0-20260617"></script>
     <script src="js/main.js?v=1.1.0-20260617"></script>
 </body>
