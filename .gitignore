@@ -5,3 +5,5 @@ node_modules/
 /playwright-report/
 /blob-report/
 /.playwright/
+# Dated repo assessments are working notes, not shipped artifacts — keep local.
+*-assessment.md
