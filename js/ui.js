@@ -122,7 +122,13 @@ const ui = {
             if (game.state === 'EDITOR') { this.applyEdit(); return; }
             if (game.state === 'PLAY' || game.state === 'PAUSE') { game.tryAssign(); e.preventDefault(); }
         };
-        game.canvas.oncontextmenu = e => { e.preventDefault(); game.selectSkill(null); };
+        game.canvas.oncontextmenu = e => {
+            e.preventDefault();
+            // Right-click deselects on desktop. On touch, a long-press also raises
+            // contextmenu — suppress the menu but DON'T silently drop the skill the
+            // player was lining up to place (the last pointer tells us which).
+            if (!game.lastPointerTouch) game.selectSkill(null);
+        };
 
         window.onkeydown = e => {
             if (e.target.tagName === 'INPUT') return;
@@ -152,6 +158,9 @@ const ui = {
             else if (k === 'd') game.debug = !game.debug;
             else if (k === 't') this.toggleTutorial();
         };
+
+        const ver = document.getElementById('app-version');
+        if (ver && typeof APP_VERSION !== 'undefined') ver.textContent = `v${APP_VERSION}`;
 
         this.buildMenu();
         this.tryImportSharedLevel();

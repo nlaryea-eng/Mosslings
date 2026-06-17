@@ -4,6 +4,12 @@
  * Plain script (no modules) so the game runs from file:// with zero build step.
  */
 
+// Release version — the single source of truth is package.json "version".
+// `node tools/bump-version.js` keeps this string and the cache-bust `?v=` tags
+// in sync with it, so the displayed/app version and the asset cache key never
+// drift apart. Do not hand-edit; bump package.json and run the tool.
+const APP_VERSION = '1.1.0';
+
 const W = 960, H = 540;
 
 // Terrain tile types (stored in the per-pixel collision mask)
