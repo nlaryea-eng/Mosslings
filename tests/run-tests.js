@@ -87,8 +87,10 @@ function makeGame() {
         savedCount: 0,
         shake: 0, flash: 0, hitStop: 0, saveStreak: 0, lastSaveStep: -999, simStep: 0,
         level: { exit: { x: -9999, y: -9999 }, spawn: { x: 0, y: 0 } },
+        deaths: { cliff: 0, lava: 0, void: 0, explode: 0, lastPos: { cliff: null, lava: null, void: null, explode: null } },
         juice() {},
         onSave(m) { this.savedCount++; },
+        recordDeath(cause, x, y) { if (cause in this.deaths) { this.deaths[cause]++; this.deaths.lastPos[cause] = { x: Math.round(x), y: Math.round(y) }; } },
     };
 }
 function step(game, m, frames) {
@@ -1451,6 +1453,75 @@ test('starting a later campaign level marks it seen exactly once', () => {
     assert(!storage.isSeen(3), 'unseen before first play');
     const g = new Game(); g.loadLevel(3);
     assert(storage.isSeen(3), 'seen after onLevelStart');
+});
+
+// ==============================================================
+console.log('\n— Sprint: readable mastery loop —');
+// ==============================================================
+
+// Item P0-1 — failure diagnosis (derived from recorded state; no sim mutation).
+test('recordDeath tallies a cause and its rounded position', () => {
+    const g = new Game(); g.loadLevel(0);
+    g.recordDeath('cliff', 123.6, 200.2);
+    eq(g.deaths.cliff, 1, 'cliff counted');
+    eq(g.deaths.lastPos.cliff.x, 124, 'x rounded');
+    eq(g.deaths.lastPos.cliff.y, 200, 'y rounded');
+    g.recordDeath('bogus', 1, 1);          // unknown cause ignored
+    eq(g.deaths.cliff, 1, 'unknown cause does not corrupt the tally');
+});
+test('death tally is deterministic across identical runs', () => {
+    const a = new Game(); a.loadLevel(0);
+    const b = new Game(); b.loadLevel(0);
+    // Long enough for unguided marchers to reach L1's gap and fall to their death.
+    for (let i = 0; i < 1600; i++) { a.update(); b.update(); }
+    eq(JSON.stringify(a.deaths), JSON.stringify(b.deaths), 'death tallies diverged');
+    assert(a.deaths.void + a.deaths.cliff > 0, 'unguided L1 marchers should die (tally non-empty)');
+});
+test('diagnoseFailure picks the most actionable reason and never mutates the sim', () => {
+    const mk = () => { const g = new Game(); g.loadLevel(0); return g; };
+    const before = (() => { const g = mk(); const s = g.simStep; g.diagnoseFailure(); return g.simStep === s; })();
+    assert(before, 'diagnoseFailure must not advance simStep');
+
+    let g = mk(); g.deaths.lava = 3; g.deaths.cliff = 1; g.deaths.lastPos.lava = { x: 400, y: 300 };
+    let d = g.diagnoseFailure(); eq(d.key, 'lava', 'lava dominates'); assert(d.zone && d.zone.kind === 'lava', 'lava zone set');
+
+    g = mk(); g.deaths.cliff = 2; g.deaths.lastPos.cliff = { x: 200, y: 250 };
+    d = g.diagnoseFailure(); eq(d.key, 'cliff'); eq(d.zone.x, 200);
+
+    g = mk(); g.deaths.void = 1; g.deaths.lastPos.void = { x: 10, y: 500 };
+    eq(g.diagnoseFailure().key, 'void');
+
+    g = mk(); g.time = 0; g.mosslings = [new Mossling(0, 0, 0)]; // one still wandering
+    eq(g.diagnoseFailure().key, 'time');
+
+    g = mk(); g.time = 100; for (const k of Object.keys(g.inventory)) g.inventory[k] = 0; g.savedCount = 0;
+    eq(g.diagnoseFailure().key, 'skills');
+
+    g = mk(); g.time = 100; g.savedCount = Math.max(0, g.level.reqSaved - 1);
+    eq(g.diagnoseFailure().key, 'short');
+});
+
+// Item P0-2 — retry ghost hint (render-only, never logged).
+test('a matching retry hint is consumed into a render-only failHint; a different level clears it', () => {
+    const g = new Game(); g.loadLevel(0);
+    g.retryHint = { key: g.levelKey(), x: 100, y: 200, kind: 'cliff' };
+    g.loadLevel(0);                                  // same level → hint shown
+    assert(g.failHint && g.failHint.x === 100 && g.failHint.kind === 'cliff', 'failHint armed on retry');
+    eq(g.retryHint, null, 'retryHint consumed');
+
+    g.retryHint = { key: 'c0', x: 1, y: 2, kind: 'lava' };
+    g.loadLevel(1);                                  // different level → cleared
+    eq(g.failHint, null, 'hint cleared on a different level');
+});
+test('failHint is render-only: the sim ignores it, and it self-clears when stale', () => {
+    const rec = recordingCtx();
+    const g = new Game(); g.loadLevel(0);
+    g.failHint = { x: 100, y: 200, kind: 'cliff', born: g.tick };
+    const s = g.simStep; g.update(); eq(g.simStep, s + 1, 'update advances regardless of failHint');
+    assert(g.failHint, 'update does not touch the hint');
+    g.drawFailHint(rec.ctx); assert(g.failHint, 'a fresh hint keeps drawing');
+    g.failHint = { x: 1, y: 1, kind: 'cliff', born: g.tick - 999 };
+    g.drawFailHint(rec.ctx); eq(g.failHint, null, 'an expired hint self-clears');
 });
 
 // ------------------------------------------------------------------

@@ -98,6 +98,12 @@ class Game {
         this.exitFlash = 0; // portal brightens briefly on each rescue
         this.deniedAt = -999; // render: tick of the last failed assignment (red ring)
         this.saveStreak = 0; this.lastSaveStep = -999;
+        // Failure diagnosis: deterministic per-cause death tally (set by die()
+        // during the sim, read by the UI after a loss). retryHint carries the
+        // last failure zone across a Retry; failHint is the render-only marker
+        // shown at the start of the next attempt. None are read by the sim.
+        this.deaths = this.freshDeaths();
+        this.retryHint = null; this.failHint = null;
         // Deterministic-replay backbone (Backspace rewind). `simStep` counts
         // actual simulation steps (one per update()), independent of render
         // frames and fast-forward — unlike `tick`, which advances once per
@@ -186,6 +192,74 @@ class Game {
         this.particles.spawn(m.x, m.y - 12, '#ffffff', 6, { speed: 2, life: 28, glow: true });
         if (tier >= 4) this.juice({ flash: 0.10, color: athlete ? '#ffe082' : '#80deea' });
     }
+    // --- Failure diagnosis (render/UI-only consumers; sim only writes the tally) ---
+    freshDeaths() {
+        return { cliff: 0, lava: 0, void: 0, explode: 0, lastPos: { cliff: null, lava: null, void: null, explode: null } };
+    }
+    /** Called from Mossling.die() during the sim. Deterministic bookkeeping only. */
+    recordDeath(cause, x, y) {
+        if (!(cause in this.deaths)) return;
+        this.deaths[cause]++;
+        this.deaths.lastPos[cause] = { x: Math.round(x), y: Math.round(y) };
+    }
+    /** Stable identity for the current level so a Retry hint only re-shows on the SAME puzzle. */
+    levelKey() {
+        if (this.runMode === 'daily' && this.dailyChallenge) return 'daily:' + this.dailyChallenge.key;
+        if (this.levelIdx >= 0) return 'c' + this.levelIdx;
+        return 'custom:' + (this.level && this.level.name);
+    }
+    /**
+     * Read-only failure analysis derived entirely from already-recorded state
+     * (death tally, counts, remaining inventory, clock). Returns the single most
+     * actionable reason plus an optional zone for the retry marker. Never mutates
+     * sim state — safe to call from the UI after a loss.
+     */
+    diagnoseFailure() {
+        const total = this.level.totalSpawn, req = this.level.reqSaved;
+        const saved = this.savedCount, missed = Math.max(0, req - saved);
+        const d = this.deaths, alive = this.aliveCount();
+        const anySkillLeft = Object.keys(this.inventory).some(k => (this.inventory[k] || 0) > 0);
+        const zone = (kind) => d.lastPos[kind] ? { x: d.lastPos[kind].x, y: d.lastPos[kind].y, kind } : null;
+        // Location-based lethal causes first (most actionable), then time, then
+        // resource shortfall, then a generic "how close" line.
+        if (d.lava > 0 && d.lava >= d.cliff && d.lava >= d.void)
+            return { key: 'lava', label: 'Lost to lava', detail: `${d.lava} fell in`, zone: zone('lava') };
+        if (d.cliff > 0 && d.cliff >= d.void)
+            return { key: 'cliff', label: 'Fatal fall', detail: `${d.cliff} dropped too far`, zone: zone('cliff') };
+        if (d.void > 0)
+            return { key: 'void', label: 'Walked off the map', detail: `${d.void} lost`, zone: zone('void') };
+        if (this.time <= 0 && alive > 0)
+            return { key: 'time', label: alive >= Math.ceil(total * 0.3) ? 'Colony never reached the exit' : 'Ran out of time', detail: `${alive} still wandering`, zone: null };
+        if (!anySkillLeft && missed > 0)
+            return { key: 'skills', label: 'Ran out of skills', detail: `needed ${missed} more`, zone: null };
+        return { key: 'short', label: `Saved ${missed} short`, detail: `${saved}/${total}, needed ${req}`, zone: null };
+    }
+    /** Retry marker at last attempt's failure zone. Render-only; fades and self-clears. */
+    drawFailHint(ctx) {
+        const h = this.failHint;
+        if (!h) return;
+        const TTL = 240; // ~4s of render frames
+        const age = this.tick - h.born;
+        if (age > TTL || age < 0) { this.failHint = null; return; }
+        const fade = 1 - age / TTL;
+        const t = this.tick * 0.15;
+        const col = h.kind === 'lava' ? '#ff7043' : '#ffb300';
+        ctx.save();
+        ctx.translate(h.x, h.y);
+        ctx.globalAlpha = fade * (0.55 + 0.45 * Math.sin(t));
+        ctx.strokeStyle = col;
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(0, 0, 13 + Math.sin(t) * 3, 0, Math.PI * 2); ctx.stroke();
+        // a small caution chevron inside the ring
+        ctx.fillStyle = col;
+        ctx.beginPath(); ctx.moveTo(-5, -3); ctx.lineTo(5, -3); ctx.lineTo(0, 5); ctx.closePath(); ctx.fill();
+        ctx.globalAlpha = fade;
+        ctx.fillStyle = col;
+        ctx.font = 'bold 9px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('LAST TIME', 0, -19);
+        ctx.restore();
+    }
     // --- Level lifecycle ---------------------------------------------------
     loadDailyChallenge(challenge = dailyChallengeForDate()) {
         if (!challenge) { ui.toast('Daily challenge is unavailable.', true); return; }
@@ -223,6 +297,7 @@ class Game {
         this.ffwd = false; this.nukeArmedAt = 0; this.nuked = false;
         this.shake = 0; this.flash = 0; this.hitStop = 0; this.exitFlash = 0;
         this.saveStreak = 0; this.lastSaveStep = -999;
+        this.deaths = this.freshDeaths(); // fresh diagnosis tally per attempt
         this.simStep = 0; this.actionLog = [];   // fresh input history per attempt
         // Onboard a brand-new player on (and only on) campaign Level 1.
         this.onboarding = !isCustom && idx === 0 && storage.getUnlocked() === 0;
@@ -235,6 +310,13 @@ class Game {
         // the state is PLAY — a PAUSE here would dead-loop the rewind.
         this.state = 'PLAY';
         if (!silent) {
+            // Retry Ghost Hint: when reloading the SAME level we just failed, mark
+            // the failure zone for a few seconds. Render-only, never logged, so
+            // replay/rewind are untouched. A fresh/different level clears it.
+            this.failHint = (this.retryHint && this.retryHint.key === this.levelKey())
+                ? { x: this.retryHint.x, y: this.retryHint.y, kind: this.retryHint.kind, born: this.tick }
+                : null;
+            this.retryHint = null;
             if (typeof music !== 'undefined' && music) {
                 music.duck(false);
                 music.start(this.level.theme || 'FOREST');
@@ -495,6 +577,7 @@ class Game {
             if (this.state === 'PLAY') this.emitLavaEmbers();
             this.drawHatch(ctx);
             this.drawExit(ctx);
+            this.drawFailHint(ctx);   // "last time" retry marker (render-only, fades out)
             this.drawDangerHints(ctx);
             for (const m of this.mosslings) m.draw(ctx);
             this.particles.draw(ctx);

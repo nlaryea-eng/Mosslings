@@ -620,6 +620,26 @@ button:focus-visible {
 .stat b { font-size: 20px; color: var(--accent-bright); font-family: var(--pixel-font); }
 .stat span { font-size: 9px; color: #8ba88b; text-transform: uppercase; letter-spacing: 0; }
 
+/* Failure diagnosis chip — one actionable reason on a loss (P0). */
+#msg-diagnosis {
+    display: inline-flex; align-items: center; gap: 8px;
+    margin: -12px 0 20px; padding: 7px 14px;
+    background: rgba(239, 83, 80, 0.12);
+    border: 1px solid rgba(239, 83, 80, 0.45);
+    border-radius: 8px;
+    box-shadow: 0 0 14px rgba(239, 83, 80, 0.16);
+    animation: riseIn 0.4s ease-out both; animation-delay: 0.08s;
+}
+#msg-diagnosis::before {
+    content: '!'; flex: 0 0 auto;
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 16px; height: 16px; border-radius: 50%;
+    background: var(--danger); color: #2a0a08; font-weight: 900; font-size: 11px;
+    font-family: var(--pixel-font);
+}
+#msg-diagnosis b { color: #ffb3a7; font-size: 13px; font-family: var(--pixel-font); }
+#msg-diagnosis span { color: #d09a93; font-size: 11px; }
+
 /* ---------- Gallery ---------- */
 #gallery-screen {
     position: absolute; inset: 0; background: rgba(6, 9, 7, 0.96);
@@ -761,4 +781,22 @@ button:focus-visible {
     #message-overlay.has-result-card #msg-btns { gap: 6px; max-width: 650px; }
     #message-overlay.has-result-card #msg-btns button { padding: 7px 10px; font-size: 8px; }
     #result-card-preview { display: none !important; }
+
+    /* P0: make the next action dominant; recede Copy/Share/Menu. A loss (no
+       result card) gets the same compaction so Retry leads cleanly too. */
+    #msg-diagnosis { margin: 0 0 8px; padding: 5px 10px; }
+    #msg-diagnosis b { font-size: 11px; }
+    #msg-diagnosis span { font-size: 9px; }
+    #message-overlay:not(.has-result-card) #msg-title { font-size: 20px; margin: 0 0 6px; }
+    #message-overlay:not(.has-result-card) #msg-text { font-size: 9px; margin: 0 0 8px; }
+    #message-overlay:not(.has-result-card) #msg-stats { margin: 0 0 8px; }
+    #message-overlay #msg-btns #msg-btn-primary,
+    #message-overlay #msg-btns #msg-btn-retry { order: -1; padding: 10px 18px; font-size: 11px; }
+    #message-overlay #msg-btns #msg-btn-primary {
+        background: var(--accent); color: #0c130c; border-color: var(--accent-bright);
+        box-shadow: 0 0 14px rgba(124, 179, 66, 0.4);
+    }
+    #message-overlay #msg-btns #msg-btn-card,
+    #message-overlay #msg-btns #msg-btn-share,
+    #message-overlay #msg-btns #msg-btn-menu { opacity: 0.6; padding: 6px 9px; font-size: 8px; }
 }

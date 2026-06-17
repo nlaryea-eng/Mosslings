@@ -60,7 +60,7 @@ class Mossling {
                 game.particles.spawn(this.x, this.y - 5, '#5d4037', 14, { speed: 3, gravity: 0.15, life: 60 });
                 audio.sfxExplode();
                 game.juice({ flash: 0.5, color: '#ffd166', hitStop: 4, shake: 12 });
-                this.die(game, true);
+                this.die(game, true, 'explode');
                 return;
             }
         }
@@ -83,7 +83,7 @@ class Mossling {
             for (let oy = -6; oy <= 0; oy += 2) {
                 if (game.terrain.get(this.x + ox, this.y + oy) === T_HAZARD) {
                     game.particles.spawn(this.x, this.y - 4, '#ff7043', 16, { speed: 3, gravity: -0.02, life: 40, glow: true });
-                    this.die(game, true);
+                    this.die(game, true, 'lava');
                     return;
                 }
             }
@@ -103,10 +103,15 @@ class Mossling {
                 break;
         }
 
-        if (this.y > H + 30 || this.x < -20 || this.x > W + 20) this.die(game, true);
+        if (this.y > H + 30 || this.x < -20 || this.x > W + 20) this.die(game, true, 'void');
     }
-    die(game, silentPuff = false) {
+    die(game, silentPuff = false, cause = '') {
         this.state = STATE.DEAD;
+        // Tally the cause for the post-failure diagnosis. Pure deterministic
+        // bookkeeping (integer counters + a rounded position) — no Math.random,
+        // no wall-clock, never read back by the sim, reset each loadLevel, so it
+        // reconstructs identically on replay/rewind.
+        if (cause && game.recordDeath) game.recordDeath(cause, this.x, this.y);
         game.particles.spawn(this.x, this.y - 4, '#81c784', 12, { speed: 2.5, gravity: 0.06, life: 45 });
         if (!silentPuff) audio.sfxDie();
     }
@@ -129,7 +134,7 @@ class Mossling {
                 if (fell > PHYS.FATAL_FALL && !this.hasFloater) {
                     game.particles.spawn(this.x, this.y, '#a5d6a7', 18, { speed: 3, gravity: 0.1, life: 40 });
                     audio.sfxSplat();
-                    this.die(game, true);
+                    this.die(game, true, 'cliff');
                     return;
                 }
                 if (fell > 40) {
