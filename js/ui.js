@@ -35,9 +35,9 @@ const ui = {
         $('btn-editor').onclick = () => { storage.markMenuRevealSeen('editor'); audio.init(); this.startEditor(); };
         $('btn-start').onclick = () => { this.armAudioForPlay(); game.loadLevel(game.levelIdx); };
         $('continue-hero').onclick = () => this.startRecommendedLevel();
-        $('btn-daily').onclick = () => { storage.markMenuRevealSeen('daily'); audio.init(); game.loadDailyChallenge(); };
-        $('btn-chapter-open').onclick = () => this.openPendingChapterReward();
-        $('btn-chapter-dismiss').onclick = () => this.dismissPendingChapterReward();
+        $('btn-daily').onclick = () => { storage.markMenuRevealSeen('daily'); audio.init(); game.loadDailyChallenge(); game.armGhostRace(); };
+        $('btn-grove-open').onclick = () => this.openPendingGroveReward();
+        $('btn-grove-dismiss').onclick = () => this.dismissPendingGroveReward();
         $('btn-edit-save').onclick = () => this.saveCustomLevel();
         $('btn-edit-settings').onclick = () => this.openEditorSettings();
         $('btn-edit-share').onclick = () => this.shareCustomLevel();
@@ -130,7 +130,7 @@ const ui = {
 
         window.onkeydown = e => {
             if (e.target.tagName === 'INPUT') return;
-            if (this.handleWorldKey(e)) return;
+            if (this.handleGroveKey(e)) return;
             this.armAudioForPlay();
             const k = e.key.toLowerCase();
             if (e.key >= '1' && e.key <= '8') game.selectSkill(parseInt(e.key, 10) - 1);
@@ -417,32 +417,24 @@ const ui = {
         if (!this.menu && typeof MenuUI !== 'undefined') this.menu = new MenuUI(this);
         return this.menu;
     },
-    worldMeta(idx) { return this._ensureMenu().worldMeta(idx); },
-    worldMetaByWorld(world) { return this._ensureMenu().worldMetaByWorld(world); },
-    isWorldCompleteLevel(idx) { return this._ensureMenu().isWorldCompleteLevel(idx); },
-    worldSummaryHtml(idx) { return this._ensureMenu().worldSummaryHtml(idx); },
-    worldMasteryData(meta, unlocked = storage.getUnlocked()) { return this._ensureMenu().worldMasteryData(meta, unlocked); },
-    worldCompletionStats(meta, unlocked = storage.getUnlocked()) { return this._ensureMenu().worldCompletionStats(meta, unlocked); },
-    worldCompletionRibbonHtml(meta, unlocked = storage.getUnlocked()) { return this._ensureMenu().worldCompletionRibbonHtml(meta, unlocked); },
-    worldMasterySummaryHtml(meta, unlocked = storage.getUnlocked()) { return this._ensureMenu().worldMasterySummaryHtml(meta, unlocked); },
+    groveMeta(idx) { return this._ensureMenu().groveMeta(idx); },
+    groveMetaByGrove(grove) { return this._ensureMenu().groveMetaByGrove(grove); },
+    isGroveCompleteLevel(idx) { return this._ensureMenu().isGroveCompleteLevel(idx); },
+    groveSummaryHtml(idx) { return this._ensureMenu().groveSummaryHtml(idx); },
+    groveMasteryData(meta, unlocked = storage.getUnlocked()) { return this._ensureMenu().groveMasteryData(meta, unlocked); },
+    groveCompletionStats(meta, unlocked = storage.getUnlocked()) { return this._ensureMenu().groveCompletionStats(meta, unlocked); },
+    groveCompletionRibbonHtml(meta, unlocked = storage.getUnlocked()) { return this._ensureMenu().groveCompletionRibbonHtml(meta, unlocked); },
+    groveMasterySummaryHtml(meta, unlocked = storage.getUnlocked()) { return this._ensureMenu().groveMasterySummaryHtml(meta, unlocked); },
     recommendedLevelIdx() { return this._ensureMenu().recommendedLevelIdx(); },
     startRecommendedLevel() { return this._ensureMenu().startRecommendedLevel(); },
     renderContinueHero() { return this._ensureMenu().renderContinueHero(); },
     buildMenu() { return this._ensureMenu().buildMenu(); },
     refreshDailyCard(firstRun) { return this._ensureMenu().refreshDailyCard(firstRun); },
-    handleWorldKey(e) { return this._ensureMenu() ? this._ensureMenu().handleWorldKey(e) : false; },
+    handleGroveKey(e) { return this._ensureMenu() ? this._ensureMenu().handleGroveKey(e) : false; },
 
-    // Compatibility wrappers for result-ui and older storage naming.
-    chapterMeta(idx) { return this.worldMeta(idx); },
-    isChapterCompleteLevel(idx) { return this.isWorldCompleteLevel(idx); },
-    chapterSummaryHtml(idx) { return this.worldSummaryHtml(idx); },
-    chapterMasteryData(meta, unlocked = storage.getUnlocked()) { return this.worldMasteryData(meta, unlocked); },
-    chapterCompletionStats(meta, unlocked = storage.getUnlocked()) { return this.worldCompletionStats(meta, unlocked); },
-    chapterCompletionRibbonHtml(meta, unlocked = storage.getUnlocked()) { return this.worldCompletionRibbonHtml(meta, unlocked); },
-    chapterMasteryRowHtml(meta, unlocked = storage.getUnlocked()) { return this.worldMasterySummaryHtml(meta, unlocked); },
-    renderChapterReward(unlocked) { return this._ensureMenu().renderWorldReward(unlocked); },
-    dismissPendingChapterReward() { return this._ensureMenu().dismissPendingWorldReward(); },
-    openPendingChapterReward() { return this._ensureMenu().openPendingWorldReward(); },
+    renderGroveReward(unlocked) { return this._ensureMenu().renderGroveReward(unlocked); },
+    dismissPendingGroveReward() { return this._ensureMenu().dismissPendingGroveReward(); },
+    openPendingGroveReward() { return this._ensureMenu().openPendingGroveReward(); },
 
     openGallery() {
         this.setMenuMode(true);

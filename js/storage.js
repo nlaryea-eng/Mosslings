@@ -82,11 +82,13 @@ class StorageManager {
         const seen = this.getMenuRevealSeen();
         if (!seen[name]) { seen[name] = 1; this.save('menuRevealSeen', seen); }
     }
-    getChapterRewardSeen() { return this.load('chapterRewardSeen', {}); }
-    hasChapterRewardSeen(chapter) { return !!this.getChapterRewardSeen()[chapter]; }
-    markChapterRewardSeen(chapter) {
-        const seen = this.getChapterRewardSeen();
-        if (!seen[chapter]) { seen[chapter] = 1; this.save('chapterRewardSeen', seen); }
+    // Groves were formerly called "worlds"/"chapters". The persisted key keeps
+    // its legacy name so existing saves keep their grove-reward-seen flags.
+    getGroveRewardSeen() { return this.load('chapterRewardSeen', {}); }
+    hasGroveRewardSeen(grove) { return !!this.getGroveRewardSeen()[grove]; }
+    markGroveRewardSeen(grove) {
+        const seen = this.getGroveRewardSeen();
+        if (!seen[grove]) { seen[grove] = 1; this.save('chapterRewardSeen', seen); }
     }
     recordRunOutcome(win) {
         const prev = this.getRunStreak();

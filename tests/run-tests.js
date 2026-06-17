@@ -63,7 +63,7 @@ global.localStorage = (() => {
 // Delete existing global.ui before loading ui.js to avoid collisions
 delete global.ui;
 
-for (const f of ['constants.js', 'icons.js', 'audio.js', 'haptics.js', 'music.js', 'particles.js', 'terrain.js', 'mossling.js', 'levels.js', 'daily.js', 'utils.js', 'replay-integrity.js', 'daily-ghost.js', 'storage.js', 'menu-stage.js', 'ugc-trust.js', 'result-card.js', 'overlays.js', 'game.js', 'ui.js', 'menu-ui.js', 'result-ui.js']) {
+for (const f of ['constants.js', 'icons.js', 'audio.js', 'haptics.js', 'music.js', 'particles.js', 'terrain.js', 'mossling.js', 'levels.js', 'daily.js', 'utils.js', 'replay-integrity.js', 'daily-ghost.js', 'storage.js', 'menu-stage.js', 'ugc-trust.js', 'result-card.js', 'overlays.js', 'game.js', 'ghost-race.js', 'ui.js', 'menu-ui.js', 'result-ui.js']) {
     const file = path.join(__dirname, '..', 'js', f);
     vm.runInThisContext(fs.readFileSync(file, 'utf8'), { filename: file });
 }
@@ -117,7 +117,7 @@ test('drawRect writes dirt into the mask', () => {
     eq(g.terrain.get(12, 12), T_DIRT);
     eq(g.terrain.get(16, 12), T_AIR);
 });
-test('out-of-bounds reads as metal (world edges are walls)', () => {
+test('out-of-bounds reads as metal (grove edges are walls)', () => {
     const g = makeGame();
     eq(g.terrain.get(-1, 10), T_METAL);
     eq(g.terrain.get(W, 10), T_METAL);
@@ -899,7 +899,7 @@ test('dailyCardModel drives the three Beat-the-Ghost menu states', () => {
     eq(fresh.kicker, 'Daily Challenge');
     eq(fresh.cta, "Play Today's Puzzle");
     eq(fresh.target, '');
-    assert(fresh.title.includes('L3 Cavern Climb'), 'title names the level');
+    assert(fresh.title.includes('P3 Cavern Climb'), 'title names the patch');
     // Matching ghost — the card becomes an explicit race with a target chip.
     const ghost = { fingerprint: 'abc', saved: 9, total: 10, timeSeconds: 72, skills: 4 };
     const race = dailyCardModel({ challenge, ghost, fingerprint: 'abc' });
@@ -944,6 +944,77 @@ test('returning from daily restores the previous unlocked campaign selection', (
     ui.backToMenu();
     eq(g.runMode, 'campaign');
     eq(g.levelIdx, 0, 'Play returns to the prior campaign selection, not the daily level');
+});
+
+// ==============================================================
+console.log('\n— Live ghost race (Beat the Ghost phantom) —');
+// ==============================================================
+const ghostRaceSnapshot = (g) => JSON.stringify({
+    step: g.simStep, saved: g.savedCount, dead: g.deadCount, spawn: g.spawnCounter,
+    log: g.actionLog.length,
+    ms: g.mosslings.map(m => [Math.round(m.x * 1000), Math.round(m.y * 1000), m.dir, m.state]),
+});
+
+test('the ghost-race precompute leaves the player run byte-identical (determinism)', () => {
+    storage.save('dailyGhosts', {});
+    const challenge = dailyChallengeForDate('2026-06-17');
+    // Control: a plain daily run, N steps, no phantom.
+    const control = new Game(); ui.game = control;
+    control.loadDailyChallenge(challenge);
+    for (let i = 0; i < 240; i++) control.update();
+    const controlSnap = ghostRaceSnapshot(control);
+
+    // Same run, but after a muted phantom precompute + clean reload.
+    const raced = new Game(); ui.game = raced;
+    raced.loadDailyChallenge(challenge);
+    const traj = buildGhostTrajectory(raced, []); // empty ghost log still drives a headless walk
+    raced.loadDailyChallenge(challenge);           // reload clean for the player
+    raced.ghostRace = { trajectory: traj, finalSaved: traj.finalSaved, total: traj.total };
+    for (let i = 0; i < 240; i++) raced.update();
+
+    eq(ghostRaceSnapshot(raced), controlSnap, 'the phantom precompute must not perturb the player sim');
+    assert(traj.length > 0, 'the precompute recorded a trajectory');
+    assert(Array.isArray(traj.steps[0].poses), 'each trajectory frame carries phantom poses');
+});
+
+test('armGhostRace no-ops cleanly without a matching daily ghost', () => {
+    storage.save('dailyGhosts', {});
+    const g = new Game(); ui.game = g;
+    g.loadDailyChallenge(dailyChallengeForDate('2026-06-17'));
+    eq(g.armGhostRace(), false, 'no stored ghost → no race');
+    eq(g.ghostRace, null, 'ghostRace stays unarmed');
+});
+
+test('a fingerprint-matched daily ghost arms a faithful phantom from step 0', () => {
+    storage.save('dailyGhosts', {});
+    const challenge = dailyChallengeForDate('2026-06-17');
+    // Record a short ghost run, then store it as today's daily ghost.
+    const rec = new Game(); ui.game = rec;
+    rec.loadDailyChallenge(challenge);
+    for (let i = 0; i < 40; i++) rec.update();
+    const code = serializeReplay(rec.buildReplay());
+    const fp = levelFingerprint(rec.level);
+    storage.setDailyGhost(challenge.key, {
+        key: challenge.key, saved: rec.savedCount, total: rec.level.totalSpawn,
+        timeSeconds: 10, skills: 0, fingerprint: fp, completedAt: new Date().toISOString(),
+        replay: { code, fingerprint: fp },
+    });
+    // Arm on a fresh game and verify the player resets to a clean step 0.
+    const g = new Game(); ui.game = g;
+    g.loadDailyChallenge(challenge);
+    eq(g.armGhostRace(), true, 'a fingerprint-matched ghost arms the race');
+    assert(g.ghostRace && g.ghostRace.trajectory.length > 0, 'a phantom trajectory was built');
+    eq(g.simStep, 0, 'the player races from a clean step 0 after the precompute');
+    eq(g.savedCount, 0, 'no rescues leaked from the precompute into the live run');
+    // A stale fingerprint refuses the race.
+    storage.setDailyGhost(challenge.key, {
+        key: challenge.key, saved: 1, total: 1, timeSeconds: 5, skills: 0,
+        fingerprint: 'deadbeef', completedAt: new Date().toISOString(),
+        replay: { code, fingerprint: 'deadbeef' },
+    });
+    const g2 = new Game(); ui.game = g2;
+    g2.loadDailyChallenge(challenge);
+    eq(g2.armGhostRace(), false, 'a stale-fingerprint ghost refuses to race');
 });
 
 // ==============================================================
@@ -1413,18 +1484,18 @@ test('medal icons use the 24x24 3-tone pixel-art recipe (like skill badges)', ()
         assert(fills.size >= 3, `${key} medal is too flat (${fills.size} fills) — needs outline/fill/highlight`);
     }
 });
-test('world detail level rail has class selectors and miniature SVG sizing', () => {
+test('grove detail level rail has class selectors and miniature SVG sizing', () => {
     const uiSrc = fs.readFileSync(path.join(__dirname, '..', 'js', 'ui.js'), 'utf8');
     const menuSrc = fs.readFileSync(path.join(__dirname, '..', 'js', 'menu-ui.js'), 'utf8');
     const css = fs.readFileSync(path.join(__dirname, '..', 'style.css'), 'utf8');
     const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
     assert(html.includes('js/menu-ui.js'), 'menu-ui.js must be loaded as the menu boundary');
-    assert(html.includes('id="world-menu"'), 'menu shell must expose id="world-menu"');
-    assert(menuSrc.includes('class="world-carousel"'), 'world carousel markup must emit class="world-carousel"');
-    assert(menuSrc.includes('class="level-medals"'), 'world detail markup must emit class="level-medals"');
+    assert(html.includes('id="grove-menu"'), 'menu shell must expose id="grove-menu"');
+    assert(menuSrc.includes('class="grove-carousel"'), 'grove carousel markup must emit class="grove-carousel"');
+    assert(menuSrc.includes('class="patch-medals"'), 'grove detail markup must emit class="patch-medals"');
     assert(!/\.lvl-btn\b/.test(css), 'new menu CSS must not keep styling the old .lvl-btn grid');
-    assert(/\.level-medals\s*\{[^}]*display:\s*flex/.test(css), 'level medal strip needs its own flex layout');
-    assert(/\.level-medals \.pixel-icon\s*\{[^}]*width:\s*10px;[^}]*height:\s*10px;/.test(css), 'level medals must be miniaturized inside the rail');
+    assert(/\.patch-medals\s*\{[^}]*display:\s*flex/.test(css), 'level medal strip needs its own flex layout');
+    assert(/\.patch-medals \.pixel-icon\s*\{[^}]*width:\s*10px;[^}]*height:\s*10px;/.test(css), 'level medals must be miniaturized inside the rail');
     assert(menuSrc.includes('aria-disabled'), 'locked level cards need an aria-disabled state');
     assert(uiSrc.includes('gallery-medals'), 'gallery cards need a separate medal sizing contract');
     assert(css.includes('button:focus-visible'), 'keyboard focus must be visible');
@@ -2053,13 +2124,13 @@ test('result progress helpers render streak and mastery target chips', () => {
 // ==============================================================
 console.log('\n— Menu progression —');
 // ==============================================================
-test('world reward seen flags persist through the compatible storage key', () => {
-    assert(storage.hasChapterRewardSeen(1) === false, 'world 2 reward should start unseen');
-    storage.markChapterRewardSeen(1);
-    assert(storage.hasChapterRewardSeen(1) === true, 'world reward should persist once marked');
-    assert(storage.hasChapterRewardSeen(2) === false, 'other worlds stay unseen');
+test('grove reward seen flags persist through the compatible storage key', () => {
+    assert(storage.hasGroveRewardSeen(1) === false, 'grove 2 reward should start unseen');
+    storage.markGroveRewardSeen(1);
+    assert(storage.hasGroveRewardSeen(1) === true, 'grove reward should persist once marked');
+    assert(storage.hasGroveRewardSeen(2) === false, 'other groves stay unseen');
 });
-test('world mastery summary counts medals and exposes the next focus', () => {
+test('grove mastery summary counts medals and exposes the next focus', () => {
     storage.save('best', {});
     storage.save('medals', {});
     storage.setBest(0, 100);
@@ -2068,50 +2139,50 @@ test('world mastery summary counts medals and exposes the next focus', () => {
     storage.setMedals(1, { saved: 1, skills: 0, time: 0 });
     storage.setBest(2, 83);
     storage.setMedals(2, { saved: 0, skills: 0, time: 0 });
-    const meta = ui.worldMeta(0);
-    const data = ui.worldMasteryData(meta, 6);
-    eq(data.rescue, 2, 'rescue medals counted across the world');
-    eq(data.efficiency, 1, 'efficiency medals counted across the world');
-    eq(data.speed, 1, 'speed medals counted across the world');
+    const meta = ui.groveMeta(0);
+    const data = ui.groveMasteryData(meta, 6);
+    eq(data.rescue, 2, 'rescue medals counted across the grove');
+    eq(data.efficiency, 1, 'efficiency medals counted across the grove');
+    eq(data.speed, 1, 'speed medals counted across the grove');
     eq(data.mastered, 1, 'fully mastered levels counted');
-    eq(data.masteryComplete, false, 'partial world is not flagged complete');
+    eq(data.masteryComplete, false, 'partial grove is not flagged complete');
     eq(data.nextGoal.level, 2, 'next focus points at the first incomplete unlocked level');
-    const html = ui.worldMasterySummaryHtml(meta, 6);
+    const html = ui.groveMasterySummaryHtml(meta, 6);
     assert(html.includes('Mastered 1/7'), 'summary line prints mastered progress');
     assert(html.includes('4/21 medals'), 'summary line compresses every medal into one count');
-    assert(html.includes('Next: L2'), 'a single next-target chip remains');
+    assert(html.includes('Next: P2'), 'a single next-target chip remains');
     assert(!/Rescue \d|Efficiency \d|Speed \d/.test(html), 'individual rescue/efficiency/speed chips are gone');
 });
 
-test('world mastery summary exposes completion state when every level is mastered', () => {
+test('grove mastery summary exposes completion state when every level is mastered', () => {
     storage.save('best', {});
     storage.save('medals', {});
     for (let i = 0; i < 7; i++) {
         storage.setBest(i, 100);
         storage.setMedals(i, { saved: 1, skills: 1, time: 1 });
     }
-    const meta = ui.worldMeta(0);
-    const data = ui.worldMasteryData(meta, 6);
+    const meta = ui.groveMeta(0);
+    const data = ui.groveMasteryData(meta, 6);
     eq(data.mastered, 7, 'all levels count as mastered');
-    eq(data.masteryComplete, true, 'world mastery completion is detected');
-    eq(data.nextGoal, null, 'no next goal remains when world is complete');
-    const html = ui.worldMasterySummaryHtml(meta, 6);
-    assert(html.includes('world-mastery is-complete'), 'row adds a completion class');
-    assert(html.includes('World 1 mastery complete'), 'row prints the completion banner');
-    assert(html.includes('World mastered'), 'row switches the next chip to completion copy');
-    assert(html.includes('world-mastery-node'), 'mastered nodes use the world mastery contract');
+    eq(data.masteryComplete, true, 'grove mastery completion is detected');
+    eq(data.nextGoal, null, 'no next goal remains when grove is complete');
+    const html = ui.groveMasterySummaryHtml(meta, 6);
+    assert(html.includes('grove-mastery is-complete'), 'row adds a completion class');
+    assert(html.includes('Grove 1 mastery complete'), 'row prints the completion banner');
+    assert(html.includes('Grove mastered'), 'row switches the next chip to completion copy');
+    assert(html.includes('grove-mastery-node'), 'mastered nodes use the grove mastery contract');
 });
 
 
-test('world reward ribbon summarizes world-complete stats and mastery state', () => {
+test('grove reward ribbon summarizes grove-complete stats and mastery state', () => {
     storage.save('best', {});
     storage.save('medals', {});
     for (let i = 0; i < 7; i++) {
         storage.setBest(i, 100);
         storage.setMedals(i, { saved: 1, skills: 1, time: 1 });
     }
-    const html = ui.worldCompletionRibbonHtml(ui.worldMeta(0), 6);
-    assert(html.includes('World mastered'), 'reward ribbon distinguishes mastery from a plain unlock');
+    const html = ui.groveCompletionRibbonHtml(ui.groveMeta(0), 6);
+    assert(html.includes('Grove mastered'), 'reward ribbon distinguishes mastery from a plain unlock');
     assert(html.includes('21/21 medals'), 'reward ribbon surfaces aggregate medal totals');
     assert(html.includes('Mastery complete'), 'reward ribbon prints the mastery pill');
 });
@@ -2119,7 +2190,7 @@ test('world reward ribbon summarizes world-complete stats and mastery state', ()
 test('carousel wheel intent steps horizontally, ignores vertical, and debounces', () => {
     const menu = ui._ensureMenu();
     menu._wheelLock = null;
-    eq(menu.wheelNavIntent(40, 4, 1000), 1, 'a rightward flick advances one world');
+    eq(menu.wheelNavIntent(40, 4, 1000), 1, 'a rightward flick advances one grove');
     eq(menu.wheelNavIntent(-40, 4, 1400), -1, 'a leftward flick steps back once the cooldown clears');
     eq(menu.wheelNavIntent(50, 4, 1500), 0, 'a second flick inside the cooldown window is swallowed');
     eq(menu.wheelNavIntent(4, 60, 3000), 0, 'a dominantly vertical gesture leaves page scroll alone');
@@ -2129,39 +2200,39 @@ test('carousel wheel intent steps horizontally, ignores vertical, and debounces'
 test('menu feature gating paces unlocks by progression and tenure', () => {
     const ws = 7;
     // Newcomer: nothing but Play.
-    let f = menuFeatureState({ unlocked: 0, daysSinceFirstPlay: 0, worldSize: ws });
+    let f = menuFeatureState({ unlocked: 0, daysSinceFirstPlay: 0, groveSize: ws });
     eq(f.stage, 'newcomer');
-    assert(!f.worldMenu && !f.daily && !f.editor, 'a brand-new save shows no surfaces');
-    // Learning: cleared L1, still inside World 1 → carousel + controls only.
-    f = menuFeatureState({ unlocked: 1, daysSinceFirstPlay: 0, worldSize: ws });
+    assert(!f.groveMenu && !f.daily && !f.editor, 'a brand-new save shows no surfaces');
+    // Learning: cleared L1, still inside Grove 1 → carousel + controls only.
+    f = menuFeatureState({ unlocked: 1, daysSinceFirstPlay: 0, groveSize: ws });
     eq(f.stage, 'learning');
-    assert(f.worldMenu && f.controls, 'carousel and controls arrive after Level 1');
-    assert(!f.daily && !f.editor, 'daily and editor stay locked inside World 1');
-    // Explorer: reached World 2 → daily/ghost unlocks, editor still gated.
-    f = menuFeatureState({ unlocked: 7, daysSinceFirstPlay: 0, worldSize: ws });
+    assert(f.groveMenu && f.controls, 'carousel and controls arrive after Level 1');
+    assert(!f.daily && !f.editor, 'daily and editor stay locked inside Grove 1');
+    // Explorer: reached Grove 2 → daily/ghost unlocks, editor still gated.
+    f = menuFeatureState({ unlocked: 7, daysSinceFirstPlay: 0, groveSize: ws });
     eq(f.stage, 'explorer');
-    assert(f.daily, 'the daily ghost loop unlocks at World 2');
-    assert(!f.editor, 'the editor does not unlock just for reaching World 2 same-day');
-    // Veteran by depth: reached World 3 → editor without waiting weeks.
-    f = menuFeatureState({ unlocked: 14, daysSinceFirstPlay: 0, worldSize: ws });
+    assert(f.daily, 'the daily ghost loop unlocks at Grove 2');
+    assert(!f.editor, 'the editor does not unlock just for reaching Grove 2 same-day');
+    // Veteran by depth: reached Grove 3 → editor without waiting weeks.
+    f = menuFeatureState({ unlocked: 14, daysSinceFirstPlay: 0, groveSize: ws });
     eq(f.stage, 'veteran');
     assert(f.editor, 'deep progression unlocks the editor without tenure');
     // Veteran by tenure: ~week three on a shallow save → editor unlocks.
-    assert(menuFeatureState({ unlocked: 7, daysSinceFirstPlay: 14, worldSize: ws }).editor,
+    assert(menuFeatureState({ unlocked: 7, daysSinceFirstPlay: 14, groveSize: ws }).editor,
         'two weeks of tenure unlocks the editor for a returning player');
     // Gallery needs both the editor and an actual custom level.
-    assert(!menuFeatureState({ unlocked: 14, customLevelCount: 0, worldSize: ws }).gallery, 'no customs, no gallery');
-    assert(menuFeatureState({ unlocked: 14, customLevelCount: 1, worldSize: ws }).gallery, 'editor + a custom shows the gallery');
+    assert(!menuFeatureState({ unlocked: 14, customLevelCount: 0, groveSize: ws }).gallery, 'no customs, no gallery');
+    assert(menuFeatureState({ unlocked: 14, customLevelCount: 1, groveSize: ws }).gallery, 'editor + a custom shows the gallery');
 });
 
 test('carousel window stays bounded as the campaign scales', () => {
-    eq(carouselWindow(0, 3).join(','), '0,1,2', 'small campaigns render every world');
+    eq(carouselWindow(0, 3).join(','), '0,1,2', 'small campaigns render every grove');
     const big = carouselWindow(50, 300, 3);
     eq(big.length, 7, 'a large campaign renders only a bounded window');
     assert(big.includes(50), 'the window is centered on the selection');
     eq(carouselWindow(0, 300, 3)[0], 0, 'the window clamps to the start edge');
     eq(carouselWindow(299, 300, 3).slice(-1)[0], 299, 'the window clamps to the end edge');
-    eq(carouselWindow(5, 0).length, 0, 'no worlds, no window');
+    eq(carouselWindow(5, 0).length, 0, 'no groves, no window');
 });
 
 test('menuDaysBetween floors whole days and tolerates bad input', () => {
@@ -2170,11 +2241,11 @@ test('menuDaysBetween floors whole days and tolerates bad input', () => {
     eq(menuDaysBetween('garbage', '2026-06-01'), 0, 'bad input is treated as no tenure');
 });
 
-test('late-campaign ordering now ramps world 2 and 3 more steadily', () => {
+test('late-campaign ordering now ramps grove 2 and 3 more steadily', () => {
     const names = LEVELS.slice(7).map(l => l.name);
-    eq(names[0], 'One-Way Out', 'world 2 now opens with a route-control remix');
-    eq(names[2], "Basher's Hollow", 'level 10 should sit in the middle of the advanced route world');
-    eq(names[7], 'Gatekeeper', 'world 3 now begins with the switch intro');
+    eq(names[0], 'One-Way Out', 'grove 2 now opens with a route-control remix');
+    eq(names[2], "Basher's Hollow", 'level 10 should sit in the middle of the advanced route grove');
+    eq(names[7], 'Gatekeeper', 'grove 3 now begins with the switch intro');
     eq(names[12], 'Mossling Master', 'tower ascent now lands near the endgame');
     eq(names[13], 'Moss Gauntlet', 'the gauntlet remains the campaign finale');
 });

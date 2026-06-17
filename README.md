@@ -71,14 +71,15 @@ js/result-card.js result overlay snippets + deterministic PNG share-card export
 js/overlays.js    render-only readability overlays (danger probe + hints)
 js/game.js        engine: fixed-timestep loop, skills, ghost replay, HUD, juice
                   (persistence lives in js/storage.js, loaded before it)
+js/ghost-race.js  live Beat-the-Ghost phantom: precompute + render-only draw
 js/ui.js          core DOM bindings, shared UI orchestration, editor, pointer input
-js/menu-ui.js     campaign menu: Continue hero, world carousel, level rail
+js/menu-ui.js     campaign menu: Continue hero, grove carousel, patch rail
 js/result-ui.js   result overlay, run summary, sharing, ghost-replay export
 js/main.js        bootstrap (constructs Game + ui, starts the loop), loads last
 ```
 
 The `ui` object is split across `ui.js` (core orchestration/editor/input),
-`menu-ui.js` (campaign menu + world carousel), and `result-ui.js` (result
+`menu-ui.js` (campaign menu + grove carousel), and `result-ui.js` (result
 overlay + sharing). `menu-ui.js` is instantiated as `ui.menu`; `ui.js` keeps
 small wrapper methods for the public `ui.*` calls that existing game/result code
 uses. `result-ui.js` still mixes methods onto the same object via
@@ -117,11 +118,11 @@ npm install && npm run test:e2e  # 17 Playwright browser smoke tests (dev-only)
 The unit suite (175 tests, no test framework needed) loads the real game scripts
 into Node with stubbed canvas/DOM. A separate **Playwright** smoke suite
 (`tests/e2e/`) drives a real Chromium against the static site to catch
-boot/layout regressions (world-carousel overflow, first-run menu gating,
-level-rail selection, play-next flow) and is gated in CI before deploy. The unit
+boot/layout regressions (grove-carousel overflow, first-run menu gating,
+patch-rail selection, play-next flow) and is gated in CI before deploy. The unit
 suite covers:
 
-1. **Terrain semantics** — destructibility rules, world-edge walls, one-way
+1. **Terrain semantics** — destructibility rules, grove-edge walls, one-way
    membranes (probe-direction aware, indestructible, never a floor)
 2. **Every skill's physics** — walking, step-up limits, fatal falls, floating,
    blocking, digging, bashing (incl. metal stop + floor preservation), mining
@@ -220,10 +221,10 @@ determinism invariant (presentation lives outside `update()`):
 - **Onboarding** — dismissible/auto-hiding tutorial card, portrait rotate hint.
 - **Continue hero** — the menu leads with one strong CTA that resumes the first
   unlocked level you haven't cleared.
-- **World carousel menu** (`js/menu-ui.js`) — after the first clear, the start
-  screen becomes a campaign navigator: a dominant selected world, subdued locked
-  worlds, compact adjacent progress, and a selected-world detail panel with a
-  level rail, recommended level, and completion/reward state. Mastery is
+- **Grove carousel menu** (`js/menu-ui.js`) — after the first clear, the start
+  screen becomes a campaign navigator: a dominant selected grove, subdued locked
+  groves, compact adjacent progress, and a selected-grove detail panel with a
+  patch rail, recommended level, and completion/reward state. Mastery is
   progressively disclosed: one compact summary line (`Mastered 2/7 · 13/21
   medals`), a subtle node track, and a single next-target chip — not a wall of
   per-medal chips. Navigation supports click/tap, prev/next, keyboard
@@ -233,10 +234,16 @@ determinism invariant (presentation lives outside `update()`):
   `Beat 90% · 1:12 · 4 skills` target chip, and a "Beat Your Ghost" CTA. It stays
   calmer than the Continue hero so it never competes with the primary path. The
   card's fresh/race/stale logic is a pure `dailyCardModel()` in `js/daily-ghost.js`.
+- **Live ghost phantom race** (`js/ghost-race.js`) — starting that daily runs the
+  stored ghost's recorded action log **once**, muted and headless, to precompute a
+  per-step position trajectory; the ghost then races live as translucent phantoms
+  beside your colony with a rolling `You N · Ghost M` rescue delta. The precompute
+  reloads the level clean afterwards, so your run is byte-identical to one with no
+  ghost — the phantom is render-only and never touches the sim (guarded by a
+  determinism unit test). A rewind keeps the phantom; a fresh load drops it.
 - **Ghost replays** — any run packs into a `?replay=` link off the existing
   action log; opening it plays the run back deterministically (the same machinery
-  as rewind), with player input locked out and the viewer's save untouched. This
-  is the share/watch MVP; concurrent "race the ghost" builds on the same infra.
+  as rewind), with player input locked out and the viewer's save untouched.
 - **Shared-level safety net** — a generous reachability smoke check
   (`analyzeSolvability`) warns at editor save/share if it can't find any route to
   the exit with the given skills. It is an honest *heuristic*, not a proof (see
@@ -258,9 +265,9 @@ maps `{unlocked, daysSinceFirstPlay, customLevelCount}` → which surfaces are l
 | Stage | Trigger | Unlocks |
 |---|---|---|
 | Newcomer | brand-new save | one dominant **Start Playing** |
-| Learning | cleared Level 1 | Continue hero + world carousel + keyboard hints |
-| Explorer | reached World 2 | **Daily / Beat-the-Ghost** loop |
-| Veteran | reached World 3 **or** ~week three by tenure | **Level Editor** (then **My Levels** once a custom exists) |
+| Learning | cleared Level 1 | Continue hero + grove carousel + keyboard hints |
+| Explorer | reached Grove 2 | **Daily / Beat-the-Ghost** loop |
+| Veteran | reached Grove 3 **or** ~week three by tenure | **Level Editor** (then **My Levels** once a custom exists) |
 
 Each freshly-unlocked surface shows a one-time **NEW** badge (`.menu-new`,
 cleared on first use). Visibility is owned by `MenuUI.applyMenuSurfaces`, not a
@@ -269,11 +276,11 @@ full-width modular blocks. Tenure is a wall-clock first-play stamp
 (`storage.firstSeenAt`) and is **menu-only** — it never enters the simulation.
 
 Within the menu, the Continue hero is the strongest action, the staged
-Daily/Editor surfaces are secondary, and the world carousel exposes only the
-selected world's detail. Locked worlds remain visible for orientation but do not
+Daily/Editor surfaces are secondary, and the grove carousel exposes only the
+selected grove's detail. Locked groves remain visible for orientation but do not
 expose dense mastery data. The carousel renders only a **bounded window** of
-worlds around the selection (`carouselWindow`), so a 100-world campaign costs the
-same to render as a 3-world one.
+groves around the selection (`carouselWindow`), so a 100-grove campaign costs the
+same to render as a 3-grove one.
 
 ## Known limitations
 
@@ -291,9 +298,9 @@ Honest gaps, not bugs — most need a human, not more code:
   whether a gate's switch is itself reachable. A clean result means "no obvious
   dead end found," never "guaranteed solvable" — which is why it advises instead
   of blocking a save/share.
-- **World labels share a legacy storage key.** World reward seen-state persists
+- **Grove labels share a legacy storage key.** Grove reward seen-state persists
   through the older `mosslings_chapterRewardSeen` key so existing saves keep
-  working. The UI copy says "World"; the storage name is intentionally
+  working. The UI copy says "Grove"; the storage name is intentionally
   compatible.
 
 ### Real-device check (do before each release)
@@ -321,7 +328,7 @@ Free, build-free helpers (run from the repo root):
 
 ## Ideas for later
 
-More campaign worlds now that the menu scales horizontally · "race the ghost"
+More campaign groves now that the menu scales horizontally · "race the ghost"
 concurrent replays + a baked daily dev-ghost · level-complete confetti · a
 colourblind-friendly palette toggle · continuing to split shared UI/editor code
 out of `ui.js` as it grows.
