@@ -27,6 +27,7 @@ const ui = {
 
         $('btn-editor').onclick = () => { audio.init(); this.startEditor(); };
         $('btn-start').onclick = () => { this.armAudioForPlay(); game.loadLevel(game.levelIdx); };
+        $('btn-daily').onclick = () => { audio.init(); game.loadDailyChallenge(); };
         $('btn-edit-save').onclick = () => this.saveCustomLevel();
         $('btn-edit-settings').onclick = () => this.openEditorSettings();
         $('btn-edit-share').onclick = () => this.shareCustomLevel();
@@ -62,6 +63,10 @@ const ui = {
         };
         $('msg-btn-primary').onclick = () => {
             if (game.state === 'VICTORY') this.backToMenu();
+            else if (game.runMode === 'daily') {
+                if (this.lastWin) this.backToMenu();
+                else this.restartLevel();
+            }
             else if (this.lastWin && game.levelIdx >= 0) game.loadLevel(game.levelIdx + 1);
             else if (game.levelIdx === -2) this.backToMenu();
             else game.loadLevel(game.levelIdx);
@@ -180,6 +185,7 @@ const ui = {
         const params = new URLSearchParams(location.search);
         let code = params.get('level');
         if (!code && location.hash.startsWith('#level=')) code = location.hash.slice(7);
+        if (!code && this.tryImportDaily(params)) return;
         if (!code) return;
         const level = this.parseSharedLevel(code);
         if (!level) {
@@ -207,6 +213,22 @@ const ui = {
         const level = deserializeLevel(code);
         if (!level || !level.name || !Array.isArray(level.commands)) return null;
         return level;
+    },
+    tryImportDaily(params) {
+        let key = params.get('daily');
+        if (!key && location.hash.startsWith('#daily=')) key = location.hash.slice(7);
+        if (!key) return false;
+
+        const challenge = dailyChallengeForDate(key);
+        if (!challenge) {
+            this.toast('That daily challenge link is invalid.', true);
+            history.replaceState(null, '', location.pathname);
+            return true;
+        }
+        this.game.loadDailyChallenge(challenge);
+        this.toast(`${challenge.label}: ${challenge.levelName}`);
+        history.replaceState(null, '', location.pathname);
+        return true;
     },
     shareCustomLevel() {
         const game = this.game;
@@ -239,6 +261,13 @@ const ui = {
         url.search = '';
         url.hash = '';
         url.searchParams.set('level', code);
+        return url.toString();
+    },
+    dailyUrlFor(key) {
+        const url = new URL(location.href);
+        url.search = '';
+        url.hash = '';
+        url.searchParams.set('daily', key);
         return url.toString();
     },
     /** Copy text via the async Clipboard API, falling back to a manual prompt. */
@@ -287,7 +316,8 @@ const ui = {
     /** Reload the current level — campaign by index, custom/shared by object. */
     restartLevel() {
         const g = this.game;
-        if (g.levelIdx === -2) g.loadLevel(g.level, true);
+        if (g.runMode === 'daily') g.loadDailyChallenge(g.dailyChallenge);
+        else if (g.levelIdx === -2) g.loadLevel(g.level, true);
         else g.loadLevel(g.levelIdx);
     },
 
@@ -353,7 +383,22 @@ const ui = {
             };
             c.appendChild(b);
         }
+        this.refreshDailyCard(firstRun);
         document.getElementById('btn-gallery').classList.toggle('hidden', storage.getCustomLevels().length === 0);
+    },
+    refreshDailyCard(firstRun) {
+        const card = document.getElementById('daily-card');
+        if (!card) return;
+        const challenge = dailyChallengeForDate();
+        card.classList.toggle('hidden', firstRun || !challenge);
+        if (firstRun || !challenge) return;
+
+        const result = storage.getDailyResult(challenge.key);
+        document.getElementById('daily-title').innerText =
+            `${challenge.key} · L${challenge.levelIdx + 1} ${challenge.levelName}`;
+        document.getElementById('daily-meta').innerText = result
+            ? `Best ${result.pct}% · ${this.fmtTime(result.timeSeconds)} · ${result.skills} skills · ${result.attempts} attempt${result.attempts === 1 ? '' : 's'}`
+            : 'No local run yet. Same puzzle for everyone today.';
     },
 
     openGallery() {
@@ -460,8 +505,13 @@ const ui = {
 
     backToMenu() {
         if (typeof music !== 'undefined' && music) music.stop();
+        const returningFromDaily = this.game.runMode === 'daily';
         this.game.state = 'MENU';
         if (this.game.levelIdx < 0) this.game.levelIdx = 0;
+        if (returningFromDaily) {
+            const maxUnlocked = storage.getUnlocked();
+            this.game.levelIdx = Math.min(this.game.lastCampaignLevelIdx || 0, maxUnlocked);
+        }
         document.getElementById('start-screen').classList.remove('hidden');
         document.getElementById('message-overlay').classList.add('hidden');
         document.getElementById('gallery-screen').classList.add('hidden');
@@ -471,6 +521,8 @@ const ui = {
         // Keep the frame a consistent height (chrome is only hidden in the editor).
         document.getElementById('hud-top').classList.remove('hidden');
         document.getElementById('toolbar').classList.remove('hidden');
+        this.game.runMode = 'campaign';
+        this.game.dailyChallenge = null;
         this.game.canvas.style.cursor = 'default';
         this.buildMenu();
     },
@@ -481,7 +533,9 @@ const ui = {
         document.getElementById('gallery-screen').classList.add('hidden');
         document.getElementById('editor-ui').classList.add('hidden');
         document.getElementById('lbl-level').innerText =
-            isCustom ? game.level.name : `${game.levelIdx + 1}. ${game.level.name}`;
+            game.runMode === 'daily' && game.dailyChallenge
+                ? `${game.dailyChallenge.label} · ${game.levelIdx + 1}. ${game.level.name}`
+                : (isCustom ? game.level.name : `${game.levelIdx + 1}. ${game.level.name}`);
         document.getElementById('lbl-req').innerText = game.level.reqSaved;
         const tut = document.getElementById('tutorial-bar');
         if (game.level.tut) {
@@ -580,7 +634,9 @@ const ui = {
                 skills: game.skillsUsed,
                 time: timeTaken,
             });
-            const key = game.levelIdx >= 0 ? game.levelIdx : game.level.name;
+            const key = game.runMode === 'daily' && game.dailyChallenge
+                ? `daily:${game.dailyChallenge.key}`
+                : (game.levelIdx >= 0 ? game.levelIdx : game.level.name);
             storage.setMedals(key, medals);
 
             let html = '';
@@ -617,10 +673,33 @@ const ui = {
             mWrap.innerHTML = html;
         }
 
+        const isDaily = game.runMode === 'daily' && game.dailyChallenge;
+        if (isDaily) {
+            const dailyPayload = {
+                key: game.dailyChallenge.key,
+                levelIdx: game.levelIdx,
+                levelName: game.level.name,
+                win,
+                saved: game.savedCount,
+                total,
+                pct,
+                timeSeconds: timeTaken,
+                skills: game.skillsUsed,
+                medalCount: [medals.saved, medals.skills, medals.time].filter(Boolean).length,
+                medals,
+            };
+            const prev = storage.getDailyResult(game.dailyChallenge.key);
+            const isNewBest = compareDailyResults(dailyPayload, prev) > 0;
+            const best = storage.setDailyResult(game.dailyChallenge.key, dailyPayload);
+            mWrap.innerHTML += `<div class="msg-daily">${game.dailyChallenge.label} · ${isNewBest ? 'New local best' : 'Local best'}: ${best.pct}% in ${this.fmtTime(best.timeSeconds)}, ${best.skills} skills</div>`;
+        }
+
         // Stash a compact run summary for the "Share result" button.
         this.lastResult = {
             name: game.level.name,
             isCampaign: game.levelIdx >= 0,
+            isDaily,
+            dailyKey: isDaily ? game.dailyChallenge.key : null,
             campaignNum: game.levelIdx + 1,
             saved: game.savedCount, total, pct,
             timeStr: this.fmtTime(timeTaken),
@@ -663,14 +742,18 @@ const ui = {
     shareResult() {
         const r = this.lastResult;
         if (!r) return;
-        const label = r.isCampaign ? `Level ${r.campaignNum} "${r.name}"` : `"${r.name}"`;
+        const label = r.isDaily
+            ? `Daily ${r.dailyKey} — Level ${r.campaignNum} "${r.name}"`
+            : (r.isCampaign ? `Level ${r.campaignNum} "${r.name}"` : `"${r.name}"`);
         const medalTail = r.medalStr ? ` medals: ${r.medalStr}` : '';
         const verb = r.win ? 'rescued' : 'reached';
         // "Challenge a friend" framing — strongest on a clean win, still inviting
         // on a near miss (so close losses also become share moments).
-        const challenge = r.win
-            ? (r.medalCount >= 3 ? 'Swept all 3 medals. Can you?' : 'Think you can beat my run?')
-            : `So close: ${r.saved}/${r.total} saved. Can you do better?`;
+        const challenge = r.isDaily
+            ? (r.win ? 'Today\'s daily. Can you beat my run?' : 'Today\'s daily beat me. Can you do better?')
+            : (r.win
+                ? (r.medalCount >= 3 ? 'Swept all 3 medals. Can you?' : 'Think you can beat my run?')
+                : `So close: ${r.saved}/${r.total} saved. Can you do better?`);
         let text = `MOSSLINGS — ${label}: ${verb} ${r.saved}/${r.total} (${r.pct}%) in ${r.timeStr}, ${r.skills} skills${medalTail}. ${challenge}`;
 
         // Append a link the recipient can actually open.
@@ -683,7 +766,9 @@ const ui = {
             return;
         }
         let url = null;
-        if (r.isCampaign) {
+        if (r.isDaily) {
+            url = this.dailyUrlFor(r.dailyKey);
+        } else if (r.isCampaign) {
             const u = new URL(location.href); u.search = ''; u.hash = '';
             url = u.toString();
         } else {

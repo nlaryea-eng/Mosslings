@@ -36,6 +36,17 @@ class StorageManager {
         };
         this.save('medals', all);
     }
+    getDailyResult(key) { return this.load('daily', {})[key] ?? null; }
+    setDailyResult(key, result) {
+        const all = this.load('daily', {});
+        const cur = all[key] || null;
+        const attempts = (cur && cur.attempts ? cur.attempts : 0) + 1;
+        const next = { ...result, attempts };
+        const best = compareDailyResults(next, cur) > 0 ? next : { ...cur, attempts };
+        all[key] = best;
+        this.save('daily', all);
+        return best;
+    }
     getCustomLevels() { return this.load('custom', []); }
     saveCustomLevel(level) {
         const list = this.getCustomLevels();
@@ -60,6 +71,8 @@ class Game {
         this.particles = new Particles();
         this.spores = new Spores();
         this.levelIdx = 0; this.level = null; this.state = 'MENU';
+        this.runMode = 'campaign'; this.dailyChallenge = null;
+        this.lastCampaignLevelIdx = 0;
         this.mosslings = []; this.inventory = {}; this.selectedSkill = null;
         this.savedCount = 0; this.deadCount = 0; this.skillsUsed = 0;
         this.time = 0; this.spawnCounter = 0; this.spawnTimer = 0; this.spawnRate = 60;
@@ -151,7 +164,12 @@ class Game {
         if (tier >= 4) this.juice({ flash: 0.10, color: athlete ? '#ffe082' : '#80deea' });
     }
     // --- Level lifecycle ---------------------------------------------------
-    loadLevel(idx, isCustom = false, silent = false) {
+    loadDailyChallenge(challenge = dailyChallengeForDate()) {
+        if (!challenge) { ui.toast('Daily challenge is unavailable.', true); return; }
+        if (this.runMode !== 'daily' && this.levelIdx >= 0) this.lastCampaignLevelIdx = this.levelIdx;
+        this.loadLevel(challenge.levelIdx, false, false, { mode: 'daily', daily: challenge });
+    }
+    loadLevel(idx, isCustom = false, silent = false, opts = {}) {
         if (!isCustom && idx >= LEVELS.length) {
             this.state = 'VICTORY';
             ui.showMsg('LEGENDARY!', 'Every Mossling colony is safe. You are the Moss Master!', true);
@@ -159,6 +177,8 @@ class Game {
         }
         this.levelIdx = isCustom ? -2 : idx;
         this.level = isCustom ? idx : LEVELS[idx];
+        this.runMode = opts.mode || (isCustom ? 'custom' : 'campaign');
+        this.dailyChallenge = this.runMode === 'daily' ? opts.daily : null;
 
         if (isCustom) {
             const err = validateLevelStructure(this.level);
@@ -204,7 +224,7 @@ class Game {
         const total = this.level.totalSpawn;
         const pct = Math.round(this.savedCount / total * 100);
         if (this.savedCount >= this.level.reqSaved) {
-            if (this.levelIdx >= 0) {
+            if (this.runMode === 'campaign' && this.levelIdx >= 0) {
                 storage.setUnlocked(this.levelIdx + 1);
                 storage.setBest(this.levelIdx, pct);
             }
@@ -227,6 +247,7 @@ class Game {
      * shortcuts (N, +/-) keep working regardless — power users lose nothing.
      */
     advancedControlsVisible() {
+        if (this.runMode === 'daily') return true;       // daily is opt-in challenge play
         if (this.levelIdx < 0) return true;          // custom (-2) / editor (-1)
         return storage.getUnlocked() >= 2;           // campaign: revealed after clearing L2
     }
@@ -383,7 +404,10 @@ class Game {
         const kept = this.actionLog.filter(a => a.step < targetStep);
         const wasPaused = this.state === 'PAUSE';
         const isCustom = this.levelIdx === -2;
-        this.loadLevel(isCustom ? this.level : this.levelIdx, isCustom, true);
+        const opts = this.runMode === 'daily'
+            ? { mode: 'daily', daily: this.dailyChallenge }
+            : {};
+        this.loadLevel(isCustom ? this.level : this.levelIdx, isCustom, true, opts);
         this.actionLog = kept;
         // Mute the catch-up: noop particle spawns and silence audio.
         this.replaying = true;

@@ -89,6 +89,7 @@ test('first run shows only Play, then the full menu returns once Level 1 is clea
     await expect(page.locator('#start-screen')).toHaveClass(/first-run/);
     await expect(page.locator('#btn-start')).toHaveText(/start playing/i);
     await expect(page.locator('#level-select-container')).toBeHidden();
+    await expect(page.locator('#daily-card')).toBeHidden();
     await expect(page.locator('#btn-editor')).toBeHidden();
     await expect(page.locator('.controls-disc')).toBeHidden();
 
@@ -99,6 +100,7 @@ test('first run shows only Play, then the full menu returns once Level 1 is clea
     await expect(page.locator('#start-screen')).not.toHaveClass(/first-run/);
     await expect(page.locator('#btn-start')).toHaveText(/^play$/i);
     await expect(page.locator('#level-select-container')).toBeVisible();
+    await expect(page.locator('#daily-card')).toBeVisible();
     await expect(page.locator('#btn-editor')).toBeVisible();
     await expect(page.locator('.controls-disc')).toBeVisible();
 });
@@ -114,4 +116,38 @@ test('mute preference persists across reload', async ({ page }) => {
     expect(await page.evaluate(() => localStorage.getItem('mosslings.audioMuted'))).toBe('1');
     // The audio engine should boot already-muted, not just remember the string.
     expect(await page.evaluate(() => audio.muted)).toBe(true);
+});
+
+test('daily challenge card starts today\'s deterministic level', async ({ page }) => {
+    await page.addInitScript(seedProgress);
+    await page.goto('/');
+    await expect(page.locator('#daily-card')).toBeVisible();
+    await expect(page.locator('#daily-title')).toContainText(/^\d{4}-\d{2}-\d{2}/);
+    await page.locator('#btn-daily').click();
+    await expect(page.locator('#gameCanvas')).toBeVisible();
+
+    const daily = await page.evaluate(() => ({
+        state: ui.game.state,
+        mode: ui.game.runMode,
+        key: ui.game.dailyChallenge && ui.game.dailyChallenge.key,
+        label: document.getElementById('lbl-level').innerText,
+    }));
+    expect(daily.state).toBe('PLAY');
+    expect(daily.mode).toBe('daily');
+    expect(daily.key).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(daily.label).toContain(`Daily ${daily.key}`);
+});
+
+test('daily deep link opens the requested challenge directly', async ({ page }) => {
+    await page.goto('/?daily=2026-06-17');
+    await expect(page.locator('#gameCanvas')).toBeVisible();
+    const daily = await page.evaluate(() => ({
+        mode: ui.game.runMode,
+        key: ui.game.dailyChallenge && ui.game.dailyChallenge.key,
+        idx: ui.game.levelIdx,
+        expected: dailyChallengeForDate('2026-06-17').levelIdx,
+    }));
+    expect(daily.mode).toBe('daily');
+    expect(daily.key).toBe('2026-06-17');
+    expect(daily.idx).toBe(daily.expected);
 });

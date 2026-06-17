@@ -18,7 +18,7 @@
     <meta name="twitter:title" content="Mosslings — a tiny moss-folk puzzle">
     <meta name="twitter:description" content="Guide mindless moss creatures home. Can you save the whole colony?">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect x='4' y='5' width='8' height='9' rx='2' fill='%237cb342'/><rect x='6' y='3' width='2' height='3' fill='%232e7d32'/><rect x='9' y='2' width='2' height='4' fill='%232e7d32'/><rect x='6' y='8' width='2' height='2' fill='white'/><rect x='10' y='8' width='2' height='2' fill='white'/></svg>">
-    <link rel="stylesheet" href="style.css?v=20260617-accw">
+    <link rel="stylesheet" href="style.css?v=20260617-daily">
 </head>
 <body>
     <div id="game-container">
@@ -168,6 +168,14 @@
             <div class="logo">MOSSLINGS</div>
             <p class="tagline">The moss folk march without thinking.<br>Lend them your wits and lead them to the portal.</p>
             <div id="level-select-container"></div>
+            <div id="daily-card" class="daily-card hidden">
+                <div class="daily-copy">
+                    <span class="daily-kicker">Daily Challenge</span>
+                    <strong id="daily-title">Today</strong>
+                    <span id="daily-meta">One shared puzzle for everyone.</span>
+                </div>
+                <button id="btn-daily" class="big-btn">Play Daily</button>
+            </div>
             <div id="start-btns">
                 <button id="btn-start" class="big-btn">Play</button>
                 <button id="btn-gallery" class="big-btn hidden">My Levels</button>
@@ -194,17 +202,18 @@
         </div>
     </div>
 
-    <script src="js/constants.js?v=20260617-accw"></script>
-    <script src="js/icons.js?v=20260617-accw"></script>
-    <script src="js/utils.js?v=20260617-accw"></script>
-    <script src="js/audio.js?v=20260617-accw"></script>
-    <script src="js/music.js?v=20260617-accw"></script>
-    <script src="js/particles.js?v=20260617-accw"></script>
-    <script src="js/terrain.js?v=20260617-accw"></script>
-    <script src="js/mossling.js?v=20260617-accw"></script>
-    <script src="js/levels.js?v=20260617-accw"></script>
-    <script src="js/overlays.js?v=20260617-accw"></script>
-    <script src="js/game.js?v=20260617-accw"></script>
-    <script src="js/ui.js?v=20260617-accw"></script>
+    <script src="js/constants.js?v=20260617-daily"></script>
+    <script src="js/icons.js?v=20260617-daily"></script>
+    <script src="js/utils.js?v=20260617-daily"></script>
+    <script src="js/audio.js?v=20260617-daily"></script>
+    <script src="js/music.js?v=20260617-daily"></script>
+    <script src="js/particles.js?v=20260617-daily"></script>
+    <script src="js/terrain.js?v=20260617-daily"></script>
+    <script src="js/mossling.js?v=20260617-daily"></script>
+    <script src="js/levels.js?v=20260617-daily"></script>
+    <script src="js/daily.js?v=20260617-daily"></script>
+    <script src="js/overlays.js?v=20260617-daily"></script>
+    <script src="js/game.js?v=20260617-daily"></script>
+    <script src="js/ui.js?v=20260617-daily"></script>
 </body>
 </html>

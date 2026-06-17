@@ -62,7 +62,7 @@ global.localStorage = (() => {
 // Delete existing global.ui before loading ui.js to avoid collisions
 delete global.ui;
 
-for (const f of ['constants.js', 'icons.js', 'audio.js', 'music.js', 'particles.js', 'terrain.js', 'mossling.js', 'levels.js', 'overlays.js', 'game.js', 'utils.js', 'ui.js']) {
+for (const f of ['constants.js', 'icons.js', 'audio.js', 'music.js', 'particles.js', 'terrain.js', 'mossling.js', 'levels.js', 'daily.js', 'overlays.js', 'game.js', 'utils.js', 'ui.js']) {
     const file = path.join(__dirname, '..', 'js', f);
     vm.runInThisContext(fs.readFileSync(file, 'utf8'), { filename: file });
 }
@@ -521,6 +521,85 @@ test('v0x01 shared links continue to decode correctly', () => {
         eq(dec.totalSpawn, 5);
         eq(dec.inventory[SKILLS.BLOCK], 1);
     }
+});
+
+// ==============================================================
+console.log('\n— Daily challenge —');
+// ==============================================================
+test('dailyDateKey uses the UTC YYYY-MM-DD key', () => {
+    eq(dailyDateKey(new Date('2026-06-17T23:59:59.000Z')), '2026-06-17');
+});
+test('dailyChallengeForDate is deterministic and maps to a campaign level', () => {
+    const a = dailyChallengeForDate('2026-06-17');
+    const b = dailyChallengeForDate('2026-06-17');
+    assert(a && b, 'daily challenge exists');
+    eq(a.key, '2026-06-17');
+    eq(a.levelIdx, b.levelIdx);
+    assert(a.levelIdx >= 0 && a.levelIdx < LEVELS.length, 'level index is in campaign range');
+    eq(a.levelName, LEVELS[a.levelIdx].name);
+});
+test('dailyChallengeForDate rejects malformed dates', () => {
+    eq(dailyChallengeForDate('2026-02-31'), null);
+    eq(dailyChallengeForDate('not-a-date'), null);
+});
+test('compareDailyResults ranks win, saved percent, medals, skills, then time', () => {
+    const base = { win: false, pct: 80, medalCount: 0, skills: 4, timeSeconds: 80 };
+    assert(compareDailyResults({ ...base, win: true, pct: 70 }, base) > 0, 'win beats higher failed percent');
+    assert(compareDailyResults({ ...base, pct: 90 }, base) > 0, 'higher pct wins');
+    assert(compareDailyResults({ ...base, medalCount: 2 }, base) > 0, 'more medals win');
+    assert(compareDailyResults({ ...base, skills: 3 }, base) > 0, 'fewer skills win');
+    assert(compareDailyResults({ ...base, timeSeconds: 70 }, base) > 0, 'faster time wins');
+});
+test('daily best storage keeps the stronger run while counting attempts', () => {
+    storage.save('daily', {});
+    const key = '2030-01-02';
+    const first = storage.setDailyResult(key, {
+        win: false, saved: 4, total: 8, pct: 50, medalCount: 0, skills: 4, timeSeconds: 80,
+    });
+    eq(first.pct, 50);
+    eq(first.attempts, 1);
+
+    const worse = storage.setDailyResult(key, {
+        win: false, saved: 3, total: 8, pct: 38, medalCount: 0, skills: 5, timeSeconds: 90,
+    });
+    eq(worse.pct, 50, 'keeps previous best');
+    eq(worse.attempts, 2, 'attempt count still advances');
+
+    const better = storage.setDailyResult(key, {
+        win: true, saved: 5, total: 8, pct: 63, medalCount: 1, skills: 3, timeSeconds: 70,
+    });
+    eq(better.pct, 63, 'stores stronger run');
+    eq(better.attempts, 3);
+});
+test('daily wins do not unlock campaign progress', () => {
+    storage.save('unlocked', 0);
+    storage.save('daily', {});
+    const g = new Game();
+    const challenge = dailyChallengeForDate('2026-06-17');
+    ui.game = g;
+    g.loadDailyChallenge(challenge);
+    eq(g.runMode, 'daily');
+    eq(g.levelIdx, challenge.levelIdx);
+
+    g.savedCount = g.level.reqSaved;
+    g.deadCount = 0;
+    g.spawnCounter = g.level.totalSpawn;
+    g.mosslings = [];
+    g.endLevel();
+    eq(storage.getUnlocked(), 0, 'campaign unlock remains untouched');
+    assert(storage.getDailyResult(challenge.key), 'daily result was stored');
+});
+test('returning from daily restores the previous unlocked campaign selection', () => {
+    storage.save('unlocked', 1);
+    const g = new Game();
+    ui.game = g;
+    g.levelIdx = 0;
+    const challenge = dailyChallengeForDate('2026-06-17');
+    g.loadDailyChallenge(challenge);
+    assert(g.levelIdx !== 0 || challenge.levelIdx === 0, 'daily may point at another campaign index');
+    ui.backToMenu();
+    eq(g.runMode, 'campaign');
+    eq(g.levelIdx, 0, 'Play returns to the prior campaign selection, not the daily level');
 });
 
 // ==============================================================

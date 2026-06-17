@@ -36,6 +36,10 @@ assign (with a wider assist radius for fingers). The HUD and toolbar reflow for
 phones, and the board is bounded by the viewport height so the toolbar is never
 pushed off-screen. Best played in landscape.
 
+**Daily Challenge:** once Level 1 is cleared, the menu shows a UTC daily puzzle.
+It is deterministic and static-hostable (`?daily=YYYY-MM-DD`), with a local best
+stored per date. There is no hosted leaderboard.
+
 **Skills:** Blocker · Builder (12 rising bricks) · Basher (horizontal tunnel) ·
 Miner (1:1 diagonal stairway) · Digger (vertical shaft) · Floater (permanent
 umbrella) · Climber (permanent) · Exploder (5s fuse — also the only way to
@@ -57,6 +61,7 @@ js/particles.js   particle engine + ambient spore drift
 js/terrain.js     per-pixel collision mask + layered canvas rendering
 js/mossling.js    creature state machine + procedural animated sprite
 js/levels.js      the 9 campaign maps (geometry derived from movement math)
+js/daily.js       deterministic UTC daily challenge selection + scoring helper
 js/overlays.js    render-only readability overlays (danger probe + hints)
 js/game.js        engine: fixed-timestep loop, skills, HUD, juice, effects
 js/ui.js          DOM bindings, menu, overlays, level editor, pointer input
@@ -89,11 +94,11 @@ Design principles:
 ## Tests
 
 ```
-node tests/run-tests.js          # 90 unit tests, no framework (stubbed DOM)
+node tests/run-tests.js          # 97 unit tests, no framework (stubbed DOM)
 npm install && npm run test:e2e  # Playwright browser smoke tests (dev-only)
 ```
 
-The unit suite (90 tests, no test framework needed) loads the real game scripts
+The unit suite (97 tests, no test framework needed) loads the real game scripts
 into Node with stubbed canvas/DOM. A separate **Playwright** smoke suite
 (`tests/e2e/`) drives a real Chromium against the static site to catch
 boot/layout regressions (e.g. level-select card overflow) and is gated in CI
@@ -118,10 +123,13 @@ before deploy. The unit suite covers:
    spins up its scheduler (no wasted CPU into a silent bus), and unmuting
    restarts it cleanly; advanced HUD controls are gated for the first two
    campaign levels
-8. **Readability assist overlay** — danger probes flag fatal cliffs/lava,
+8. **Daily challenge determinism** — UTC daily keys map to one campaign level,
+   malformed dates fail closed, local bests keep the stronger run, and daily
+   clears do not unlock campaign progress
+9. **Readability assist overlay** — danger probes flag fatal cliffs/lava,
    suppress false alarms for floaters, and prove the rendering helper does not
    mutate deterministic sim state
-9. **Shared-level import robustness** — `deserializeLevel` is fuzzed with
+10. **Shared-level import robustness** — `deserializeLevel` is fuzzed with
    thousands of random/truncated/oversized payloads and must always return
    `null` or a well-formed level — never throw
 
@@ -187,7 +195,7 @@ Honest gaps, not bugs — most need a human, not more code:
   listening pass on real laptop/phone speakers. It may need simplifying.
 - **Icon/glyph readability is unproven on real devices.** Tests check the icon
   map is *complete*, not that 16px glyphs are *distinguishable* on a phone.
-- **No hosted leaderboard.** Progress and best-% are local-only.
+- **No hosted leaderboard.** Progress, best-%, and daily bests are local-only.
 
 ### Real-device check (do before each release)
 
