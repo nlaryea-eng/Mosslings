@@ -47,6 +47,11 @@ class StorageManager {
         this.save('daily', all);
         return best;
     }
+    // First-encounter coaching: which campaign levels the player has already
+    // started once (so the new-mechanic nudge fires only the first time).
+    getSeen() { return this.load('seen', {}); }
+    isSeen(idx) { return !!this.getSeen()[idx]; }
+    markSeen(idx) { const s = this.getSeen(); if (!s[idx]) { s[idx] = 1; this.save('seen', s); } }
     getCustomLevels() { return this.load('custom', []); }
     saveCustomLevel(level) {
         const list = this.getCustomLevels();
@@ -104,6 +109,22 @@ class Game {
         // coaching: pre-selects Builder, auto-pauses once when a mossling nears
         // the gap, and arrows the player to the right tap. No sim coupling.
         this.onboarding = false; this.onboardDone = false; this.onboardPausedOnce = false;
+        // Accessibility: when the OS asks for reduced motion, the render-only
+        // juice (full-screen flash, shake, freeze-frame) is suppressed. Read
+        // once at startup and kept live; never consulted by the sim.
+        this.reduceMotion = false;
+        try {
+            if (typeof matchMedia === 'function') {
+                const mq = matchMedia('(prefers-reduced-motion: reduce)');
+                this.reduceMotion = mq.matches;
+                const onChange = (e) => {
+                    this.reduceMotion = e.matches;
+                    if (typeof haptics !== 'undefined') haptics.setReducedMotion(e.matches);
+                };
+                if (mq.addEventListener) mq.addEventListener('change', onChange);
+                else if (mq.addListener) mq.addListener(onChange);
+            }
+        } catch (e) { /* matchMedia unavailable */ }
         this.debug = false;
         this.fps = 0; this.lastFpsUpdate = 0; this.frameCount = 0;
         this.lastT = 0; this.acc = 0;
@@ -139,6 +160,7 @@ class Game {
      */
     juice({ flash = 0, color = '#ffffff', hitStop = 0, shake = 0 } = {}) {
         if (this.replaying) return;
+        if (this.reduceMotion) return; // honor prefers-reduced-motion (render-only)
         if (flash > this.flash) { this.flash = flash; this.flashColor = color; }
         this.hitStop = Math.max(this.hitStop, hitStop);
         this.shake = Math.max(this.shake, shake);
@@ -155,6 +177,7 @@ class Game {
         this.lastSaveStep = this.simStep;
         if (this.replaying) return;
         this.exitFlash = 1; // portal swells as the mossling enters
+        if (typeof haptics !== 'undefined') haptics.save();
         const tier = Math.min(this.saveStreak, 8);
         const athlete = !!this.level.exit.athlete;
         audio.sfxSave(1 + (tier - 1) * 0.09); // chime climbs with the streak
@@ -317,6 +340,7 @@ class Game {
      */
     denyFeedback() {
         audio.sfxDeny();
+        if (typeof haptics !== 'undefined') haptics.deny();
         this.deniedAt = this.tick;
         this.particles.spawn(this.mouseX, this.mouseY, '#ff5252', 5, { speed: 1.3, life: 16 });
     }
@@ -340,6 +364,7 @@ class Game {
         this.skillsUsed++;
         if (this.replaying) return; // muted catch-up: no SFX, particles or toolbar churn
         audio.sfxAssign();
+        if (typeof haptics !== 'undefined') haptics.tap();
         this.particles.spawn(m.x, m.y - 8, '#ffeb3b', 6, { speed: 1.5, life: 25, glow: true });
         // Onboarding success beat: first Builder assign clears the coaching,
         // unpauses, and celebrates — then gets out of the way.

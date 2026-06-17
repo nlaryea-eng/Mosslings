@@ -411,6 +411,20 @@ class Mossling {
             ctx.fillStyle = '#ffd166';
             ctx.fillRect(x - 2, y - 15, 4, 1);
         }
+        // Permanent Floater pip — readable at a glance even on a phone, so a
+        // grounded floater (and especially a two-trait "athlete") is never a
+        // guess. The full umbrella already renders during a fall, so only show
+        // the pip otherwise. Sits just above the climber helmet; both together
+        // unmistakably mark an athlete. Render-only — no sim coupling.
+        if (this.hasFloater && this.state !== STATE.FALL) {
+            const x = Math.round(this.x), y = Math.round(this.y);
+            ctx.fillStyle = '#0d4750';
+            ctx.fillRect(x - 4, y - 19, 8, 1);     // canopy underside
+            ctx.fillStyle = '#34c0d4';
+            ctx.fillRect(x - 3, y - 20, 6, 1);     // canopy
+            ctx.fillStyle = '#b3eef5';
+            ctx.fillRect(x - 1, y - 22, 2, 2);     // finial highlight
+        }
         if (this.isExploding) {
             const sec = Math.ceil(this.explodeTimer / 60);
             ctx.fillStyle = this.explodeTimer % 20 < 10 ? '#ffeb3b' : '#ff5722';

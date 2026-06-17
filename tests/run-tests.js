@@ -62,7 +62,7 @@ global.localStorage = (() => {
 // Delete existing global.ui before loading ui.js to avoid collisions
 delete global.ui;
 
-for (const f of ['constants.js', 'icons.js', 'audio.js', 'music.js', 'particles.js', 'terrain.js', 'mossling.js', 'levels.js', 'daily.js', 'result-card.js', 'overlays.js', 'game.js', 'utils.js', 'ui.js']) {
+for (const f of ['constants.js', 'icons.js', 'audio.js', 'haptics.js', 'music.js', 'particles.js', 'terrain.js', 'mossling.js', 'levels.js', 'daily.js', 'result-card.js', 'overlays.js', 'game.js', 'utils.js', 'ui.js']) {
     const file = path.join(__dirname, '..', 'js', f);
     vm.runInThisContext(fs.readFileSync(file, 'utf8'), { filename: file });
 }
@@ -1357,6 +1357,100 @@ test('deserializeLevel rejects a header that lies about its command count', () =
     try { r = deserializeLevel(code); } catch (e) { threw = true; }
     assert(!threw, 'truncated-command header must not throw');
     eq(r, null, 'a command count exceeding the buffer must be rejected');
+});
+
+// ==============================================================
+console.log('\n— Sprint: phone-first repeat-play —');
+// ==============================================================
+
+// A canvas recorder that captures fillRect calls with the active fillStyle, so
+// we can assert specific pixels were drawn without a real canvas.
+function recordingCtx() {
+    const calls = [];
+    let fillStyle = '';
+    const noop = () => {};
+    const ctx = {
+        save: noop, restore: noop, translate: noop, scale: noop, rotate: noop,
+        beginPath: noop, closePath: noop, moveTo: noop, lineTo: noop, arc: noop,
+        ellipse: noop, quadraticCurveTo: noop, fill: noop, stroke: noop,
+        strokeRect: noop, drawImage: noop, fillText: noop, clip: noop,
+        measureText: () => ({ width: 0 }),
+        createRadialGradient: () => ({ addColorStop: noop }),
+        createLinearGradient: () => ({ addColorStop: noop }),
+        fillRect(x, y, w, h) { calls.push({ x, y, w, h, fill: fillStyle }); },
+        set fillStyle(v) { fillStyle = v; }, get fillStyle() { return fillStyle; },
+        set strokeStyle(v) {}, set lineWidth(v) {}, set globalAlpha(v) {}, get globalAlpha() { return 1; },
+        set globalCompositeOperation(v) {}, set filter(v) {}, get filter() { return ''; },
+        set font(v) {}, set textAlign(v) {}, set shadowColor(v) {}, set shadowBlur(v) {},
+    };
+    return { ctx, calls };
+}
+
+// Item 4 — always-on permanent-skill pips.
+test('grounded Floater renders an always-on canopy pip', () => {
+    const m = new Mossling(100, 100, 0); m.state = STATE.WALK; m.hasFloater = true;
+    const rec = recordingCtx(); m.draw(rec.ctx);
+    assert(rec.calls.some(c => c.fill === '#34c0d4'), 'cyan floater pip drawn while grounded');
+});
+test('a non-floater draws no floater pip', () => {
+    const m = new Mossling(100, 100, 1); m.state = STATE.WALK;
+    const rec = recordingCtx(); m.draw(rec.ctx);
+    assert(!rec.calls.some(c => c.fill === '#34c0d4'), 'no cyan pip without the trait');
+});
+
+// Item 5 — reduced motion suppresses canvas juice, never the sim.
+test('reduced motion suppresses flash/shake/hit-stop but the sim still advances', () => {
+    const g = new Game(); g.loadLevel(0);
+    g.reduceMotion = true;
+    g.flash = 0; g.shake = 0; g.hitStop = 0;
+    g.juice({ flash: 0.6, shake: 9, hitStop: 6 });
+    eq(g.flash, 0, 'flash suppressed');
+    eq(g.shake, 0, 'shake suppressed');
+    eq(g.hitStop, 0, 'hit-stop suppressed');
+    const before = g.simStep; g.update(); eq(g.simStep, before + 1, 'update() still advances one step');
+});
+test('without reduced motion, juice still fires', () => {
+    const g = new Game(); g.loadLevel(0);
+    g.reduceMotion = false; g.flash = 0;
+    g.juice({ flash: 0.5 });
+    assert(g.flash > 0, 'flash applied when motion is allowed');
+});
+
+// Item 3 — haptics: opt-out, reduced-motion aware, never during replay.
+test('haptics fires when enabled and stays silent when off or reduced', () => {
+    const prev = navigator.vibrate; let calls = 0;
+    navigator.vibrate = () => { calls++; return true; };
+    haptics.setReducedMotion(false); haptics.setEnabled(true);
+    haptics.save(); assert(calls > 0, 'vibrates when enabled');
+    calls = 0; haptics.setEnabled(false); haptics.save(); eq(calls, 0, 'silent when disabled');
+    haptics.setEnabled(true); haptics.setReducedMotion(true); calls = 0; haptics.save();
+    eq(calls, 0, 'silent under reduced motion');
+    haptics.setReducedMotion(false);
+    navigator.vibrate = prev;
+});
+test('haptics never fires during deterministic replay catch-up', () => {
+    const prev = navigator.vibrate; let calls = 0;
+    navigator.vibrate = () => { calls++; };
+    haptics.setEnabled(true); haptics.setReducedMotion(false);
+    const g = new Game(); g.loadLevel(0);
+    g.replaying = true; g.onSave({ x: 0, y: 0 }); g.replaying = false;
+    eq(calls, 0, 'onSave during replay does not buzz');
+    navigator.vibrate = prev;
+});
+
+// Item 6 — first-encounter coaching data + seen-tracking.
+test('every campaign level grants its headline skill', () => {
+    for (let i = 0; i < LEVELS.length; i++) {
+        const hs = LEVELS[i].headlineSkill;
+        assert(hs != null && hs >= 0 && hs <= 7, `L${i + 1} headlineSkill in range`);
+        assert((LEVELS[i].inventory[hs] || 0) > 0, `L${i + 1} inventory includes its headline skill`);
+    }
+});
+test('starting a later campaign level marks it seen exactly once', () => {
+    storage.save('seen', {});
+    assert(!storage.isSeen(3), 'unseen before first play');
+    const g = new Game(); g.loadLevel(3);
+    assert(storage.isSeen(3), 'seen after onLevelStart');
 });
 
 // ------------------------------------------------------------------

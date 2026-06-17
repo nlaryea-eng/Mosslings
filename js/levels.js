@@ -18,6 +18,7 @@ const LEVELS = [
     {
         name: 'The First March', totalSpawn: 8, reqSaved: 4, time: 90, spawnRate: 55,
         par: { time: 55, skills: 3, saved: 8 },
+        headlineSkill: SKILLS.BUILD,
         theme: 'FOREST',
         tut: 'Mosslings march mindlessly! Use BUILDER [2] to bridge the gap. BLOCKER [1] holds the rest back.',
         inventory: { [SKILLS.BLOCK]: 2, [SKILLS.BUILD]: 10 },
@@ -30,6 +31,7 @@ const LEVELS = [
     {
         name: 'Going Down', totalSpawn: 12, reqSaved: 7, time: 150, spawnRate: 50,
         par: { time: 100, skills: 6, saved: 12 },
+        headlineSkill: SKILLS.DIG,
         theme: 'FOREST',
         tut: 'DIGGER [5] tunnels straight down. Only dig where a floor waits below!',
         inventory: { [SKILLS.DIG]: 8, [SKILLS.BLOCK]: 3, [SKILLS.BUILD]: 3, [SKILLS.FLOAT]: 2 },
@@ -44,6 +46,7 @@ const LEVELS = [
     {
         name: 'Sky High', totalSpawn: 10, reqSaved: 6, time: 110, spawnRate: 55,
         par: { time: 70, skills: 10, saved: 10 },
+        headlineSkill: SKILLS.FLOAT,
         theme: 'FOREST',
         tut: 'Fatal drop ahead. FLOATER [6] gives a Mossling an umbrella for life. Float them all down!',
         inventory: { [SKILLS.FLOAT]: 12, [SKILLS.BLOCK]: 2 },
@@ -56,6 +59,7 @@ const LEVELS = [
     {
         name: 'The Wall', totalSpawn: 12, reqSaved: 6, time: 180, spawnRate: 60,
         par: { time: 100, skills: 4, saved: 12 },
+        headlineSkill: SKILLS.CLIMB,
         theme: 'CAVE',
         tut: 'CLIMBER [7] scales any vertical face and keeps the skill forever. Send them up and over.',
         inventory: { [SKILLS.CLIMB]: 10, [SKILLS.BLOCK]: 2, [SKILLS.FLOAT]: 2 },
@@ -68,6 +72,7 @@ const LEVELS = [
     {
         name: 'Diagonal Dig', totalSpawn: 16, reqSaved: 9, time: 200, spawnRate: 50,
         par: { time: 110, skills: 5, saved: 16 },
+        headlineSkill: SKILLS.MINE,
         theme: 'CAVE',
         tut: 'MINER [4] digs a diagonal stairway. Cliff drops are fatal — tunnel down instead. Block the edge first!',
         inventory: { [SKILLS.MINE]: 5, [SKILLS.BLOCK]: 3, [SKILLS.FLOAT]: 3, [SKILLS.BASH]: 2 },
@@ -81,6 +86,7 @@ const LEVELS = [
     {
         name: 'Hard Rock', totalSpawn: 15, reqSaved: 8, time: 200, spawnRate: 55,
         par: { time: 110, skills: 6, saved: 15 },
+        headlineSkill: SKILLS.BUILD,
         theme: 'CAVE',
         tut: 'METAL is indestructible — no bashing or digging. Start FAR back and BUILD a ramp up and over the steel wall. Chain builders!',
         inventory: { [SKILLS.BUILD]: 14, [SKILLS.BLOCK]: 3, [SKILLS.FLOAT]: 2 },
@@ -93,6 +99,7 @@ const LEVELS = [
     {
         name: 'Lava Leap', totalSpawn: 18, reqSaved: 10, time: 260, spawnRate: 55,
         par: { time: 120, skills: 8, saved: 18 },
+        headlineSkill: SKILLS.BUILD,
         theme: 'VOLCANO',
         tut: 'Orange is LAVA — instant death. Start FAR back and BUILD a bridge up over the ridge and the lava moat to the far shore.',
         inventory: { [SKILLS.BUILD]: 12, [SKILLS.BASH]: 3, [SKILLS.BLOCK]: 3, [SKILLS.FLOAT]: 3, [SKILLS.EXPLODE]: 2 },
@@ -107,6 +114,7 @@ const LEVELS = [
     {
         name: 'Mossling Master', totalSpawn: 16, reqSaved: 10, time: 240, spawnRate: 45,
         par: { time: 160, skills: 24, saved: 16 },
+        headlineSkill: SKILLS.CLIMB,
         theme: 'VOLCANO',
         tut: 'Final ascent. Only ATHLETES pass: give each Mossling BOTH a CLIMBER [7] to scale the steel tower AND a FLOATER [6] to survive the drop beyond.',
         inventory: {
@@ -122,6 +130,7 @@ const LEVELS = [
     {
         name: 'One-Way Out', totalSpawn: 12, reqSaved: 6, time: 220, spawnRate: 60,
         par: { time: 150, skills: 6, saved: 12 },
+        headlineSkill: SKILLS.BASH,
         theme: 'CAVE',
         tut: 'TEAL GATES are one-way: walkers pass right but never return — pacing safely instead of marching off the cliff. BASH [3] the pillar to reach the exit.',
         inventory: { [SKILLS.BASH]: 4, [SKILLS.BLOCK]: 3, [SKILLS.BUILD]: 4, [SKILLS.FLOAT]: 2 },

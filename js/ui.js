@@ -20,6 +20,8 @@ const ui = {
         this.refreshMuteButton();
         this.applyCrt(this._crtOn());
         $('btn-crt').onclick = () => this.toggleCrt();
+        this.refreshHapticsButton();
+        $('btn-haptics').onclick = () => this.toggleHaptics();
 
         $('btn-gallery').onclick = () => this.openGallery();
         $('btn-gallery-back').onclick = () => { $('gallery-screen').classList.add('hidden'); this.backToMenu(); };
@@ -51,6 +53,7 @@ const ui = {
 
         $('btn-pause').onclick = () => game.togglePause();
         $('btn-restart').onclick = () => this.restartLevel();
+        $('btn-rewind').onclick = () => game.rewind(); // on-screen access to the deterministic 5s undo (phone-friendly)
         $('btn-ffwd').onclick = () => { game.ffwd = !game.ffwd; this.refreshButtons(game); };
         $('btn-nuke').onclick = () => game.nuke();
         $('btn-rate-up').onclick = () => game.adjustRate(1);
@@ -142,6 +145,7 @@ const ui = {
             setIconHtml(btn.querySelector('.icon'), SKILL_ICONS[s], SKILL_NAMES[s]);
         });
         setIconHtml(document.getElementById('btn-ffwd'), UI_ICONS.fastForward, 'Fast forward');
+        setIconHtml(document.getElementById('btn-rewind'), UI_ICONS.undo, 'Rewind 5 seconds');
         setIconHtml(document.getElementById('btn-restart'), UI_ICONS.reset, 'Restart level');
         setIconHtml(document.getElementById('btn-nuke'), UI_ICONS.hazard, 'Nuke');
         setIconHtml(document.getElementById('btn-rate-down'), UI_ICONS.minus, 'Slower spawns');
@@ -173,6 +177,24 @@ const ui = {
         const on = !this._crtOn();
         try { localStorage.setItem('mosslings.crt', on ? '1' : '0'); } catch (e) {}
         this.applyCrt(on);
+    },
+    // --- Haptics toggle (only surfaced on devices with a vibration motor) ---
+    refreshHapticsButton() {
+        const b = document.getElementById('btn-haptics');
+        if (!b) return;
+        const supported = typeof haptics !== 'undefined' && haptics.supported();
+        b.classList.toggle('hidden', !supported);
+        if (!supported) return;
+        const on = haptics.enabled();
+        b.innerText = 'Vibrate: ' + (on ? 'On' : 'Off');
+        if (b.setAttribute) b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    },
+    toggleHaptics() {
+        if (typeof haptics === 'undefined') return;
+        const on = !haptics.enabled();
+        haptics.setEnabled(on);
+        if (on) haptics.tap(); // confirm the new setting with a buzz
+        this.refreshHapticsButton();
     },
     armAudioForPlay() {
         audio.init();
@@ -564,7 +586,18 @@ const ui = {
         if (game.onboarding) {
             game.selectSkill(SKILLS.BUILD);
             this.setTutorial('Mosslings march on their own. We picked BUILDER for you — watch for the glowing one.');
+        } else if (game.runMode === 'campaign' && game.levelIdx >= 1 && !storage.isSeen(game.levelIdx)) {
+            // First encounter with a later campaign level: pulse its headline
+            // skill a few times so the new mechanic draws the eye (the tutorial
+            // card, shown above, names it). UI/storage only — no sim coupling.
+            const hs = game.level.headlineSkill;
+            if (hs != null && (game.inventory[hs] || 0) > 0) {
+                let n = 0;
+                const pulse = () => { this.updateToolbar(game, hs); if (++n < 3) setTimeout(pulse, 520); };
+                pulse();
+            }
         }
+        if (game.runMode === 'campaign' && game.levelIdx >= 1) storage.markSeen(game.levelIdx);
     },
     /** Show the coaching card with explicit text (onboarding + guidance). */
     setTutorial(text) {
@@ -615,7 +648,10 @@ const ui = {
         const game = this.game;
         const o = document.getElementById('message-overlay');
         o.classList.remove('hidden');
-        o.classList.add('has-result-card');
+        // The big shareable result card is a celebration — show it on a win only.
+        // A loss leads with the compact stats + a one-tap Retry so the next
+        // attempt is immediate, not gated behind a "FAILED RUN" brag card.
+        o.classList.toggle('has-result-card', win);
         if (typeof music !== 'undefined' && music) music.duck(true);
         document.getElementById('msg-title').innerText = title;
         document.getElementById('msg-title').className = win ? 'win' : 'fail';
@@ -659,7 +695,9 @@ const ui = {
         }
 
         this.lastResult = result;
-        ResultView.drawResultCardPreview(document.getElementById('result-card-preview'), result);
+        const preview = document.getElementById('result-card-preview');
+        if (win) ResultView.drawResultCardPreview(preview, result);
+        else if (preview && preview.classList) preview.classList.add('hidden');
 
         // "Retry for medals" appears on a win that didn't sweep all three.
         const medals = result.medals;
@@ -667,9 +705,28 @@ const ui = {
         const showRetry = win && game.level.par && !allMedals && game.state !== 'VICTORY';
         document.getElementById('msg-btn-retry').classList.toggle('hidden', !showRetry);
 
-        document.getElementById('msg-btn-primary').innerText =
-            game.state === 'VICTORY' ? 'The End' : (win ? 'Next Level' : 'Retry');
+        // The shareable PNG brag card is a win-only flourish; demote it on a loss.
+        document.getElementById('msg-btn-card').classList.toggle('hidden', !win);
+
+        // Forward pull: on a campaign win, name the reward you're heading to.
+        const primary = document.getElementById('msg-btn-primary');
+        const hasNext = win && game.runMode === 'campaign' && game.levelIdx >= 0 && game.levelIdx + 1 < LEVELS.length;
+        let label;
+        if (game.state === 'VICTORY') label = 'The End';
+        else if (!win) label = 'Retry';
+        else if (game.runMode === 'daily') label = 'Done';
+        else if (hasNext) {
+            const nm = LEVELS[game.levelIdx + 1].name;
+            label = `Next ▸ ${game.levelIdx + 2}. ${nm.length > 16 ? nm.slice(0, 15) + '…' : nm}`;
+        } else label = 'Next Level';
+        primary.innerText = label;
+        primary.classList.toggle('primary-next', hasNext);
+        // Autofocus the most likely next action (Next on a win, Retry on a loss)
+        // so a keyboard/controller press continues without hunting.
+        if (typeof primary.focus === 'function') { try { primary.focus(); } catch (e) {} }
+
         if (win) audio.sfxWin(); else audio.sfxLose();
+        if (typeof haptics !== 'undefined') { if (win) haptics.win(); else haptics.fail(); }
 
         // Fire a stamp sting as each earned medal slams in (matches the CSS
         // .msg-medal-slot stagger: 0.30s / 0.55s / 0.80s).
