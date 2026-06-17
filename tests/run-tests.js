@@ -871,6 +871,73 @@ test('level-select medal strip has a class selector and miniature SVG sizing', (
 });
 
 // ==============================================================
+
+console.log('\n— Readability assist overlay —');
+test('dangerProbe flags a fatal cliff for ordinary walkers', () => {
+    const g = new Game();
+    g.terrain.clear();
+    g.terrain.drawRect(0, 300, 120, 20, T_DIRT);
+    const m = new Mossling(92, 299, 1);
+    m.state = STATE.WALK;
+    m.dir = 1;
+    g.mosslings = [m];
+    const h = g.dangerProbe(m);
+    assert(h && h.kind === 'cliff', `expected cliff hint, got ${h && h.kind}`);
+});
+test('dangerProbe suppresses fatal-cliff warnings for floaters', () => {
+    const g = new Game();
+    g.terrain.clear();
+    g.terrain.drawRect(0, 300, 120, 20, T_DIRT);
+    const m = new Mossling(92, 299, 1);
+    m.state = STATE.WALK;
+    m.dir = 1; m.hasFloater = true;
+    const h = g.dangerProbe(m);
+    assert(!h || h.kind !== 'cliff', `floater should not get fatal cliff hint, got ${h && h.kind}`);
+});
+test('dangerProbe flags lava before contact', () => {
+    const g = new Game();
+    g.terrain.clear();
+    g.terrain.drawRect(0, 300, 220, 20, T_DIRT);
+    g.terrain.drawRect(128, 292, 24, 8, T_HAZARD);
+    const m = new Mossling(100, 299, 1);
+    m.state = STATE.WALK;
+    m.dir = 1;
+    const h = g.dangerProbe(m);
+    assert(h && h.kind === 'lava', `expected lava hint, got ${h && h.kind}`);
+});
+test('drawDangerHints places warning at the probed danger point', () => {
+    const g = new Game();
+    g.state = 'PLAY';
+    g.tick = 20;
+    g.terrain.clear();
+    g.terrain.drawRect(0, 300, 120, 20, T_DIRT);
+    const m = new Mossling(92, 299, 1);
+    m.state = STATE.WALK;
+    m.dir = 1;
+    g.mosslings = [m];
+    const h = g.dangerProbe(m);
+    const arcs = [];
+    const ctx = makeCtx();
+    ctx.arc = (x, y, r) => arcs.push({ x, y, r });
+    g.drawDangerHints(ctx);
+    assert(arcs.some(a => Math.abs(a.x - h.x) < 0.1 && Math.abs(a.y - h.y) < 0.1),
+        `warning marker should use danger point ${h.x},${h.y}, got ${JSON.stringify(arcs)}`);
+});
+test('drawDangerHints renders without mutating simulation state', () => {
+    const g = new Game();
+    g.loadLevel(0, false, true);
+    g.state = 'PLAY';
+    g.terrain.drawRect(0, 300, 120, 20, T_DIRT);
+    const m = new Mossling(92, 299, 1);
+    m.state = STATE.WALK;
+    m.dir = 1;
+    g.mosslings = [m];
+    const before = `${m.x},${m.y},${m.state},${g.simStep},${g.particles.list.length}`;
+    g.drawDangerHints(makeCtx());
+    const after = `${m.x},${m.y},${m.state},${g.simStep},${g.particles.list.length}`;
+    eq(after, before, 'render assist must not touch sim state');
+});
+
 console.log('\n— Music & game-feel —');
 // ==============================================================
 function makeAudioParam(v = 0) {

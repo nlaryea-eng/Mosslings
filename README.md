@@ -88,7 +88,7 @@ Design principles:
 node tests/run-tests.js
 ```
 
-80 tests, no test framework needed. The suite loads the real game scripts
+88 tests, no test framework needed. The suite loads the real game scripts
 into Node with stubbed canvas/DOM and covers:
 
 1. **Terrain semantics** — destructibility rules, world-edge walls, one-way
@@ -110,7 +110,10 @@ into Node with stubbed canvas/DOM and covers:
    spins up its scheduler (no wasted CPU into a silent bus), and unmuting
    restarts it cleanly; advanced HUD controls are gated for the first two
    campaign levels
-8. **Shared-level import robustness** — `deserializeLevel` is fuzzed with
+8. **Readability assist overlay** — danger probes flag fatal cliffs/lava,
+   suppress false alarms for floaters, and prove the rendering helper does not
+   mutate deterministic sim state
+9. **Shared-level import robustness** — `deserializeLevel` is fuzzed with
    thousands of random/truncated/oversized payloads and must always return
    `null` or a well-formed level — never throw
 
@@ -144,6 +147,12 @@ determinism invariant (presentation lives outside `update()`):
 - **Game feel** — full-screen impact flash + freeze-frame hit-stop on
   explosions, landing dust, contact shadows, an exit that swells on each
   rescue, a save-streak chime, and animated win/lose overlays.
+- **Readability assist** — walkers now get subtle render-only danger pips before
+  lava, fatal cliffs, and hard turns. The overlay teaches the puzzle state
+  without changing simulation, pathing, or replay determinism.
+- **CRT bloom polish** — the playfield has a lightweight scanline/vignette
+  pass that makes the procedural canvas art feel more cohesive while keeping
+  the collision mask untouched.
 - **Touch & responsive** — Pointer-Events input with finger-friendly targeting;
   HUD/toolbar reflow for phones; the board can never overflow the viewport.
 - **Onboarding** — dismissible/auto-hiding tutorial card, portrait rotate hint.
