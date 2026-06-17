@@ -863,34 +863,104 @@ class Game {
             ctx.strokeRect(this.mouseX - 11, this.mouseY - 11, 22, 22);
         }
     }
+    drawIntentLabel(ctx, text, x, y) {
+        ctx.font = 'bold 10px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const w = ctx.measureText(text).width;
+        ctx.fillStyle = 'rgba(0,0,0,0.86)';
+        ctx.fillRect(x - w / 2 - 4, y - 7, w + 8, 13);
+        ctx.fillStyle = '#d5f59a';
+        ctx.fillText(text, x, y - 1);
+    }
     /**
-     * Semi-transparent preview of what the selected skill will carve or build,
-     * drawn relative to the hovered mossling's position and facing. Mirrors the
-     * real strides in Mossling.update* so the ghost matches the outcome.
+     * Semi-transparent preview of what the selected skill will do, drawn
+     * relative to the hovered mossling's position and facing. It is intentionally
+     * render-only: no terrain, mossling, inventory, or action-log state changes.
      */
     drawSkillGhost(ctx, m) {
         const s = this.selectedSkill, d = m.dir;
         if (s === null) return;
         ctx.save();
-        ctx.globalAlpha = 0.32;
-        ctx.fillStyle = '#ffeb3b';
-        ctx.strokeStyle = 'rgba(255,235,59,0.8)';
+        ctx.globalAlpha = 0.56;
         ctx.lineWidth = 1;
-        if (s === SKILLS.BUILD) {            // rising 6-brick staircase
+        if (s === SKILLS.BLOCK) {            // stop post + turnback wall
+            const x = m.x + d * 9;
+            ctx.fillStyle = '#ef5350';
+            ctx.strokeStyle = 'rgba(239,83,80,0.9)';
+            ctx.fillRect(x - 3, m.y - 21, 6, 24);
+            ctx.fillRect(x - 9, m.y - 18, 18, 4);
+            ctx.strokeRect(x - 7.5, m.y - 20.5, 15, 22);
+            ctx.globalAlpha = 0.85;
+            this.drawIntentLabel(ctx, 'HOLD', x, m.y - 27);
+        } else if (s === SKILLS.BUILD) {     // rising staircase, roughly one builder
+            ctx.fillStyle = '#ffeb3b';
+            ctx.strokeStyle = 'rgba(255,235,59,0.85)';
             let bx = m.x, by = m.y - 1;
-            for (let i = 0; i < 6; i++) { ctx.fillRect(d === 1 ? bx : bx - 8, by, 8, 2); bx += d * 5; by -= 1; }
+            for (let i = 0; i < PHYS.BUILD_BRICKS; i++) { ctx.fillRect(d === 1 ? bx : bx - 8, by, 8, 2); bx += d * 5; by -= 1; }
+            ctx.globalAlpha = 0.75;
+            ctx.beginPath(); ctx.moveTo(m.x, m.y - 4); ctx.lineTo(bx, by - 2); ctx.stroke();
+            this.drawIntentLabel(ctx, 'BRIDGE', m.x + d * 30, m.y - 22);
         } else if (s === SKILLS.BASH) {      // horizontal tunnel ahead
+            ctx.fillStyle = '#ff8a3d';
+            ctx.strokeStyle = 'rgba(255,138,61,0.9)';
             const x0 = d === 1 ? m.x + 1 : m.x - 40;
             ctx.fillRect(x0, m.y - 12, 40, 12); ctx.strokeRect(x0 + 0.5, m.y - 11.5, 39, 11);
+            ctx.globalAlpha = 0.85;
+            ctx.fillRect(m.x + d * 34, m.y - 8, 6, 4);
+            this.drawIntentLabel(ctx, 'TUNNEL', m.x + d * 24, m.y - 20);
         } else if (s === SKILLS.MINE) {      // diagonal shaft, down-forward
+            ctx.fillStyle = '#4fa3d9';
+            ctx.strokeStyle = 'rgba(79,163,217,0.9)';
             let mx = m.x, my = m.y;
             for (let i = 0; i < 7; i++) { ctx.fillRect(d === 1 ? mx + 2 : mx - 10, my - 10, 9, 13); mx += d * 2; my += 2; }
+            ctx.globalAlpha = 0.85;
+            this.drawIntentLabel(ctx, 'SLOPE', m.x + d * 16, m.y + 17);
         } else if (s === SKILLS.DIG) {       // vertical shaft below
+            ctx.fillStyle = '#b0bec5';
+            ctx.strokeStyle = 'rgba(176,190,197,0.9)';
             ctx.fillRect(m.x - 6, m.y - 1, 13, 34); ctx.strokeRect(m.x - 5.5, m.y - 0.5, 12, 33);
+            ctx.globalAlpha = 0.85;
+            this.drawIntentLabel(ctx, 'DOWN', m.x, m.y + 45);
+        } else if (s === SKILLS.FLOAT) {     // permanent safe-fall umbrella
+            ctx.fillStyle = '#34c0d4';
+            ctx.strokeStyle = 'rgba(52,192,212,0.95)';
+            ctx.beginPath();
+            ctx.moveTo(m.x - 14, m.y - 24);
+            ctx.lineTo(m.x - 7, m.y - 34);
+            ctx.lineTo(m.x, m.y - 38);
+            ctx.lineTo(m.x + 7, m.y - 34);
+            ctx.lineTo(m.x + 14, m.y - 24);
+            ctx.closePath();
+            ctx.fill(); ctx.stroke();
+            ctx.fillRect(m.x - 1, m.y - 24, 2, 24);
+            ctx.globalAlpha = 0.42;
+            for (let i = 0; i < 3; i++) ctx.fillRect(m.x - 14 + i * 12, m.y + 9 + i * 10, 6, 2);
+            ctx.globalAlpha = 0.85;
+            this.drawIntentLabel(ctx, 'SAFE FALL', m.x, m.y - 43);
+        } else if (s === SKILLS.CLIMB) {     // permanent wall-scaling arrow
+            ctx.fillStyle = '#9ccc65';
+            ctx.strokeStyle = 'rgba(156,204,101,0.95)';
+            const x = m.x + d * 12;
+            ctx.fillRect(x - 2, m.y - 35, 4, 34);
+            ctx.fillRect(x - 8, m.y - 30, 16, 3);
+            ctx.fillRect(x - 8, m.y - 20, 16, 3);
+            ctx.fillRect(x - 8, m.y - 10, 16, 3);
+            ctx.beginPath();
+            ctx.moveTo(x, m.y - 45);
+            ctx.lineTo(x - 8, m.y - 33);
+            ctx.lineTo(x + 8, m.y - 33);
+            ctx.closePath();
+            ctx.fill(); ctx.stroke();
+            ctx.globalAlpha = 0.85;
+            this.drawIntentLabel(ctx, 'CLIMB', x, m.y - 51);
         } else if (s === SKILLS.EXPLODE) {   // blast radius
+            ctx.fillStyle = '#ff7043';
             ctx.beginPath(); ctx.arc(m.x, m.y - 5, PHYS.EXPLODE_RADIUS, 0, Math.PI * 2);
             ctx.globalAlpha = 0.16; ctx.fillStyle = '#ff7043'; ctx.fill();
             ctx.globalAlpha = 0.6; ctx.strokeStyle = 'rgba(255,112,67,0.9)'; ctx.stroke();
+            ctx.globalAlpha = 0.85;
+            this.drawIntentLabel(ctx, 'BOOM', m.x, m.y - PHYS.EXPLODE_RADIUS - 9);
         }
         ctx.restore();
     }

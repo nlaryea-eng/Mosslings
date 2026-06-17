@@ -1,6 +1,6 @@
 @font-face {
     font-family: 'Moss Pixel';
-    src: url('assets/fonts/moss-pixel.woff2?v=20260617-harden') format('woff2');
+    src: url('assets/fonts/moss-pixel.woff2?v=20260617-p1') format('woff2');
     font-weight: 400;
     font-style: normal;
     font-display: swap;
@@ -424,6 +424,15 @@ button:focus-visible {
     filter: none;
 }
 .lvl-medals .pixel-icon { width: 10px; height: 10px; }
+.lvl-goal {
+    height: 12px; max-width: 52px;
+    display: flex; align-items: center; justify-content: center;
+    padding: 0 2px; border-radius: 4px;
+    font-size: 6px; line-height: 8px; color: var(--gold);
+    background: rgba(255, 235, 59, 0.08);
+    border: 1px solid rgba(255, 235, 59, 0.22);
+    white-space: nowrap; overflow: hidden;
+}
 .lvl-lock { color: #9aac94; height: 12px; display: flex; align-items: center; justify-content: center; }
 .lvl-lock .pixel-icon { width: 11px; height: 11px; }
 .lvl-btn.selected {
@@ -433,6 +442,11 @@ button:focus-visible {
 }
 .lvl-btn.selected::after { background: rgba(6, 18, 8, 0.28); border-top-color: rgba(12, 19, 12, 0.35); }
 .lvl-btn.selected .lvl-best { color: #3c3000; }
+.lvl-btn.selected .lvl-goal {
+    color: #2d2600;
+    background: rgba(255, 235, 59, 0.30);
+    border-color: rgba(20, 31, 14, 0.32);
+}
 .lvl-btn.selected .lvl-lock { color: #203315; }
 .lvl-btn.is-locked { opacity: 0.45; cursor: not-allowed; }
 .lvl-btn.is-locked:hover { background: linear-gradient(180deg, rgba(22, 31, 24, 0.96), rgba(13, 19, 15, 0.96)); border-color: #28342a; }
@@ -726,6 +740,7 @@ button:focus-visible {
     .lvl-btn::after { height: 17px; }
     .lvl-medals .pixel-icon,
     .lvl-medals .medal { width: 9px; height: 9px; }
+    .lvl-goal { max-width: 42px; font-size: 5px; padding: 0 1px; }
     .lvl-lock .pixel-icon { width: 10px; height: 10px; }
     .tut-dismiss { content: 'tap to hide'; } /* (key hint is desktop-only context) */
 }

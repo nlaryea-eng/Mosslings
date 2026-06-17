@@ -1524,6 +1524,59 @@ test('failHint is render-only: the sim ignores it, and it self-clears when stale
     g.drawFailHint(rec.ctx); eq(g.failHint, null, 'an expired hint self-clears');
 });
 
+// Item P1-1 — skill-intent previews (render-only, every skill represented).
+test('skill intent preview draws a cue for every skill without mutating sim state', () => {
+    const g = new Game(); g.loadLevel(0);
+    const m = new Mossling(180, 220, 99); m.state = STATE.WALK; m.dir = 1;
+    const before = () => JSON.stringify({
+        simStep: g.simStep,
+        actionLog: g.actionLog.length,
+        inventory: g.inventory,
+        mossling: { state: m.state, x: m.x, y: m.y, dir: m.dir, floater: m.hasFloater, climber: m.hasClimber },
+    });
+    for (let s = 0; s < SKILL_NAMES.length; s++) {
+        g.selectedSkill = s;
+        const pre = before();
+        const rec = recordingCtx();
+        g.drawSkillGhost(rec.ctx, m);
+        assert(rec.calls.length > 0, `${SKILL_NAMES[s]} preview drew nothing`);
+        eq(before(), pre, `${SKILL_NAMES[s]} preview mutated game or mossling state`);
+    }
+});
+test('skill intent preview uses distinct permanent-skill cues for Floater and Climber', () => {
+    const g = new Game(); g.loadLevel(0);
+    const m = new Mossling(180, 220, 100); m.state = STATE.WALK; m.dir = 1;
+    g.selectedSkill = SKILLS.FLOAT;
+    let rec = recordingCtx(); g.drawSkillGhost(rec.ctx, m);
+    assert(rec.calls.some(c => c.fill === '#34c0d4'), 'Floater preview needs cyan umbrella/fall cue');
+    g.selectedSkill = SKILLS.CLIMB;
+    rec = recordingCtx(); g.drawSkillGhost(rec.ctx, m);
+    assert(rec.calls.some(c => c.fill === '#9ccc65'), 'Climber preview needs green ladder/arrow cue');
+});
+test('Builder intent preview shows the full builder span, not only a vague cursor mark', () => {
+    const g = new Game(); g.loadLevel(0);
+    const m = new Mossling(180, 220, 101); m.state = STATE.WALK; m.dir = 1;
+    g.selectedSkill = SKILLS.BUILD;
+    const rec = recordingCtx(); g.drawSkillGhost(rec.ctx, m);
+    const bricks = rec.calls.filter(c => c.fill === '#ffeb3b' && c.w === 8 && c.h === 2);
+    assert(bricks.length >= PHYS.BUILD_BRICKS, 'Builder preview should show a full staircase footprint');
+});
+
+// Item P1-2 — one missing medal target on replayable level cards.
+test('nextMedalGoal exposes the first missing mastery target in priority order', () => {
+    let goal = ui.nextMedalGoal(LEVELS[0], { saved: 0, skills: 0, time: 0 });
+    eq(goal.key, 'saved');
+    assert(goal.short.includes('SAVE'), 'rescue target short label');
+    assert(goal.label.includes('save all'), 'rescue target full label');
+    goal = ui.nextMedalGoal(LEVELS[0], { saved: 1, skills: 0, time: 0 });
+    eq(goal.key, 'skills');
+    eq(goal.short, 'SK<=3');
+    goal = ui.nextMedalGoal(LEVELS[0], { saved: 1, skills: 1, time: 0 });
+    eq(goal.key, 'time');
+    eq(goal.short, 'T<0:55');
+    eq(ui.nextMedalGoal(LEVELS[0], { saved: 1, skills: 1, time: 1 }), null, 'all medals cleared');
+});
+
 // ------------------------------------------------------------------
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

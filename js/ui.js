@@ -348,6 +348,35 @@ const ui = {
         else g.loadLevel(g.levelIdx);
     },
 
+    nextMedalGoal(level, medals) {
+        if (!level || !level.par) return null;
+        const m = medals || {};
+        const p = level.par;
+        if (!m.saved) {
+            const all = p.saved >= level.totalSpawn;
+            return {
+                key: 'saved',
+                short: `SAVE ${p.saved}`,
+                label: all ? `Next target: save all ${p.saved}` : `Next target: save ${p.saved}`,
+            };
+        }
+        if (!m.skills) {
+            return {
+                key: 'skills',
+                short: `SK<=${p.skills}`,
+                label: `Next target: use ${p.skills} or fewer skills`,
+            };
+        }
+        if (!m.time) {
+            return {
+                key: 'time',
+                short: `T<${ResultView.fmtTime(p.time)}`,
+                label: `Next target: beat ${ResultView.fmtTime(p.time)}`,
+            };
+        }
+        return null;
+    },
+
     buildMenu() {
         const c = document.getElementById('level-select-container');
         c.innerHTML = '';
@@ -363,6 +392,7 @@ const ui = {
             const locked = i > unlocked;
             const best = storage.getBest(i);
             const medals = storage.getMedals(i);
+            const goal = !locked && best !== null ? this.nextMedalGoal(LEVELS[i], medals) : null;
             const medalBits = [];
             const medalNames = [];
             if (!locked && medals.saved) {
@@ -382,6 +412,7 @@ const ui = {
                 i === this.game.levelIdx ? 'selected' : '',
                 locked ? 'is-locked' : '',
                 !locked && best !== null ? 'has-best' : '',
+                goal ? 'has-goal' : '',
                 medalBits.length ? 'has-medals' : ''
             ].filter(Boolean).join(' ');
             if (b.setAttribute) b.setAttribute('aria-disabled', locked ? 'true' : 'false');
@@ -391,13 +422,16 @@ const ui = {
                 `<span class="lvl-best${locked || best === null ? ' empty' : ''}">${!locked && best !== null ? `${best}%` : ''}</span>` +
                 (locked
                     ? `<span class="lvl-lock">${UI_ICONS.lock}</span>`
-                    : `<span class="lvl-medals">${medalBits.join('')}</span>`);
+                    : (goal
+                        ? `<span class="lvl-goal" title="${goal.label}">${goal.short}</span>`
+                        : `<span class="lvl-medals">${medalBits.join('')}</span>`));
             b.title = i <= unlocked ? LEVELS[i].name : 'Locked';
             const progress = locked
                 ? 'Locked'
                 : [
                     best !== null ? `best ${best}% rescued` : 'not yet cleared',
-                    medalNames.length ? `earned ${medalNames.join(', ')}` : 'no medals earned'
+                    medalNames.length ? `earned ${medalNames.join(', ')}` : 'no medals earned',
+                    goal ? goal.label.toLowerCase() : 'all medal targets cleared'
                 ].join(', ');
             const selected = i === this.game.levelIdx ? ', selected' : '';
             const aria = `Level ${i + 1}: ${LEVELS[i].name}, ${progress}${selected}`;

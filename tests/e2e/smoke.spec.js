@@ -65,6 +65,16 @@ test('level-select cards do not overflow their borders', async ({ page }) => {
     }
 });
 
+test('cleared level cards surface one missing medal target', async ({ page }) => {
+    await page.addInitScript(seedProgress);
+    await page.goto('/');
+    const goal = page.locator('#level-select-container .lvl-btn.has-goal .lvl-goal').first();
+    await expect(goal).toBeVisible();
+    await expect(goal).toHaveText(/^(SAVE \d+|SK<=\d+|T<\d+:\d{2})$/);
+    const aria = await page.locator('#level-select-container .lvl-btn.has-goal').first().getAttribute('aria-label');
+    expect(aria).toContain('next target:');
+});
+
 test('starting a level shows the board and the full 8-skill toolbar', async ({ page }) => {
     await page.addInitScript(seedProgress);
     await page.goto('/');
