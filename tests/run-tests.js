@@ -62,7 +62,7 @@ global.localStorage = (() => {
 // Delete existing global.ui before loading ui.js to avoid collisions
 delete global.ui;
 
-for (const f of ['constants.js', 'icons.js', 'audio.js', 'music.js', 'particles.js', 'terrain.js', 'mossling.js', 'levels.js', 'game.js', 'utils.js', 'ui.js']) {
+for (const f of ['constants.js', 'icons.js', 'audio.js', 'music.js', 'particles.js', 'terrain.js', 'mossling.js', 'levels.js', 'overlays.js', 'game.js', 'utils.js', 'ui.js']) {
     const file = path.join(__dirname, '..', 'js', f);
     vm.runInThisContext(fs.readFileSync(file, 'utf8'), { filename: file });
 }
@@ -936,6 +936,45 @@ test('drawDangerHints renders without mutating simulation state', () => {
     g.drawDangerHints(makeCtx());
     const after = `${m.x},${m.y},${m.state},${g.simStep},${g.particles.list.length}`;
     eq(after, before, 'render assist must not touch sim state');
+});
+test('a full draw() pass (overlays included) never perturbs the deterministic sim', () => {
+    // Guard for the whole render path, not just the danger helper: one run only
+    // updates; the other renders a full frame between every sim step. The
+    // mosslings must end in byte-identical state — any sim coupling in draw()
+    // (danger overlay, lava embers, spores, cursor, juice) would diverge them.
+    const a = new Game(); a.loadLevel(0);
+    const b = new Game(); b.loadLevel(0);
+    for (let i = 0; i < 220; i++) {
+        a.update();
+        b.update();
+        b.tick++;        // advance the render clock so the throttled overlay runs
+        b.draw();        // full frame: overlays, glow, spores, cursor
+    }
+    const sig = (g) => g.mosslings.map(m => `${m.id}:${m.x},${m.y},${m.state},${m.dir}`).join('|');
+    eq(b.simStep, a.simStep, 'draw() advanced simStep');
+    eq(sig(b), sig(a), 'mossling sim state diverged when a full frame rendered each step');
+});
+test('storage survives a throwing localStorage (quota / private mode)', () => {
+    const real = global.localStorage;
+    global.localStorage = {
+        getItem() { throw new Error('blocked'); },
+        setItem() { throw new Error('quota exceeded'); },
+        removeItem() { throw new Error('blocked'); },
+    };
+    try {
+        const s = new StorageManager();
+        let threw = false;
+        try {
+            s.save('best', { 0: 50 });
+            s.setUnlocked(3);
+            s.setMedals(0, { saved: 1, skills: 1, time: 1 });
+            eq(s.getUnlocked(), 0, 'read failure falls back to the default');
+            eq(s.getBest(0), null, 'best read failure returns null');
+        } catch (e) { threw = true; }
+        assert(!threw, 'StorageManager must swallow localStorage exceptions, not crash the game');
+    } finally {
+        global.localStorage = real;
+    }
 });
 
 console.log('\n— Music & game-feel —');

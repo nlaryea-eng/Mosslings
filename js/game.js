@@ -593,76 +593,12 @@ class Game {
         ctx.globalAlpha = 1;
     }
 
-    /**
-     * Render-only danger readability. Lemmings-likes are fun when the player can
-     * read the next disaster before it happens; this lightweight probe flags
-     * walkers that are about to hit lava, a fatal cliff, or a hard turn. It never
-     * mutates mosslings or terrain, so deterministic replay remains untouched.
-     */
-    dangerProbe(m) {
-        if (!m || !m.alive() || (m.state !== STATE.WALK && m.state !== STATE.SHRUG)) return null;
-        const d = m.dir || 1;
-        const footY = Math.floor(m.y + 1);
-        const isFloor = (t) => t === T_DIRT || t === T_METAL || t === T_BRIDGE;
-        const isWall = (t) => t === T_DIRT || t === T_METAL || t === T_BRIDGE || (t === T_ONEWAY_R && d < 0) || (t === T_ONEWAY_L && d > 0);
-        for (let ahead = 6; ahead <= 38; ahead += 4) {
-            const x = Math.floor(m.x + d * ahead);
-            const body = this.terrain.get(x, Math.floor(m.y - 5));
-            const toe = this.terrain.get(x, footY);
-            if (toe === T_HAZARD || body === T_HAZARD) return { kind: 'lava', x, y: m.y - 20, severity: 1 };
-            if (isWall(body)) return { kind: 'wall', x, y: m.y - 24, severity: 0.45 };
-            if (!isFloor(this.terrain.get(x, footY))) {
-                let drop = 0;
-                while (drop <= PHYS.FATAL_FALL + 36 && !isFloor(this.terrain.get(x, footY + drop))) drop++;
-                if (drop > PHYS.FATAL_FALL && !m.hasFloater) return { kind: 'cliff', x, y: m.y - 24, severity: 1 };
-                if (drop > 52 && !m.hasFloater) return { kind: 'drop', x, y: m.y - 24, severity: 0.55 };
-            }
-        }
-        return null;
-    }
-    drawDangerHints(ctx) {
-        if (this.state !== 'PLAY' && this.state !== 'PAUSE') return;
-        if (!this.mosslings.length) return;
-        const hints = [];
-        for (const m of this.mosslings) {
-            const h = this.dangerProbe(m);
-            if (h) hints.push({ m, ...h });
-            if (hints.length >= 8) break; // keep the overlay helpful, not noisy
-        }
-        if (!hints.length) return;
-        const t = this.tick * 0.13;
-        ctx.save();
-        ctx.font = 'bold 11px monospace';
-        ctx.textAlign = 'center';
-        for (const h of hints) {
-            const pulse = 0.72 + 0.22 * Math.sin(t + h.m.id * 0.7);
-            const floor = h.kind === 'wall' ? 0.38 : 0.58;
-            const alpha = Math.max(floor, Math.min(0.95, pulse * h.severity));
-            ctx.globalAlpha = alpha;
-            const x = h.x, y = h.y;
-            ctx.fillStyle = h.kind === 'wall' ? '#80deea' : '#ffeb3b';
-            ctx.strokeStyle = h.kind === 'wall' ? 'rgba(128,222,234,0.8)' : 'rgba(255,112,67,0.9)';
-            ctx.lineWidth = 1.5;
-            ctx.shadowColor = h.kind === 'wall' ? 'rgba(128,222,234,0.65)' : 'rgba(255,235,59,0.65)';
-            ctx.shadowBlur = 5;
-            ctx.beginPath();
-            ctx.arc(x, y, 9 + Math.sin(t) * 1.5, 0, Math.PI * 2);
-            ctx.stroke();
-            ctx.shadowBlur = 0;
-            if (h.kind === 'wall') {
-                ctx.fillRect(x - 5, y - 4, 10, 2);
-                ctx.fillRect(x - 5, y + 1, 10, 2);
-            } else if (h.kind === 'lava') {
-                ctx.beginPath();
-                ctx.moveTo(x, y - 6); ctx.lineTo(x - 6, y + 5); ctx.lineTo(x + 6, y + 5); ctx.closePath();
-                ctx.fill();
-                ctx.fillStyle = '#ff7043'; ctx.fillRect(x - 2, y - 1, 4, 4);
-            } else {
-                ctx.fillText('!', x, y + 4);
-            }
-        }
-        ctx.restore();
-    }
+    // Render-only danger readability lives in js/overlays.js; these thin wrappers
+    // keep the call sites (and tests) on the Game object while the implementation
+    // sits in its own module. They read terrain/mosslings and draw only — no sim
+    // state is touched, so determinism/replay are untouched.
+    dangerProbe(m) { return probeDangerFor(this, m); }
+    drawDangerHints(ctx) { return drawDangerOverlay(this, ctx); }
     /** The mossling the onboarding flow should point at: a rightward walker in
      *  the build-here window just before Level 1's gap (~x450). */
     onboardTarget() {

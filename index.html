@@ -9,14 +9,16 @@
     <meta property="og:type" content="website">
     <meta property="og:title" content="Mosslings — a tiny moss-folk puzzle">
     <meta property="og:description" content="Guide mindless moss creatures home with builders, bashers, floaters and more. Can you save the whole colony?">
-    <!-- Absolute URL so social scrapers can fetch the card. (Some scrapers
-         prefer raster over SVG; swap for a PNG export if unfurls misbehave.) -->
-    <meta property="og:image" content="https://nlaryea-eng.github.io/Mosslings/assets/og-card.svg">
+    <!-- Raster 1200x630 card (rendered from assets/og-card.svg via
+         tools/render-og.js) — the format social scrapers reliably unfurl. -->
+    <meta property="og:image" content="https://nlaryea-eng.github.io/Mosslings/assets/og-card.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Mosslings — a tiny moss-folk puzzle">
     <meta name="twitter:description" content="Guide mindless moss creatures home. Can you save the whole colony?">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect x='4' y='5' width='8' height='9' rx='2' fill='%237cb342'/><rect x='6' y='3' width='2' height='3' fill='%232e7d32'/><rect x='9' y='2' width='2' height='4' fill='%232e7d32'/><rect x='6' y='8' width='2' height='2' fill='white'/><rect x='10' y='8' width='2' height='2' fill='white'/></svg>">
-    <link rel="stylesheet" href="style.css?v=20260616-danger">
+    <link rel="stylesheet" href="style.css?v=20260617-bse">
 </head>
 <body>
     <div id="game-container">
@@ -172,7 +174,8 @@
                 <button id="btn-editor" class="big-btn">Level Editor</button>
             </div>
             <p class="first-run-hint">One rule: guide the moss folk to the portal. We'll show you how.</p>
-            <p class="controls-hint">1-8 skills · click to assign (works paused) · F fast-forward · Backspace rewind 5s · +/- spawn rate · N nuke twice · R restart · Space pause · M mute</p>
+            <button id="btn-crt" class="toggle-link" aria-pressed="true">CRT effect: On</button>
+            <p class="controls-hint">1-8 skills · click to assign (works paused) · F fast-forward · Backspace rewind 5s · +/- spawn rate · N nuke twice · R restart · Space pause · C crt · M mute</p>
         </div>
 
         <div id="gallery-screen" class="hidden">
@@ -188,16 +191,17 @@
         </div>
     </div>
 
-    <script src="js/constants.js?v=20260616-danger"></script>
-    <script src="js/icons.js?v=20260616-danger"></script>
-    <script src="js/utils.js?v=20260616-danger"></script>
-    <script src="js/audio.js?v=20260616-danger"></script>
-    <script src="js/music.js?v=20260616-danger"></script>
-    <script src="js/particles.js?v=20260616-danger"></script>
-    <script src="js/terrain.js?v=20260616-danger"></script>
-    <script src="js/mossling.js?v=20260616-danger"></script>
-    <script src="js/levels.js?v=20260616-danger"></script>
-    <script src="js/game.js?v=20260616-danger"></script>
-    <script src="js/ui.js?v=20260616-danger"></script>
+    <script src="js/constants.js?v=20260617-bse"></script>
+    <script src="js/icons.js?v=20260617-bse"></script>
+    <script src="js/utils.js?v=20260617-bse"></script>
+    <script src="js/audio.js?v=20260617-bse"></script>
+    <script src="js/music.js?v=20260617-bse"></script>
+    <script src="js/particles.js?v=20260617-bse"></script>
+    <script src="js/terrain.js?v=20260617-bse"></script>
+    <script src="js/mossling.js?v=20260617-bse"></script>
+    <script src="js/levels.js?v=20260617-bse"></script>
+    <script src="js/overlays.js?v=20260617-bse"></script>
+    <script src="js/game.js?v=20260617-bse"></script>
+    <script src="js/ui.js?v=20260617-bse"></script>
 </body>
 </html>

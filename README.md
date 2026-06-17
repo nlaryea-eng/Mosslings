@@ -4,11 +4,13 @@ A Lemmings-inspired puzzle platformer for the browser. The moss folk march
 mindlessly off cliffs and into lava — assign them skills and guide enough of
 them to the portal before time runs out.
 
-**Zero dependencies, zero build step.** Open `index.html` in any browser (or
-serve the folder statically). All graphics are drawn procedurally on canvas and
-all audio — including the generative ambient score — is synthesized with Web
-Audio; the only bundled assets are one local pixel font (`assets/fonts/`) and a
-static Open Graph share card (`assets/og-card.svg`). Plays with mouse **or**
+**Zero runtime dependencies, zero build step.** Open `index.html` in any browser
+(or serve the folder statically). All graphics are drawn procedurally on canvas
+and all audio — including the generative ambient score — is synthesized with Web
+Audio; the only bundled assets are one local pixel font (`assets/fonts/`) and an
+Open Graph share card (`assets/og-card.svg`, rasterized to `og-card.png`). The
+shipped game pulls in nothing — the `devDependencies` in `package.json`
+(Playwright) are for the browser smoke tests / CI only. Plays with mouse **or**
 touch, on desktop **or** phone.
 
 ## Play
@@ -26,6 +28,7 @@ touch, on desktop **or** phone.
 | `R` | Restart level |
 | `T` | Toggle the tutorial card |
 | `M` | Mute |
+| `C` | Toggle the CRT scanline/vignette effect (also on the menu) |
 | `D` | Debug overlay (FPS, terrain probe, state census) |
 
 **Touch & mobile:** input is unified through Pointer Events — tap a mossling to
@@ -54,6 +57,7 @@ js/particles.js   particle engine + ambient spore drift
 js/terrain.js     per-pixel collision mask + layered canvas rendering
 js/mossling.js    creature state machine + procedural animated sprite
 js/levels.js      the 9 campaign maps (geometry derived from movement math)
+js/overlays.js    render-only readability overlays (danger probe + hints)
 js/game.js        engine: fixed-timestep loop, skills, HUD, juice, effects
 js/ui.js          DOM bindings, menu, overlays, level editor, pointer input
 js/utils.js       level (de)serialization for sharing + pure medal logic
@@ -85,11 +89,15 @@ Design principles:
 ## Tests
 
 ```
-node tests/run-tests.js
+node tests/run-tests.js          # 90 unit tests, no framework (stubbed DOM)
+npm install && npm run test:e2e  # Playwright browser smoke tests (dev-only)
 ```
 
-88 tests, no test framework needed. The suite loads the real game scripts
-into Node with stubbed canvas/DOM and covers:
+The unit suite (90 tests, no test framework needed) loads the real game scripts
+into Node with stubbed canvas/DOM. A separate **Playwright** smoke suite
+(`tests/e2e/`) drives a real Chromium against the static site to catch
+boot/layout regressions (e.g. level-select card overflow) and is gated in CI
+before deploy. The unit suite covers:
 
 1. **Terrain semantics** — destructibility rules, world-edge walls, one-way
    membranes (probe-direction aware, indestructible, never a floor)
@@ -147,12 +155,15 @@ determinism invariant (presentation lives outside `update()`):
 - **Game feel** — full-screen impact flash + freeze-frame hit-stop on
   explosions, landing dust, contact shadows, an exit that swells on each
   rescue, a save-streak chime, and animated win/lose overlays.
-- **Readability assist** — walkers now get subtle render-only danger pips before
-  lava, fatal cliffs, and hard turns. The overlay teaches the puzzle state
-  without changing simulation, pathing, or replay determinism.
-- **CRT bloom polish** — the playfield has a lightweight scanline/vignette
-  pass that makes the procedural canvas art feel more cohesive while keeping
-  the collision mask untouched.
+- **Readability assist** (`js/overlays.js`) — walkers get render-only danger
+  pips before lava, fatal cliffs, and hard turns, plus a chunky ground-edge
+  caution marker planted on the cliff lip so the warning reads at phone size.
+  The probe is throttled (recomputed a few times a second, animated every frame)
+  and never touches simulation, pathing, or replay determinism — guarded by a
+  full-`draw()` determinism test.
+- **CRT scanline/vignette** — a lightweight, **toggleable** (menu or `C` key,
+  persisted) scanline/vignette pass that makes the procedural canvas art feel
+  more cohesive while keeping the collision mask untouched.
 - **Touch & responsive** — Pointer-Events input with finger-friendly targeting;
   HUD/toolbar reflow for phones; the board can never overflow the viewport.
 - **Onboarding** — dismissible/auto-hiding tutorial card, portrait rotate hint.
@@ -176,11 +187,19 @@ Honest gaps, not bugs — most need a human, not more code:
   listening pass on real laptop/phone speakers. It may need simplifying.
 - **Icon/glyph readability is unproven on real devices.** Tests check the icon
   map is *complete*, not that 16px glyphs are *distinguishable* on a phone.
-- **The Open Graph card is a bundled SVG, not a hosted raster.** Social
-  scrapers generally want an absolute `https` URL (and some prefer PNG/JPG over
-  SVG); swap `assets/og-card.svg` for an absolute card URL when you deploy.
-- **No hosted leaderboard** and **no automated browser/screenshot regression**
-  layer yet — the suite is Node-only with a stubbed DOM/canvas.
+- **Music mix is unverified by ear** (still the case).
+- **Icon/glyph readability is unproven on real devices.** Tests check the icon
+  map is *complete*, not that the glyphs are *distinguishable* on a phone.
+- **No hosted leaderboard.** Progress and best-% are local-only.
+
+## Tooling
+
+Free, build-free helpers (run from the repo root):
+
+- `node tools/bump-version.js [label]` — bump every `?v=` cache-busting query in
+  `index.html`/`style.css` in one shot (single source of truth, no missed tags).
+- `node tools/render-og.js` — rasterize `assets/og-card.svg` → `og-card.png`
+  (1200×630) using the Chromium that Playwright already installs.
 
 ## Ideas for later
 

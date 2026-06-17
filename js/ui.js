@@ -18,6 +18,8 @@ const ui = {
         const $ = (id) => document.getElementById(id);
         this.installIcons();
         this.refreshMuteButton();
+        this.applyCrt(this._crtOn());
+        $('btn-crt').onclick = () => this.toggleCrt();
 
         $('btn-gallery').onclick = () => this.openGallery();
         $('btn-gallery-back').onclick = () => { $('gallery-screen').classList.add('hidden'); this.backToMenu(); };
@@ -113,6 +115,7 @@ const ui = {
             else if (k === 'r' && (game.state === 'PLAY' || game.state === 'PAUSE')) this.restartLevel();
             else if (e.key === ' ' || k === 'p') { game.togglePause(); e.preventDefault(); }
             else if (k === 'm') $('btn-mute').click();
+            else if (k === 'c' && !e.ctrlKey && !e.metaKey) this.toggleCrt();
             else if (k === 'f') { game.ffwd = !game.ffwd; this.refreshButtons(game); }
             else if (k === 'n') game.nuke();
             else if (e.key === '+' || e.key === '=') game.adjustRate(1);
@@ -148,6 +151,22 @@ const ui = {
     },
     refreshMuteButton() {
         setIconHtml(document.getElementById('btn-mute'), audio.muted ? UI_ICONS.soundOff : UI_ICONS.soundOn, audio.muted ? 'Unmute' : 'Mute');
+    },
+    // --- CRT scanline/vignette toggle (persisted display preference) ---------
+    _crtOn() { try { return localStorage.getItem('mosslings.crt') !== '0'; } catch (e) { return true; } },
+    applyCrt(on) {
+        const c = document.getElementById('game-container');
+        if (c) c.classList.toggle('crt-off', !on);
+        const b = document.getElementById('btn-crt');
+        if (b) {
+            b.innerText = 'CRT effect: ' + (on ? 'On' : 'Off');
+            if (b.setAttribute) b.setAttribute('aria-pressed', on ? 'true' : 'false');
+        }
+    },
+    toggleCrt() {
+        const on = !this._crtOn();
+        try { localStorage.setItem('mosslings.crt', on ? '1' : '0'); } catch (e) {}
+        this.applyCrt(on);
     },
     armAudioForPlay() {
         audio.init();
