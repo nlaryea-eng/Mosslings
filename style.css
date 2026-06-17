@@ -1,6 +1,6 @@
 @font-face {
     font-family: 'Moss Pixel';
-    src: url('assets/fonts/moss-pixel.woff2?v=20260617-bse') format('woff2');
+    src: url('assets/fonts/moss-pixel.woff2?v=20260617-accw') format('woff2');
     font-weight: 400;
     font-style: normal;
     font-display: swap;
@@ -18,6 +18,11 @@
     --gold: #ffeb3b;
     --font: 'Segoe UI', system-ui, sans-serif;
     --pixel-font: 'Moss Pixel', 'Courier New', Courier, monospace;
+    /* Vertical chrome the board must subtract from the viewport so the toolbar
+       is never shoved off-screen (≈ HUD + toolbar). Single source of truth:
+       the responsive blocks below shrink it to match the trimmed chrome they
+       apply, which lets the board reclaim that height on short screens. */
+    --chrome: 118px;
 }
 
 * { box-sizing: border-box; user-select: none; }
@@ -48,12 +53,12 @@ body {
 /* The board: a 16:9 box flanked by the HUD and toolbar — never covered by them.
    max-width is expressed via the *height* budget so the board can never grow
    taller than the viewport (which would shove the toolbar off-screen on short
-   or landscape-phone displays). ~118px ≈ HUD + toolbar; on tall desktops the
+   or landscape-phone displays). --chrome ≈ HUD + toolbar; on tall desktops the
    cap exceeds the 960px container and has no effect. */
 #play-area {
     position: relative;
     width: 100%;
-    max-width: calc((100dvh - 118px) * 16 / 9);
+    max-width: calc((100dvh - var(--chrome)) * 16 / 9);
     margin: 0 auto;
     aspect-ratio: 16 / 9;
     background: #000;
@@ -301,9 +306,24 @@ button:focus-visible {
     50% { text-shadow: 0 0 40px rgba(156, 204, 101, 0.85), 3px 3px 0 #1b3413, 6px 6px 0 #0a1407; }
 }
 .tagline { font-size: 11px; text-align: center; line-height: 1.7; color: #a8c5a0; margin: 10px 0 22px; }
-.controls-hint {
-    font-size: 7px; color: #6b806b; margin: 14px 16px 0;
-    letter-spacing: 0; max-width: min(680px, 88vw); text-align: center; line-height: 1.6;
+/* Keyboard cheat-sheet, tucked behind a native disclosure so the menu stays
+   uncluttered. Collapsed by default; the 7px wall-of-text only appears on
+   demand (and is meaningless on touch — hidden on small screens below). */
+.controls-disc {
+    margin: 16px 16px 0; max-width: min(680px, 88vw); text-align: center;
+}
+.controls-disc > summary {
+    font-family: var(--pixel-font); font-size: 10px; letter-spacing: 0.5px;
+    text-transform: uppercase; color: #8ba88b; cursor: pointer; list-style: none;
+    display: inline-block; padding: 4px 10px; border: 1px solid var(--border);
+    border-radius: 6px;
+}
+.controls-disc > summary::-webkit-details-marker { display: none; }
+.controls-disc > summary:hover { color: var(--accent-bright); border-color: var(--accent); }
+.controls-disc[open] > summary { color: var(--accent-bright); margin-bottom: 8px; }
+.controls-disc > p {
+    font-size: 9px; color: #8aa08a; margin: 0 auto;
+    letter-spacing: 0; line-height: 1.7;
 }
 .first-run-hint {
     font-size: 9px; color: #8fb07f; margin: 18px 16px 0;
@@ -317,7 +337,7 @@ button:focus-visible {
 #start-screen.first-run #level-select-container,
 #start-screen.first-run #btn-editor,
 #start-screen.first-run #btn-gallery,
-#start-screen.first-run .controls-hint { display: none; }
+#start-screen.first-run .controls-disc { display: none; }
 #start-screen:not(.first-run) .first-run-hint { display: none; }
 #start-screen.first-run #btn-start {
     padding: 16px 46px; font-size: 16px;
@@ -597,7 +617,7 @@ button:focus-visible {
     .skill-btn .label { display: none; }
     .skill-btn .key { font-size: 8px; top: 2px; left: 4px; }
     #header-btns button { width: 30px; height: 30px; font-size: 14px; }
-    .controls-hint { display: none; } /* keyboard hints are meaningless on touch */
+    .controls-disc { display: none; } /* keyboard hints are meaningless on touch */
     #level-select-container { gap: 5px; margin-bottom: 18px; }
     .lvl-btn {
         width: 48px; height: 56px; padding: 4px 3px 3px;
@@ -626,11 +646,24 @@ button:focus-visible {
     }
 }
 
-/* Landscape phones are short — keep the board tall by trimming chrome height. */
+/* Landscape phones are short — every vertical pixel of chrome is a pixel the
+   board loses. Trim the HUD/toolbar height AND collapse the HUD back to a single
+   row (the <=720 reflow wraps it to two rows, which is wasteful when height —
+   not width — is the scarce axis here). Then shrink --chrome to match so the
+   board reclaims the saved height instead of capping at the old 118px budget. */
 @media (max-height: 460px) and (orientation: landscape) {
-    #hud-top { padding: 3px 8px; }
+    :root { --chrome: 92px; }
+    #hud-top { flex-wrap: nowrap; padding: 2px 8px; gap: 4px 8px; }
+    .hud-left { flex: 0 1 auto; min-width: 0; }
+    .hud-center { flex: 1 1 auto; justify-content: center; flex-wrap: nowrap; gap: 5px; }
+    .hud-right { flex: 0 1 auto; }
     .hud-chip { padding: 2px 7px; }
     .hud-chip b { font-size: 13px; }
-    #toolbar { padding: 4px 6px; }
-    .skill-btn { height: 46px; }
+    #hud-medals { display: none; }       /* medal pace is a luxury on a tiny board */
+    #toolbar { padding: 3px 6px; }
+    .skill-btn { height: 44px; }
+    /* The tutorial card must not eat the board it is teaching on. */
+    #tutorial-bar { top: 4px; padding: 4px 10px 4px 26px; font-size: 11px; max-width: 90%; }
+    #tutorial-bar::before { left: 9px; width: 6px; height: 6px; }
+    .tut-dismiss { display: none; }
 }

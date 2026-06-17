@@ -65,3 +65,53 @@ test('landscape-phone keeps the toolbar usable with no horizontal overflow', asy
     const overflows = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
     expect(overflows, 'page overflows horizontally on a landscape phone').toBeFalsy();
 });
+
+test('landscape-phone board reclaims chrome height (bigger than the old 457x257 cap)', async ({ page }) => {
+    await page.setViewportSize({ width: 667, height: 375 });
+    await page.addInitScript(seedProgress);
+    await page.goto('/');
+    await page.locator('#btn-start').click();
+    await expect(page.locator('#gameCanvas')).toBeVisible();
+    // The board grows when the landscape chrome budget shrinks. Guard the win so
+    // a future regression that re-bloats the HUD/toolbar is caught.
+    const box = await page.locator('#gameCanvas').boundingBox();
+    expect(box.width, `canvas only ${Math.round(box.width)}px wide`).toBeGreaterThan(457);
+    expect(box.height, `canvas only ${Math.round(box.height)}px tall`).toBeGreaterThan(257);
+    // ...and the toolbar must still be fully on-screen (the cap exists to protect it).
+    const toolbarFits = await page.locator('#toolbar').evaluate(
+        (el) => el.getBoundingClientRect().bottom <= window.innerHeight + 1);
+    expect(toolbarFits, 'toolbar pushed below the viewport').toBeTruthy();
+});
+
+test('first run shows only Play, then the full menu returns once Level 1 is cleared', async ({ page }) => {
+    // No seedProgress: a brand-new player (unlocked === 0) gets the stripped menu.
+    await page.goto('/');
+    await expect(page.locator('#start-screen')).toHaveClass(/first-run/);
+    await expect(page.locator('#btn-start')).toHaveText(/start playing/i);
+    await expect(page.locator('#level-select-container')).toBeHidden();
+    await expect(page.locator('#btn-editor')).toBeHidden();
+    await expect(page.locator('.controls-disc')).toBeHidden();
+
+    // Clearing Level 1 persists the unlock the same way game.js does on a win;
+    // reload so the whole app boots fresh in the unlocked state.
+    await page.evaluate(() => storage.setUnlocked(1));
+    await page.reload();
+    await expect(page.locator('#start-screen')).not.toHaveClass(/first-run/);
+    await expect(page.locator('#btn-start')).toHaveText(/^play$/i);
+    await expect(page.locator('#level-select-container')).toBeVisible();
+    await expect(page.locator('#btn-editor')).toBeVisible();
+    await expect(page.locator('.controls-disc')).toBeVisible();
+});
+
+test('mute preference persists across reload', async ({ page }) => {
+    await page.addInitScript(seedProgress);
+    await page.goto('/');
+    await page.locator('#btn-start').click();             // user gesture arms audio
+    await page.locator('#btn-mute').click();              // mute
+    expect(await page.evaluate(() => localStorage.getItem('mosslings.audioMuted'))).toBe('1');
+
+    await page.reload();
+    expect(await page.evaluate(() => localStorage.getItem('mosslings.audioMuted'))).toBe('1');
+    // The audio engine should boot already-muted, not just remember the string.
+    expect(await page.evaluate(() => audio.muted)).toBe(true);
+});

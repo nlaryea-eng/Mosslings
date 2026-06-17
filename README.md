@@ -187,10 +187,18 @@ Honest gaps, not bugs — most need a human, not more code:
   listening pass on real laptop/phone speakers. It may need simplifying.
 - **Icon/glyph readability is unproven on real devices.** Tests check the icon
   map is *complete*, not that 16px glyphs are *distinguishable* on a phone.
-- **Music mix is unverified by ear** (still the case).
-- **Icon/glyph readability is unproven on real devices.** Tests check the icon
-  map is *complete*, not that the glyphs are *distinguishable* on a phone.
 - **No hosted leaderboard.** Progress and best-% are local-only.
+
+### Real-device check (do before each release)
+
+Browser emulation proves layout, not feel. Walk this list on actual hardware:
+
+- [ ] **Phone landscape** — board fills the screen; toolbar fully visible; tutorial card does not cover the action.
+- [ ] **Phone portrait** — rotate nudge appears; rotating into landscape clears it.
+- [ ] **Touch assignment** — tapping a moving mossling assigns the right skill (no mis-taps, no double-tap zoom).
+- [ ] **Laptop speakers** — music loop is pleasant over several minutes, not fatiguing.
+- [ ] **Phone speakers** — mix is audible and balanced (no harsh highs / lost bass).
+- [ ] **Safari (iOS) & Chrome (Android)** — audio starts after first tap; no console errors; fonts/glyphs render.
 
 ## Tooling
 
