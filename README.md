@@ -62,6 +62,7 @@ js/terrain.js     per-pixel collision mask + layered canvas rendering
 js/mossling.js    creature state machine + procedural animated sprite
 js/levels.js      the 9 campaign maps (geometry derived from movement math)
 js/daily.js       deterministic UTC daily challenge selection + scoring helper
+js/result-card.js result overlay snippets + deterministic PNG share-card export
 js/overlays.js    render-only readability overlays (danger probe + hints)
 js/game.js        engine: fixed-timestep loop, skills, HUD, juice, effects
 js/ui.js          DOM bindings, menu, overlays, level editor, pointer input
@@ -94,11 +95,11 @@ Design principles:
 ## Tests
 
 ```
-node tests/run-tests.js          # 97 unit tests, no framework (stubbed DOM)
+node tests/run-tests.js          # 101 unit tests, no framework (stubbed DOM)
 npm install && npm run test:e2e  # Playwright browser smoke tests (dev-only)
 ```
 
-The unit suite (97 tests, no test framework needed) loads the real game scripts
+The unit suite (101 tests, no test framework needed) loads the real game scripts
 into Node with stubbed canvas/DOM. A separate **Playwright** smoke suite
 (`tests/e2e/`) drives a real Chromium against the static site to catch
 boot/layout regressions (e.g. level-select card overflow) and is gated in CI
@@ -126,10 +127,13 @@ before deploy. The unit suite covers:
 8. **Daily challenge determinism** — UTC daily keys map to one campaign level,
    malformed dates fail closed, local bests keep the stronger run, and daily
    clears do not unlock campaign progress
-9. **Readability assist overlay** — danger probes flag fatal cliffs/lava,
+9. **Result share card** — run summaries, text share copy, medal SVG parsing,
+   and the 1200×630 deterministic PNG card renderer are covered without adding
+   an image dependency
+10. **Readability assist overlay** — danger probes flag fatal cliffs/lava,
    suppress false alarms for floaters, and prove the rendering helper does not
    mutate deterministic sim state
-10. **Shared-level import robustness** — `deserializeLevel` is fuzzed with
+11. **Shared-level import robustness** — `deserializeLevel` is fuzzed with
    thousands of random/truncated/oversized payloads and must always return
    `null` or a well-formed level — never throw
 
@@ -174,6 +178,9 @@ determinism invariant (presentation lives outside `update()`):
   more cohesive while keeping the collision mask untouched.
 - **Touch & responsive** — Pointer-Events input with finger-friendly targeting;
   HUD/toolbar reflow for phones; the board can never overflow the viewport.
+- **Result artifact** — the result overlay draws a 1200×630 PNG share card from
+  the run summary and existing medal SVG rectangles; browsers share it via Web
+  Share, PNG clipboard, or a download fallback.
 - **Onboarding** — dismissible/auto-hiding tutorial card, portrait rotate hint.
 - **New level** — "One-Way Out" introduces the one-way membrane to the campaign.
 
@@ -221,4 +228,4 @@ Free, build-free helpers (run from the repo root):
 
 More campaign worlds · level-complete confetti · a colourblind-friendly palette
 toggle · ghost/replay export (the deterministic action log already supports it)
-· extracting the editor + result/share code out of `ui.js` as it grows.
+· extracting the editor code out of `ui.js` as it grows.

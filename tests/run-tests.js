@@ -62,7 +62,7 @@ global.localStorage = (() => {
 // Delete existing global.ui before loading ui.js to avoid collisions
 delete global.ui;
 
-for (const f of ['constants.js', 'icons.js', 'audio.js', 'music.js', 'particles.js', 'terrain.js', 'mossling.js', 'levels.js', 'daily.js', 'overlays.js', 'game.js', 'utils.js', 'ui.js']) {
+for (const f of ['constants.js', 'icons.js', 'audio.js', 'music.js', 'particles.js', 'terrain.js', 'mossling.js', 'levels.js', 'daily.js', 'result-card.js', 'overlays.js', 'game.js', 'utils.js', 'ui.js']) {
     const file = path.join(__dirname, '..', 'js', f);
     vm.runInThisContext(fs.readFileSync(file, 'utf8'), { filename: file });
 }
@@ -600,6 +600,56 @@ test('returning from daily restores the previous unlocked campaign selection', (
     ui.backToMenu();
     eq(g.runMode, 'campaign');
     eq(g.levelIdx, 0, 'Play returns to the prior campaign selection, not the daily level');
+});
+
+// ==============================================================
+console.log('\n— Result share card —');
+// ==============================================================
+test('ResultView builds a compact run summary from game state', () => {
+    const g = new Game();
+    g.loadLevel(0, false, true);
+    g.savedCount = 8;
+    g.skillsUsed = 3;
+    g.time = (g.level.time - 42) * 60;
+    const r = ResultView.buildRunResult(g, true);
+    eq(r.name, 'The First March');
+    eq(r.campaignNum, 1);
+    eq(r.pct, 100);
+    eq(r.timeStr, '0:42');
+    assert(r.medals.saved && r.medals.skills && r.medals.time, 'all L1 medals earned by the test run');
+});
+test('ResultView share text preserves campaign, daily, and URL framing', () => {
+    const g = new Game();
+    const challenge = dailyChallengeForDate('2026-06-17');
+    g.loadDailyChallenge(challenge);
+    g.savedCount = g.level.reqSaved;
+    g.skillsUsed = 4;
+    g.time = (g.level.time - 70) * 60;
+    const r = ResultView.buildRunResult(g, true);
+    const text = ResultView.buildShareText(r, { url: 'https://example.test/Mosslings/?daily=2026-06-17' });
+    assert(text.includes('MOSSLINGS - Daily 2026-06-17'), 'daily share text names the daily');
+    assert(text.includes('https://example.test/Mosslings/?daily=2026-06-17'), 'daily share text includes the link');
+    assert(text.includes('Can you beat my run?'), 'daily share text carries the challenge copy');
+});
+test('ResultView parses existing medal SVG rects for canvas reuse', () => {
+    const parsed = ResultView.parseSvgRects(UI_ICONS.trophy);
+    eq(parsed.viewBox.w, 24);
+    eq(parsed.viewBox.h, 24);
+    assert(parsed.rects.length > 20, 'trophy rect art parsed');
+    assert(parsed.rects.some(r => r.fill === '#ffd23f'), 'trophy fill colors preserved');
+});
+test('ResultView creates a 1200x630 share-card canvas without throwing', () => {
+    const g = new Game();
+    g.loadLevel(0, false, true);
+    g.savedCount = 8;
+    g.skillsUsed = 3;
+    g.time = (g.level.time - 42) * 60;
+    const r = ResultView.buildRunResult(g, true);
+    r.url = 'https://example.test/Mosslings/';
+    const canvas = ResultView.createResultCardCanvas(r);
+    eq(canvas.width, 1200);
+    eq(canvas.height, 630);
+    assert(ResultView.cardFilename(r).startsWith('mosslings-level-1'), 'campaign filename is stable');
 });
 
 // ==============================================================

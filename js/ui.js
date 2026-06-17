@@ -73,6 +73,7 @@ const ui = {
         };
         $('msg-btn-retry').onclick = () => this.restartLevel();
         $('msg-btn-share').onclick = () => this.shareResult();
+        $('msg-btn-card').onclick = () => this.shareResultCard();
         $('msg-btn-menu').onclick = () => this.backToMenu();
 
         document.querySelectorAll('.skill-btn').forEach(btn => {
@@ -255,18 +256,22 @@ const ui = {
         const url = this.shareUrlFor(code);
         this.copyText(url, 'Share link copied to clipboard!');
     },
-    /** Build a clean ?level= share URL from the current hosted location. */
-    shareUrlFor(code) {
-        const url = new URL(location.href);
+    /** Build a clean share URL from the current hosted location or test stub. */
+    currentShareUrl() {
+        const href = location.href || `${location.origin || 'http://localhost'}${location.pathname || '/'}`;
+        const url = new URL(href);
         url.search = '';
         url.hash = '';
+        return url;
+    },
+    /** Build a clean ?level= share URL from the current hosted location. */
+    shareUrlFor(code) {
+        const url = this.currentShareUrl();
         url.searchParams.set('level', code);
         return url.toString();
     },
     dailyUrlFor(key) {
-        const url = new URL(location.href);
-        url.search = '';
-        url.hash = '';
+        const url = this.currentShareUrl();
         url.searchParams.set('daily', key);
         return url.toString();
     },
@@ -514,6 +519,7 @@ const ui = {
         }
         document.getElementById('start-screen').classList.remove('hidden');
         document.getElementById('message-overlay').classList.add('hidden');
+        document.getElementById('message-overlay').classList.remove('has-result-card');
         document.getElementById('gallery-screen').classList.add('hidden');
         document.getElementById('tutorial-bar').classList.add('hidden');
         document.getElementById('editor-ui').classList.add('hidden');
@@ -530,6 +536,7 @@ const ui = {
     onLevelStart(game, isCustom) {
         document.getElementById('start-screen').classList.add('hidden');
         document.getElementById('message-overlay').classList.add('hidden');
+        document.getElementById('message-overlay').classList.remove('has-result-card');
         document.getElementById('gallery-screen').classList.add('hidden');
         document.getElementById('editor-ui').classList.add('hidden');
         document.getElementById('lbl-level').innerText =
@@ -608,113 +615,54 @@ const ui = {
         const game = this.game;
         const o = document.getElementById('message-overlay');
         o.classList.remove('hidden');
+        o.classList.add('has-result-card');
         if (typeof music !== 'undefined' && music) music.duck(true);
         document.getElementById('msg-title').innerText = title;
         document.getElementById('msg-title').className = win ? 'win' : 'fail';
         document.getElementById('msg-text').innerText = text;
 
-        const total = game.level.totalSpawn;
-        const pct = Math.round(game.savedCount / total * 100);
-        const timeTaken = (game.level.time * 60 - game.time) / 60;
-        let medals = { saved: false, skills: false, time: false };
-
-        // Visual stat row — the in-game version of the shareable result.
-        const stat = (label, value) => `<div class="stat"><b>${value}</b><span>${label}</span></div>`;
-        document.getElementById('msg-stats').innerHTML =
-            stat('Saved', `${game.savedCount}/${total}`) +
-            stat('Rescued', `${pct}%`) +
-            stat('Time', this.fmtTime(timeTaken)) +
-            stat('Skills', game.skillsUsed);
+        const result = ResultView.buildRunResult(game, win);
+        result.url = this.resultUrlFor(result);
+        document.getElementById('msg-stats').innerHTML = ResultView.statsHtml(result);
 
         const mWrap = document.getElementById('msg-medals-wrap');
-        mWrap.innerHTML = '';
         if (win && game.level.par) {
-            medals = computeMedals(game.level.par, {
-                saved: game.savedCount,
-                skills: game.skillsUsed,
-                time: timeTaken,
-            });
             const key = game.runMode === 'daily' && game.dailyChallenge
                 ? `daily:${game.dailyChallenge.key}`
                 : (game.levelIdx >= 0 ? game.levelIdx : game.level.name);
-            storage.setMedals(key, medals);
-
-            let html = '';
-            if (medals.saved || medals.skills || medals.time) {
-                html += '<div class="msg-medals">';
-                const slot = (label, earned, icon, color) => earned ? `
-                    <div class="msg-medal-slot">
-                        <span class="medal ${color}">${icon}</span>
-                        <span class="msg-medal-label">${label}</span>
-                    </div>` : '';
-                html += slot('Rescue', medals.saved, UI_ICONS.trophy, 'medal-gold');
-                html += slot('Efficiency', medals.skills, UI_ICONS.medalSilver, 'medal-silver');
-                html += slot('Speed', medals.time, UI_ICONS.medalBronze, 'medal-bronze');
-                html += '</div>';
-            }
-            // Near-miss deltas — the concrete "why replay" hook.
-            const par = game.level.par;
-            const misses = [];
-            if (!medals.saved) misses.push(`Rescue missed by ${par.saved - game.savedCount}`);
-            if (!medals.skills) misses.push(`Efficiency missed by ${game.skillsUsed - par.skills} skill${game.skillsUsed - par.skills === 1 ? '' : 's'}`);
-            if (!medals.time) misses.push(`Speed missed by ${Math.max(1, Math.ceil(timeTaken - par.time))}s`);
-            if (misses.length) {
-                html += '<div class="msg-misses">' +
-                    misses.map(m => `<span>${m}</span>`).join('') + '</div>';
-            }
-            if (!storage.load('medalLegendSeen', false)) {
-                html += '<div class="msg-medal-legend" aria-label="Medal guide">' +
-                    `<span>${UI_ICONS.trophy}<b>Rescue</b> all saved</span>` +
-                    `<span>${UI_ICONS.medalSilver}<b>Efficiency</b> low skills</span>` +
-                    `<span>${UI_ICONS.medalBronze}<b>Speed</b> fast clear</span>` +
-                    '</div>';
-                storage.save('medalLegendSeen', true);
-            }
-            mWrap.innerHTML = html;
+            storage.setMedals(key, result.medals);
         }
+        const showLegend = !!(win && game.level.par && !storage.load('medalLegendSeen', false));
+        mWrap.innerHTML = ResultView.medalsHtml(result, { showLegend });
+        if (showLegend) storage.save('medalLegendSeen', true);
 
-        const isDaily = game.runMode === 'daily' && game.dailyChallenge;
-        if (isDaily) {
+        if (result.isDaily) {
             const dailyPayload = {
-                key: game.dailyChallenge.key,
+                key: result.dailyKey,
                 levelIdx: game.levelIdx,
                 levelName: game.level.name,
                 win,
-                saved: game.savedCount,
-                total,
-                pct,
-                timeSeconds: timeTaken,
-                skills: game.skillsUsed,
-                medalCount: [medals.saved, medals.skills, medals.time].filter(Boolean).length,
-                medals,
+                saved: result.saved,
+                total: result.total,
+                pct: result.pct,
+                timeSeconds: result.timeSeconds,
+                skills: result.skills,
+                medalCount: result.medalCount,
+                medals: result.medals,
             };
-            const prev = storage.getDailyResult(game.dailyChallenge.key);
+            const prev = storage.getDailyResult(result.dailyKey);
             const isNewBest = compareDailyResults(dailyPayload, prev) > 0;
-            const best = storage.setDailyResult(game.dailyChallenge.key, dailyPayload);
-            mWrap.innerHTML += `<div class="msg-daily">${game.dailyChallenge.label} · ${isNewBest ? 'New local best' : 'Local best'}: ${best.pct}% in ${this.fmtTime(best.timeSeconds)}, ${best.skills} skills</div>`;
+            const best = storage.setDailyResult(result.dailyKey, dailyPayload);
+            result.dailyBest = best;
+            result.dailyBestIsNew = isNewBest;
+            mWrap.innerHTML += ResultView.dailyBestHtml(result);
         }
 
-        // Stash a compact run summary for the "Share result" button.
-        this.lastResult = {
-            name: game.level.name,
-            isCampaign: game.levelIdx >= 0,
-            isDaily,
-            dailyKey: isDaily ? game.dailyChallenge.key : null,
-            campaignNum: game.levelIdx + 1,
-            saved: game.savedCount, total, pct,
-            timeStr: this.fmtTime(timeTaken),
-            skills: game.skillsUsed,
-            medalCount: [medals.saved, medals.skills, medals.time].filter(Boolean).length,
-            medalStr: [
-                medals.saved ? 'Rescue' : '',
-                medals.skills ? 'Efficiency' : '',
-                medals.time ? 'Speed' : '',
-            ].filter(Boolean).join('+'),
-            win,
-            level: game.level,
-        };
+        this.lastResult = result;
+        ResultView.drawResultCardPreview(document.getElementById('result-card-preview'), result);
 
         // "Retry for medals" appears on a win that didn't sweep all three.
+        const medals = result.medals;
         const allMedals = medals.saved && medals.skills && medals.time;
         const showRetry = win && game.level.par && !allMedals && game.state !== 'VICTORY';
         document.getElementById('msg-btn-retry').classList.toggle('hidden', !showRetry);
@@ -731,8 +679,7 @@ const ui = {
         }
     },
     fmtTime(seconds) {
-        const s = Math.max(0, Math.round(seconds));
-        return Math.floor(s / 60) + ':' + (s % 60).toString().padStart(2, '0');
+        return ResultView.fmtTime(seconds);
     },
     /**
      * Copy a compact, brag-worthy summary of the run — the game's main viral
@@ -742,41 +689,61 @@ const ui = {
     shareResult() {
         const r = this.lastResult;
         if (!r) return;
-        const label = r.isDaily
-            ? `Daily ${r.dailyKey} — Level ${r.campaignNum} "${r.name}"`
-            : (r.isCampaign ? `Level ${r.campaignNum} "${r.name}"` : `"${r.name}"`);
-        const medalTail = r.medalStr ? ` medals: ${r.medalStr}` : '';
-        const verb = r.win ? 'rescued' : 'reached';
-        // "Challenge a friend" framing — strongest on a clean win, still inviting
-        // on a near miss (so close losses also become share moments).
-        const challenge = r.isDaily
-            ? (r.win ? 'Today\'s daily. Can you beat my run?' : 'Today\'s daily beat me. Can you do better?')
-            : (r.win
-                ? (r.medalCount >= 3 ? 'Swept all 3 medals. Can you?' : 'Think you can beat my run?')
-                : `So close: ${r.saved}/${r.total} saved. Can you do better?`);
-        let text = `MOSSLINGS — ${label}: ${verb} ${r.saved}/${r.total} (${r.pct}%) in ${r.timeStr}, ${r.skills} skills${medalTail}. ${challenge}`;
-
-        // Append a link the recipient can actually open.
+        let levelCode = null;
         if (location.protocol === 'file:') {
-            if (!r.isCampaign) {
-                const code = serializeLevel(r.level);
-                if (code) text += `\nLevel code: ${code}`;
-            }
-            this.copyText(text, 'Result copied. Host the game to add a play link.');
+            if (r.isCustom) levelCode = serializeLevel(r.level);
+            this.copyText(ResultView.buildShareText(r, { levelCode }), 'Result copied. Host the game to add a play link.');
             return;
         }
-        let url = null;
+        this.copyText(ResultView.buildShareText(r, { url: this.resultUrlFor(r) }), 'Result text copied to clipboard!');
+    },
+    resultUrlFor(r) {
+        if (!r || location.protocol === 'file:') return null;
         if (r.isDaily) {
-            url = this.dailyUrlFor(r.dailyKey);
-        } else if (r.isCampaign) {
-            const u = new URL(location.href); u.search = ''; u.hash = '';
-            url = u.toString();
-        } else {
-            const code = serializeLevel(r.level);
-            url = code ? this.shareUrlFor(code) : null;
+            return this.dailyUrlFor(r.dailyKey);
         }
-        if (url) text += `\n${url}`;
-        this.copyText(text, 'Result + link copied to clipboard!');
+        if (r.isCampaign) {
+            return this.currentShareUrl().toString();
+        }
+        const code = serializeLevel(r.level);
+        return code ? this.shareUrlFor(code) : null;
+    },
+    async shareResultCard() {
+        const r = this.lastResult;
+        if (!r) return;
+        try {
+            r.url = this.resultUrlFor(r);
+            const blob = await ResultView.createPngBlob(r);
+            const filename = ResultView.cardFilename(r);
+            const file = typeof File !== 'undefined'
+                ? new File([blob], filename, { type: 'image/png' })
+                : null;
+            if (file && navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
+                await navigator.share({
+                    files: [file],
+                    title: 'Mosslings result',
+                    text: ResultView.buildShareText(r, { url: r.url }),
+                });
+                this.toast('Result card shared!');
+                return;
+            }
+            if (navigator.clipboard && navigator.clipboard.write && typeof ClipboardItem !== 'undefined') {
+                await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+                this.toast('Result card copied as PNG!');
+                return;
+            }
+            const href = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = href;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(href), 1000);
+            this.toast('Downloaded result card PNG.');
+        } catch (e) {
+            this.copyText(ResultView.buildShareText(r, { url: this.resultUrlFor(r) }), 'Card failed. Copied result text instead.');
+        }
     },
 
     // --- Level editor -------------------------------------------------------

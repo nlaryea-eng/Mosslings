@@ -20,6 +20,24 @@ function seedProgress() {
     }));
 }
 
+function stubPngClipboard() {
+    window.__cardWrites = 0;
+    window.__cardTypes = [];
+    window.ClipboardItem = class {
+        constructor(items) { this.items = items; }
+    };
+    Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: {
+            write: async (items) => {
+                window.__cardWrites += items.length;
+                window.__cardTypes = Object.keys(items[0].items || {});
+            },
+            writeText: async () => {},
+        },
+    });
+}
+
 test('boots with no console/page errors and shows the menu', async ({ page }) => {
     const errors = [];
     page.on('console', (msg) => { if (msg.type() === 'error') errors.push(msg.text()); });
@@ -150,4 +168,42 @@ test('daily deep link opens the requested challenge directly', async ({ page }) 
     expect(daily.mode).toBe('daily');
     expect(daily.key).toBe('2026-06-17');
     expect(daily.idx).toBe(daily.expected);
+});
+
+test('result overlay renders and copies a PNG share card', async ({ page }) => {
+    const errors = [];
+    page.on('console', (msg) => { if (msg.type() === 'error') errors.push(msg.text()); });
+    page.on('pageerror', (err) => errors.push(String(err)));
+    await page.addInitScript(seedProgress);
+    await page.addInitScript(stubPngClipboard);
+    await page.goto('/');
+    await page.locator('#btn-start').click();
+    await page.evaluate(() => {
+        ui.game.savedCount = ui.game.level.reqSaved;
+        ui.game.skillsUsed = 3;
+        ui.game.time = (ui.game.level.time - 42) * 60;
+        ui.game.deadCount = 0;
+        ui.game.spawnCounter = ui.game.level.totalSpawn;
+        ui.game.mosslings = [];
+        ui.game.endLevel();
+    });
+    await expect(page.locator('#message-overlay')).toBeVisible();
+    await expect(page.locator('#result-card-preview')).toBeVisible();
+    const card = await page.locator('#result-card-preview').evaluate((canvas) => ({
+        w: canvas.width,
+        h: canvas.height,
+        isPng: canvas.toDataURL('image/png').startsWith('data:image/png;base64,'),
+        cssWidth: canvas.getBoundingClientRect().width,
+    }));
+    expect(card.w).toBe(1200);
+    expect(card.h).toBe(630);
+    expect(card.isPng).toBe(true);
+    expect(card.cssWidth).toBeGreaterThan(200);
+
+    await page.locator('#msg-btn-card').click();
+    await expect(page.locator('#toast')).toContainText('Result card copied as PNG!');
+    const writes = await page.evaluate(() => ({ count: window.__cardWrites, types: window.__cardTypes }));
+    expect(writes.count).toBe(1);
+    expect(writes.types).toContain('image/png');
+    expect(errors, `console/page errors:\n${errors.join('\n')}`).toEqual([]);
 });
