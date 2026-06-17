@@ -1577,6 +1577,34 @@ test('diagnoseFailure picks the most actionable reason and never mutates the sim
     g = mk(); g.time = 100; g.savedCount = Math.max(0, g.level.reqSaved - 1);
     eq(g.diagnoseFailure().key, 'short');
 });
+test('diagnoseFailure names athlete-gate rejection over a generic timeout', () => {
+    // Athlete Trial is a gold-portal level (exit.athlete).
+    const athleteIdx = LEVELS.findIndex(l => l.exit && l.exit.athlete);
+    const g = new Game(); g.loadLevel(athleteIdx);
+    assert(g.level.exit.athlete, 'fixture must be an athlete level');
+    // No rejections recorded → a timeout still reads as time/colony, not athlete.
+    g.time = 0; g.mosslings = [new Mossling(0, 0, 0)];
+    assert(g.diagnoseFailure().key !== 'athlete', 'no rejection must not key athlete');
+    // Two creatures reach the gate lacking only a Climber → diagnosis attributes it.
+    g.recordGateRejection({ hasFloater: true, hasClimber: false }, g.level.exit);
+    g.recordGateRejection({ hasFloater: true, hasClimber: false }, g.level.exit);
+    const d = g.diagnoseFailure();
+    eq(d.key, 'athlete', 'gate rejection attributed');
+    assert(/Climber/.test(d.detail), `should name the missing Climber, got "${d.detail}"`);
+    assert(d.zone && d.zone.kind === 'gate', 'gate retry-hint zone set');
+    // Lethal hazards still take precedence (fix the dying first).
+    g.deaths.lava = 4; g.deaths.lastPos.lava = { x: 100, y: 100 };
+    eq(g.diagnoseFailure().key, 'lava', 'lava deaths outrank gate rejection');
+});
+test('gate rejection bookkeeping is deterministic and reset per attempt', () => {
+    const g = new Game(); g.loadLevel(LEVELS.findIndex(l => l.exit && l.exit.athlete));
+    g.recordGateRejection({ hasFloater: false, hasClimber: false }, g.level.exit);
+    eq(g.gateRejects, 1, 'counted once');
+    eq(g.gateRejectMissing.both, 1, 'missing-both tallied');
+    g.loadLevel(LEVELS.findIndex(l => l.exit && l.exit.athlete)); // reload clears it
+    eq(g.gateRejects, 0, 'reset on reload');
+    eq(g.gateRejectMissing.both, 0, 'missing tally reset');
+});
 
 // Item P0-2 — retry ghost hint (render-only, never logged).
 test('a matching retry hint is consumed into a render-only failHint; a different level clears it', () => {

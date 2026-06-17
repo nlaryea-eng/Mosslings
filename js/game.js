@@ -125,6 +125,8 @@ class Game {
         // last failure zone across a Retry; failHint is the render-only marker
         // shown at the start of the next attempt. None are read by the sim.
         this.deaths = this.freshDeaths();
+        this.gateRejects = 0; this.gateRejectPos = null;
+        this.gateRejectMissing = { floater: 0, climber: 0, both: 0 };
         this.retryHint = null; this.failHint = null;
         // Deterministic-replay backbone (Backspace rewind). `simStep` counts
         // actual simulation steps (one per update()), independent of render
@@ -224,6 +226,18 @@ class Game {
         this.deaths[cause]++;
         this.deaths.lastPos[cause] = { x: Math.round(x), y: Math.round(y) };
     }
+    /**
+     * Called from Mossling.update() when an athlete-only gate turns a creature
+     * away. Pure deterministic bookkeeping (counts + the missing trait + the
+     * gate position) — read only by diagnoseFailure() after a loss.
+     */
+    recordGateRejection(m, exit) {
+        this.gateRejects++;
+        this.gateRejectPos = { x: Math.round(exit.x), y: Math.round(exit.y) };
+        if (!m.hasFloater && !m.hasClimber) this.gateRejectMissing.both++;
+        else if (!m.hasFloater) this.gateRejectMissing.floater++;
+        else if (!m.hasClimber) this.gateRejectMissing.climber++;
+    }
     /** Stable identity for the current level so a Retry hint only re-shows on the SAME puzzle. */
     levelKey() {
         if (this.runMode === 'daily' && this.dailyChallenge) return 'daily:' + this.dailyChallenge.key;
@@ -250,6 +264,21 @@ class Game {
             return { key: 'cliff', label: 'Fatal fall', detail: `${d.cliff} dropped too far`, zone: zone('cliff') };
         if (d.void > 0)
             return { key: 'void', label: 'Walked off the map', detail: `${d.void} lost`, zone: zone('void') };
+        // Athlete gate turned the colony away: the single most actionable reason
+        // on the gold-portal levels, where a bare "ran out of time" hides the
+        // real fix (give them BOTH Floater and Climber before the gate).
+        if (this.level.exit && this.level.exit.athlete && this.gateRejects > 0) {
+            const gm = this.gateRejectMissing;
+            const need = (gm.floater && !gm.climber && !gm.both) ? 'a Floater'
+                : (gm.climber && !gm.floater && !gm.both) ? 'a Climber'
+                : 'Floater + Climber';
+            return {
+                key: 'athlete',
+                label: 'Reached the gate, not athletes',
+                detail: `${this.gateRejects} arrived needing ${need}`,
+                zone: this.gateRejectPos ? { x: this.gateRejectPos.x, y: this.gateRejectPos.y, kind: 'gate' } : null,
+            };
+        }
         if (this.time <= 0 && alive > 0)
             return { key: 'time', label: alive >= Math.ceil(total * 0.3) ? 'Colony never reached the exit' : 'Ran out of time', detail: `${alive} still wandering`, zone: null };
         if (!anySkillLeft && missed > 0)
@@ -321,6 +350,8 @@ class Game {
         this.saveStreak = 0; this.lastSaveStep = -999;
         this.resultRecorded = false;
         this.deaths = this.freshDeaths(); // fresh diagnosis tally per attempt
+        this.gateRejects = 0; this.gateRejectPos = null;
+        this.gateRejectMissing = { floater: 0, climber: 0, both: 0 };
         this.simStep = 0; this.actionLog = [];   // fresh input history per attempt
         // Onboard a brand-new player on (and only on) campaign Level 1.
         this.onboarding = !isCustom && idx === 0 && storage.getUnlocked() === 0;

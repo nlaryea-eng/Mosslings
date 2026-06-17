@@ -30,6 +30,10 @@ class Mossling {
         this.isExploding = false;
         this.blink = 0;
         this.cosmeticFrame = id * 13; // render-only clock for blink (see updateCosmetics)
+        // Deterministic flag: this creature has already been tallied as turned
+        // away by an athlete-only gate (so the rejection counts once, not once
+        // per frame it lingers in the gate zone). Never read by physics.
+        this.rejectedAtGate = false;
     }
     alive() { return this.state !== STATE.DEAD && this.state !== STATE.SAVED; }
     /**
@@ -75,6 +79,14 @@ class Mossling {
                 this.state = STATE.SAVED;
                 game.onSave(this); // savedCount, streak chime + sparkle burst
                 return;
+            }
+            // Athlete-only gate refused entry — this one lacks Floater and/or
+            // Climber. Tally the first contact per creature so a post-loss
+            // diagnosis can explain *why* the colony never qualified, instead of
+            // a misleading "ran out of time". Deterministic; no sim coupling.
+            if (!this.rejectedAtGate && game.recordGateRejection) {
+                this.rejectedAtGate = true;
+                game.recordGateRejection(this, exit);
             }
         }
 
