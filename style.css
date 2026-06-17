@@ -386,16 +386,25 @@ button:focus-visible {
     letter-spacing: 0; max-width: min(620px, 88vw); text-align: center; line-height: 1.55;
 }
 
-/* First-run view: strip everything but a single dominant Play button so a brand
-   new player has exactly one obvious thing to do (see ui.buildMenu). Level
-   select, Editor, My Levels and the keyboard cheat-sheet return once Level 1
-   is cleared (storage.getUnlocked() >= 1). */
-#start-screen.first-run #world-menu,
-#start-screen.first-run #menu-secondary-actions,
-#start-screen.first-run #btn-editor,
-#start-screen.first-run #btn-gallery,
-#start-screen.first-run .controls-disc { display: none; }
+/* Surface visibility is now staged in JS (MenuUI.applyMenuSurfaces, driven by
+   menu-stage.js) rather than a binary first-run CSS gate: the carousel + controls
+   arrive after Level 1, the daily/ghost at World 2, and the editor at World 3 or
+   ~week three by tenure. Each surface just toggles `.hidden`. */
 #start-screen:not(.first-run) .first-run-hint { display: none; }
+
+/* One-time "NEW" reveal badge on a freshly-unlocked surface (cleared on use). */
+.menu-new { position: relative; overflow: visible; }
+.menu-new::after {
+    content: 'NEW';
+    position: absolute; top: -7px; right: -7px;
+    padding: 2px 5px;
+    font-size: 7px; line-height: 1; letter-spacing: 0.5px;
+    color: #1a1404; background: var(--gold);
+    border-radius: 999px;
+    box-shadow: 0 0 10px rgba(255, 213, 102, 0.5);
+    pointer-events: none;
+    z-index: 3;
+}
 #start-screen.first-run #btn-start {
     padding: 16px 46px; font-size: 16px;
     animation: playPulse 2s ease-in-out infinite;
@@ -1249,7 +1258,10 @@ button:focus-visible {
 
     .logo { font-size: 30px; letter-spacing: 0; }
     .tagline { font-size: 9px; max-width: 92vw; }
-    .menu-secondary-actions { width: 92vw; gap: 8px; }
+    /* Phone-first: the staged surfaces stack as full-width modular blocks so the
+       reveal of each new feature reads as its own card, not a cramped row. */
+    .menu-secondary-actions { width: 92vw; gap: 8px; flex-direction: column; align-items: stretch; }
+    .menu-secondary-actions .secondary-btn { width: 100%; }
     .daily-card { width: 100%; margin-bottom: 0; }
     .chapter-reward-card { width: 92vw; padding: 12px 13px; margin-bottom: 12px; }
     .world-menu { width: 92vw; gap: 9px; margin-bottom: 20px; }

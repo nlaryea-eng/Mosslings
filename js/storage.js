@@ -65,6 +65,23 @@ class StorageManager {
         const best = Math.max(0, Number(s.best) | 0, current);
         return { current, best };
     }
+    // Onboarding tenure: the first time the menu is built we stamp a wall-clock
+    // date so feature pacing can reward returning over days (menu-only — never
+    // read by the simulation).
+    getFirstSeenAt() { return this.load('firstSeenAt', null); }
+    markFirstSeen(nowIso) {
+        let v = this.getFirstSeenAt();
+        if (!v) { v = nowIso || new Date().toISOString(); this.save('firstSeenAt', v); }
+        return v;
+    }
+    // Which newly-unlocked menu surfaces the player has already acknowledged, so
+    // a "NEW" reveal badge shows once and then stops nagging.
+    getMenuRevealSeen() { return this.load('menuRevealSeen', {}); }
+    hasMenuRevealSeen(name) { return !!this.getMenuRevealSeen()[name]; }
+    markMenuRevealSeen(name) {
+        const seen = this.getMenuRevealSeen();
+        if (!seen[name]) { seen[name] = 1; this.save('menuRevealSeen', seen); }
+    }
     getChapterRewardSeen() { return this.load('chapterRewardSeen', {}); }
     hasChapterRewardSeen(chapter) { return !!this.getChapterRewardSeen()[chapter]; }
     markChapterRewardSeen(chapter) {

@@ -245,6 +245,25 @@ The campaign menu is now a world carousel instead of a stacked level grid.
 `js/menu-ui.js` owns the menu model and DOM rendering; `js/ui.js` keeps small
 delegating wrappers so existing `ui.*` call sites stay stable.
 
+**Staged onboarding.** Menu surfaces are revealed by progression + tenure, not
+all-at-once. `menuFeatureState()` (pure, `js/menu-stage.js`) maps
+`{unlocked, daysSinceFirstPlay, customLevelCount, worldSize}` →
+`{stage, worldMenu, controls, daily, editor, gallery}`: carousel/controls after
+Level 1, daily/ghost at World 2 (`unlocked >= worldSize`), editor at World 3
+(`unlocked >= worldSize*2`) **or** `EDITOR_TENURE_DAYS` (14) by tenure, gallery
+once the editor is live and a custom exists. `MenuUI.applyMenuSurfaces` toggles
+`.hidden` per surface and adds a one-time `.menu-new` badge (cleared via
+`storage.markMenuRevealSeen` on first use). Tenure comes from
+`storage.firstSeenAt` (stamped on first `buildMenu`) and is **menu-only** — it
+must never reach `update()`. The old binary `.first-run` CSS display:none gate is
+gone; `.first-run` now only styles the dominant Play button.
+
+**Bounded carousel.** `renderWorldMenu` renders only `carouselWindow(selected,
+count)` worlds (≤ `2*CAROUSEL_WINDOW_RADIUS+1`), so render cost is O(visible),
+not O(worlds). For the current 3-world campaign the window is the whole set, so
+nothing changes visibly today; the change exists so 100+ worlds never become a
+render cliff.
+
 - `#continue-hero` is the strongest CTA and starts the first unlocked campaign
   level that has not been cleared, falling back to replaying the current edge.
 - `#world-menu` contains `#world-carousel`, where `.world-card` buttons expose
@@ -277,10 +296,12 @@ a first clear. The race is styled to stay subordinate to the Continue hero.
 
 The browser e2e contract deliberately no longer uses `.lvl-btn` or
 `#level-select-container`. It asserts `#world-menu`, `.world-card`,
-`#world-detail .level-node`, the Continue hero, first-run gating, keyboard world
-navigation, level starting, daily entry, the Beat-the-Ghost race state, and
-locked/unlocked progression. Unit tests cover the world mastery helpers, the
-daily card model, `wheelNavIntent`, and the static menu asset contract.
+`#world-detail .level-node`, the Continue hero, the staged onboarding reveal
+(newcomer → learning → explorer → veteran, including `.menu-new` badges),
+keyboard world navigation, level starting, daily entry, the Beat-the-Ghost race
+state, and locked/unlocked progression. Unit tests cover the world mastery
+helpers, the daily card model, `wheelNavIntent`, `menuFeatureState`,
+`carouselWindow`, `menuDaysBetween`, and the static menu asset contract.
 
 World reward seen-state intentionally persists through the compatible
 `mosslings_chapterRewardSeen` storage key. The user-facing language is "World";

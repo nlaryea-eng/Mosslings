@@ -63,7 +63,7 @@ global.localStorage = (() => {
 // Delete existing global.ui before loading ui.js to avoid collisions
 delete global.ui;
 
-for (const f of ['constants.js', 'icons.js', 'audio.js', 'haptics.js', 'music.js', 'particles.js', 'terrain.js', 'mossling.js', 'levels.js', 'daily.js', 'utils.js', 'replay-integrity.js', 'daily-ghost.js', 'storage.js', 'ugc-trust.js', 'result-card.js', 'overlays.js', 'game.js', 'ui.js', 'menu-ui.js', 'result-ui.js']) {
+for (const f of ['constants.js', 'icons.js', 'audio.js', 'haptics.js', 'music.js', 'particles.js', 'terrain.js', 'mossling.js', 'levels.js', 'daily.js', 'utils.js', 'replay-integrity.js', 'daily-ghost.js', 'storage.js', 'menu-stage.js', 'ugc-trust.js', 'result-card.js', 'overlays.js', 'game.js', 'ui.js', 'menu-ui.js', 'result-ui.js']) {
     const file = path.join(__dirname, '..', 'js', f);
     vm.runInThisContext(fs.readFileSync(file, 'utf8'), { filename: file });
 }
@@ -2124,6 +2124,50 @@ test('carousel wheel intent steps horizontally, ignores vertical, and debounces'
     eq(menu.wheelNavIntent(50, 4, 1500), 0, 'a second flick inside the cooldown window is swallowed');
     eq(menu.wheelNavIntent(4, 60, 3000), 0, 'a dominantly vertical gesture leaves page scroll alone');
     eq(menu.wheelNavIntent(3, 0, 4000), 0, 'a tiny horizontal jitter is ignored');
+});
+
+test('menu feature gating paces unlocks by progression and tenure', () => {
+    const ws = 7;
+    // Newcomer: nothing but Play.
+    let f = menuFeatureState({ unlocked: 0, daysSinceFirstPlay: 0, worldSize: ws });
+    eq(f.stage, 'newcomer');
+    assert(!f.worldMenu && !f.daily && !f.editor, 'a brand-new save shows no surfaces');
+    // Learning: cleared L1, still inside World 1 → carousel + controls only.
+    f = menuFeatureState({ unlocked: 1, daysSinceFirstPlay: 0, worldSize: ws });
+    eq(f.stage, 'learning');
+    assert(f.worldMenu && f.controls, 'carousel and controls arrive after Level 1');
+    assert(!f.daily && !f.editor, 'daily and editor stay locked inside World 1');
+    // Explorer: reached World 2 → daily/ghost unlocks, editor still gated.
+    f = menuFeatureState({ unlocked: 7, daysSinceFirstPlay: 0, worldSize: ws });
+    eq(f.stage, 'explorer');
+    assert(f.daily, 'the daily ghost loop unlocks at World 2');
+    assert(!f.editor, 'the editor does not unlock just for reaching World 2 same-day');
+    // Veteran by depth: reached World 3 → editor without waiting weeks.
+    f = menuFeatureState({ unlocked: 14, daysSinceFirstPlay: 0, worldSize: ws });
+    eq(f.stage, 'veteran');
+    assert(f.editor, 'deep progression unlocks the editor without tenure');
+    // Veteran by tenure: ~week three on a shallow save → editor unlocks.
+    assert(menuFeatureState({ unlocked: 7, daysSinceFirstPlay: 14, worldSize: ws }).editor,
+        'two weeks of tenure unlocks the editor for a returning player');
+    // Gallery needs both the editor and an actual custom level.
+    assert(!menuFeatureState({ unlocked: 14, customLevelCount: 0, worldSize: ws }).gallery, 'no customs, no gallery');
+    assert(menuFeatureState({ unlocked: 14, customLevelCount: 1, worldSize: ws }).gallery, 'editor + a custom shows the gallery');
+});
+
+test('carousel window stays bounded as the campaign scales', () => {
+    eq(carouselWindow(0, 3).join(','), '0,1,2', 'small campaigns render every world');
+    const big = carouselWindow(50, 300, 3);
+    eq(big.length, 7, 'a large campaign renders only a bounded window');
+    assert(big.includes(50), 'the window is centered on the selection');
+    eq(carouselWindow(0, 300, 3)[0], 0, 'the window clamps to the start edge');
+    eq(carouselWindow(299, 300, 3).slice(-1)[0], 299, 'the window clamps to the end edge');
+    eq(carouselWindow(5, 0).length, 0, 'no worlds, no window');
+});
+
+test('menuDaysBetween floors whole days and tolerates bad input', () => {
+    eq(menuDaysBetween('2026-06-01T00:00:00.000Z', '2026-06-15T12:00:00.000Z'), 14, 'counts whole days');
+    eq(menuDaysBetween('2026-06-15', '2026-06-01'), 0, 'never negative');
+    eq(menuDaysBetween('garbage', '2026-06-01'), 0, 'bad input is treated as no tenure');
 });
 
 test('late-campaign ordering now ramps world 2 and 3 more steadily', () => {

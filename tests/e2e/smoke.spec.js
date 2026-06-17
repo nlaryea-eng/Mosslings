@@ -9,10 +9,13 @@
  */
 const { test, expect } = require('@playwright/test');
 
-// Seed a progressed save so the menu renders the worst case: every level
-// unlocked, with best-% and a full medal stack on each card.
+// Seed a progressed *and tenured* save: into World 2 with a full medal stack,
+// plus a first-play date weeks ago — i.e. a returning player for whom every
+// staged surface (carousel, daily, editor, gallery) has unlocked. This is the
+// menu's worst case for layout and the common case for feature visibility.
 function seedProgress() {
     localStorage.setItem('mosslings_unlocked', '8');
+    localStorage.setItem('mosslings_firstSeenAt', JSON.stringify('2026-01-01T00:00:00.000Z'));
     localStorage.setItem('mosslings_best', JSON.stringify({ 0: 100, 1: 83, 2: 91, 3: 67, 4: 100, 5: 45, 6: 78, 7: 88, 8: 100 }));
     const m = (s, k, t) => ({ saved: s, skills: k, time: t });
     localStorage.setItem('mosslings_medals', JSON.stringify({
@@ -145,8 +148,8 @@ test('portrait phone keeps Daily Ghost card readable without horizontal overflow
     expect(overflows, 'page overflows horizontally on a portrait phone').toBeFalsy();
 });
 
-test('first run shows only Play, then the full menu returns once Level 1 is cleared', async ({ page }) => {
-    // No seedProgress: a brand-new player (unlocked === 0) gets the stripped menu.
+test('onboarding paces feature reveals by progression instead of dumping them at once', async ({ page }) => {
+    // Newcomer (unlocked === 0): exactly one obvious thing to do.
     await page.goto('/');
     await expect(page.locator('#start-screen')).toHaveClass(/first-run/);
     await expect(page.locator('#btn-start')).toHaveText(/start playing/i);
@@ -155,8 +158,8 @@ test('first run shows only Play, then the full menu returns once Level 1 is clea
     await expect(page.locator('#btn-editor')).toBeHidden();
     await expect(page.locator('.controls-disc')).toBeHidden();
 
-    // Clearing Level 1 persists the unlock the same way game.js does on a win;
-    // reload so the whole app boots fresh in the unlocked state.
+    // Learning (cleared Level 1, still inside World 1): the carousel and controls
+    // arrive, but the daily and editor are deliberately still withheld.
     await page.evaluate(() => storage.setUnlocked(1));
     await page.reload();
     await expect(page.locator('#start-screen')).not.toHaveClass(/first-run/);
@@ -164,9 +167,24 @@ test('first run shows only Play, then the full menu returns once Level 1 is clea
     await expect(page.locator('#continue-hero')).toBeVisible();
     await expect(page.locator('#world-menu')).toBeVisible();
     await expect(page.locator('#world-carousel .world-card')).toHaveCount(3);
-    await expect(page.locator('#daily-card')).toBeVisible();
-    await expect(page.locator('#btn-editor')).toBeVisible();
     await expect(page.locator('.controls-disc')).toBeVisible();
+    await expect(page.locator('#daily-card')).toBeHidden();
+    await expect(page.locator('#btn-editor')).toBeHidden();
+    await expect(page.locator('#menu-secondary-actions')).toBeHidden();
+
+    // Explorer (reached World 2): the daily/ghost loop unlocks with a NEW badge;
+    // the editor stays gated for a same-day sprinter.
+    await page.evaluate(() => storage.setUnlocked(7));
+    await page.reload();
+    await expect(page.locator('#daily-card')).toBeVisible();
+    await expect(page.locator('#daily-card')).toHaveClass(/menu-new/);
+    await expect(page.locator('#btn-editor')).toBeHidden();
+
+    // Veteran (reached World 3): the editor finally unlocks, also flagged NEW.
+    await page.evaluate(() => storage.setUnlocked(14));
+    await page.reload();
+    await expect(page.locator('#btn-editor')).toBeVisible();
+    await expect(page.locator('#btn-editor')).toHaveClass(/menu-new/);
 });
 
 test('mute preference persists across reload', async ({ page }) => {
