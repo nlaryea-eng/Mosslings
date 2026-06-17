@@ -1577,6 +1577,32 @@ test('nextMedalGoal exposes the first missing mastery target in priority order',
     eq(ui.nextMedalGoal(LEVELS[0], { saved: 1, skills: 1, time: 1 }), null, 'all medals cleared');
 });
 
+// Item P2 — visible local win-streak momentum (localStorage only, not sim).
+test('run streak storage increments wins, tracks best, and resets on a loss', () => {
+    storage.save('streak', { current: 0, best: 0 });
+    let s = storage.recordRunOutcome(true);
+    eq(s.current, 1, 'first win starts the streak');
+    eq(s.best, 1, 'first win sets best');
+    s = storage.recordRunOutcome(true);
+    eq(s.current, 2, 'second consecutive win increments');
+    eq(s.best, 2, 'best follows the high-water mark');
+    s = storage.recordRunOutcome(false);
+    eq(s.current, 0, 'loss resets current streak');
+    eq(s.previous, 2, 'loss reports the streak that ended');
+    eq(s.best, 2, 'loss preserves best streak');
+    eq(storage.getRunStreak().best, 2, 'best streak persisted');
+});
+
+// Item P3 — result overlay can name the next mastery target without emoji/UI drift.
+test('result progress helpers render streak and mastery target chips', () => {
+    const streak = ui.runStreakHtml({ win: true, current: 3, best: 4 });
+    assert(streak.includes('STREAK 3'), 'win streak chip names the current streak');
+    assert(!/[🔥🥇🥈🥉]/u.test(streak), 'streak chip must not depend on platform emoji');
+    const target = ui.resultTargetHtml({ label: 'Next target: use 3 or fewer skills' }, false);
+    assert(target.includes('Next target: use 3 or fewer skills'), 'target chip carries the full mastery prompt');
+    assert(ui.resultTargetHtml(null, true).includes('All medal targets cleared'), 'complete chip renders');
+});
+
 // ------------------------------------------------------------------
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

@@ -218,6 +218,29 @@ test('result overlay renders and copies a PNG share card', async ({ page }) => {
     expect(errors, `console/page errors:\n${errors.join('\n')}`).toEqual([]);
 });
 
+test('result overlay shows win-streak momentum and a specific medal retry target', async ({ page }) => {
+    await page.addInitScript(() => {
+        localStorage.setItem('mosslings_unlocked', '8');
+        localStorage.setItem('mosslings_best', JSON.stringify({ 0: 100 }));
+        localStorage.setItem('mosslings_medals', JSON.stringify({ 0: { saved: 1, skills: 0, time: 0 } }));
+        localStorage.setItem('mosslings_streak', JSON.stringify({ current: 1, best: 1 }));
+    });
+    await page.goto('/');
+    await page.locator('#btn-start').click();
+    await page.evaluate(() => {
+        const g = ui.game;
+        g.savedCount = g.level.totalSpawn;
+        g.skillsUsed = g.level.par.skills + 2; // miss efficiency, keep rescue
+        g.time = (g.level.time - g.level.par.time - 10) * 60; // also miss speed, but skills is first target
+        g.endLevel();
+    });
+    await expect(page.locator('#msg-progress')).toBeVisible();
+    await expect(page.locator('#msg-progress')).toContainText('STREAK 2');
+    await expect(page.locator('#msg-progress')).toContainText('Next target: use 3 or fewer skills');
+    await expect(page.locator('#msg-btn-retry')).toHaveText('Retry: SK<=3');
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('mosslings_streak')).current)).toBe(2);
+});
+
 test('on-screen Rewind button is available in play and steps the sim back', async ({ page }) => {
     await page.addInitScript(seedProgress);
     await page.goto('/');

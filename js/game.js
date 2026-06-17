@@ -47,6 +47,19 @@ class StorageManager {
         this.save('daily', all);
         return best;
     }
+    getRunStreak() {
+        const s = this.load('streak', { current: 0, best: 0 }) || {};
+        const current = Math.max(0, Number(s.current) | 0);
+        const best = Math.max(0, Number(s.best) | 0, current);
+        return { current, best };
+    }
+    recordRunOutcome(win) {
+        const prev = this.getRunStreak();
+        const current = win ? prev.current + 1 : 0;
+        const next = { current, best: Math.max(prev.best, current) };
+        this.save('streak', next);
+        return { ...next, previous: prev.current, win: !!win };
+    }
     // First-encounter coaching: which campaign levels the player has already
     // started once (so the new-mechanic nudge fires only the first time).
     getSeen() { return this.load('seen', {}); }
@@ -98,6 +111,7 @@ class Game {
         this.exitFlash = 0; // portal brightens briefly on each rescue
         this.deniedAt = -999; // render: tick of the last failed assignment (red ring)
         this.saveStreak = 0; this.lastSaveStep = -999;
+        this.resultRecorded = false;
         // Failure diagnosis: deterministic per-cause death tally (set by die()
         // during the sim, read by the UI after a loss). retryHint carries the
         // last failure zone across a Retry; failHint is the render-only marker
@@ -297,6 +311,7 @@ class Game {
         this.ffwd = false; this.nukeArmedAt = 0; this.nuked = false;
         this.shake = 0; this.flash = 0; this.hitStop = 0; this.exitFlash = 0;
         this.saveStreak = 0; this.lastSaveStep = -999;
+        this.resultRecorded = false;
         this.deaths = this.freshDeaths(); // fresh diagnosis tally per attempt
         this.simStep = 0; this.actionLog = [];   // fresh input history per attempt
         // Onboard a brand-new player on (and only on) campaign Level 1.

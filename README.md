@@ -95,11 +95,11 @@ Design principles:
 ## Tests
 
 ```
-node tests/run-tests.js          # 119 unit tests, no framework (stubbed DOM)
-npm install && npm run test:e2e  # 16 Playwright browser smoke tests (dev-only)
+node tests/run-tests.js          # 121 unit tests, no framework (stubbed DOM)
+npm install && npm run test:e2e  # 17 Playwright browser smoke tests (dev-only)
 ```
 
-The unit suite (119 tests, no test framework needed) loads the real game scripts
+The unit suite (121 tests, no test framework needed) loads the real game scripts
 into Node with stubbed canvas/DOM. A separate **Playwright** smoke suite
 (`tests/e2e/`) drives a real Chromium against the static site to catch
 boot/layout regressions (e.g. level-select card overflow) and is gated in CI
@@ -134,8 +134,9 @@ before deploy. The unit suite covers:
    suppress false alarms for floaters, and prove the rendering helper does not
    mutate deterministic sim state
 11. **Readable mastery loop** — failure diagnosis, retry ghost hints,
-   full-skill intent previews, and missing-medal target prompts are guarded as
-   render/UI systems that do not mutate simulation state
+   full-skill intent previews, local win-streak momentum, and missing-medal
+   target prompts are guarded as render/UI systems that do not mutate
+   simulation state
 12. **Shared-level import robustness** — `deserializeLevel` is fuzzed with
    thousands of random/truncated/oversized payloads and must always return
    `null` or a well-formed level — never throw
@@ -189,7 +190,8 @@ determinism invariant (presentation lives outside `update()`):
   Share, PNG clipboard, or a download fallback.
 - **Readable mastery loop** — losses name the likely cause, Retry can mark the
   last failure zone, selected skills preview their intent on the target, and
-  cleared level cards expose the next missing medal target.
+  cleared level cards/result overlays expose the next missing medal target.
+  Consecutive wins also build a local streak chip and best-streak memory.
 - **Onboarding** — dismissible/auto-hiding tutorial card, portrait rotate hint.
 - **New level** — "One-Way Out" introduces the one-way membrane to the campaign.
 

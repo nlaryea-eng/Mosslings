@@ -348,6 +348,11 @@ const ui = {
         else g.loadLevel(g.levelIdx);
     },
 
+    medalStorageKey(game) {
+        if (game.runMode === 'daily' && game.dailyChallenge) return `daily:${game.dailyChallenge.key}`;
+        return game.levelIdx >= 0 ? game.levelIdx : game.level.name;
+    },
+
     nextMedalGoal(level, medals) {
         if (!level || !level.par) return null;
         const m = medals || {};
@@ -375,6 +380,26 @@ const ui = {
             };
         }
         return null;
+    },
+
+    runStreakHtml(streak) {
+        if (!streak) return '';
+        if (streak.win && streak.current >= 2) {
+            return `<span class="msg-progress-chip msg-streak">STREAK ${streak.current} · best ${streak.best}</span>`;
+        }
+        if (!streak.win && streak.previous >= 2) {
+            return `<span class="msg-progress-chip msg-streak ended">Streak ended at ${streak.previous} · best ${streak.best}</span>`;
+        }
+        if (streak.best >= 2) {
+            return `<span class="msg-progress-chip msg-streak">Best streak ${streak.best}</span>`;
+        }
+        return '';
+    },
+
+    resultTargetHtml(target, allMedals) {
+        if (target) return `<span class="msg-progress-chip msg-target">${target.label}</span>`;
+        if (allMedals) return '<span class="msg-progress-chip msg-target complete">All medal targets cleared</span>';
+        return '';
     },
 
     buildMenu() {
@@ -709,16 +734,27 @@ const ui = {
             }
         }
 
+        const streak = game.resultRecorded
+            ? { ...storage.getRunStreak(), previous: storage.getRunStreak().current, win }
+            : storage.recordRunOutcome(win);
+        game.resultRecorded = true;
+
         const result = ResultView.buildRunResult(game, win);
         result.url = this.resultUrlFor(result);
         document.getElementById('msg-stats').innerHTML = ResultView.statsHtml(result);
 
         const mWrap = document.getElementById('msg-medals-wrap');
         if (win && game.level.par) {
-            const key = game.runMode === 'daily' && game.dailyChallenge
-                ? `daily:${game.dailyChallenge.key}`
-                : (game.levelIdx >= 0 ? game.levelIdx : game.level.name);
-            storage.setMedals(key, result.medals);
+            storage.setMedals(this.medalStorageKey(game), result.medals);
+        }
+        const storedMedals = win && game.level.par ? storage.getMedals(this.medalStorageKey(game)) : result.medals;
+        const allMedals = !!(win && game.level.par && storedMedals.saved && storedMedals.skills && storedMedals.time);
+        const target = win && game.level.par ? this.nextMedalGoal(game.level, storedMedals) : null;
+
+        const progress = document.getElementById('msg-progress');
+        if (progress) {
+            progress.innerHTML = this.runStreakHtml(streak) + this.resultTargetHtml(target, allMedals);
+            progress.classList.toggle('hidden', progress.innerHTML === '');
         }
         const showLegend = !!(win && game.level.par && !storage.load('medalLegendSeen', false));
         mWrap.innerHTML = ResultView.medalsHtml(result, { showLegend });
@@ -753,9 +789,10 @@ const ui = {
 
         // "Retry for medals" appears on a win that didn't sweep all three.
         const medals = result.medals;
-        const allMedals = medals.saved && medals.skills && medals.time;
         const showRetry = win && game.level.par && !allMedals && game.state !== 'VICTORY';
-        document.getElementById('msg-btn-retry').classList.toggle('hidden', !showRetry);
+        const retry = document.getElementById('msg-btn-retry');
+        retry.innerText = target ? `Retry: ${target.short}` : 'Retry for medals';
+        retry.classList.toggle('hidden', !showRetry);
 
         // The shareable PNG brag card is a win-only flourish; demote it on a loss.
         document.getElementById('msg-btn-card').classList.toggle('hidden', !win);

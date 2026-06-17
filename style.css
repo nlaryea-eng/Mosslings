@@ -1,6 +1,6 @@
 @font-face {
     font-family: 'Moss Pixel';
-    src: url('assets/fonts/moss-pixel.woff2?v=20260617-p1') format('woff2');
+    src: url('assets/fonts/moss-pixel.woff2?v=20260617-p23') format('woff2');
     font-weight: 400;
     font-style: normal;
     font-display: swap;
@@ -457,6 +457,7 @@ button:focus-visible {
 #message-overlay:not(.hidden) #msg-title { animation: titlePop 0.5s cubic-bezier(0.2, 1.4, 0.4, 1) both; }
 #message-overlay:not(.hidden) #msg-text,
 #message-overlay:not(.hidden) #msg-medals-wrap,
+#message-overlay:not(.hidden) #msg-progress,
 #message-overlay:not(.hidden) #msg-btns { animation: riseIn 0.45s ease-out both; animation-delay: 0.12s; }
 @keyframes titlePop { 0% { transform: scale(0.6); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
 @keyframes riseIn { from { transform: translateY(12px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
@@ -623,6 +624,42 @@ button:focus-visible {
     background: rgba(255, 235, 59, 0.07);
     border: 1px solid rgba(255, 235, 59, 0.22);
     border-radius: 7px;
+}
+#msg-progress {
+    margin: -4px 0 16px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+}
+#msg-progress.hidden { display: none; }
+.msg-progress-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 24px;
+    padding: 5px 10px;
+    border-radius: 6px;
+    border: 1px solid rgba(124, 179, 66, 0.36);
+    background: rgba(13, 24, 16, 0.86);
+    color: #d5f59a;
+    font-size: 9px;
+    line-height: 1.15;
+    white-space: nowrap;
+}
+.msg-streak {
+    color: var(--gold);
+    border-color: rgba(255, 235, 59, 0.34);
+    background: rgba(255, 235, 59, 0.08);
+}
+.msg-streak.ended {
+    color: #c9a25b;
+    border-color: rgba(201, 162, 91, 0.34);
+}
+.msg-target.complete {
+    color: #9fe2ff;
+    border-color: rgba(77, 208, 225, 0.32);
+    background: rgba(77, 208, 225, 0.08);
 }
 #msg-stats { display: flex; gap: 10px; justify-content: center; margin: 0 0 20px; flex-wrap: wrap; }
 #msg-stats:empty { display: none; }
@@ -805,6 +842,8 @@ button:focus-visible {
     #message-overlay:not(.has-result-card) #msg-title { font-size: 20px; margin: 0 0 6px; }
     #message-overlay:not(.has-result-card) #msg-text { font-size: 9px; margin: 0 0 8px; }
     #message-overlay:not(.has-result-card) #msg-stats { margin: 0 0 8px; }
+    #msg-progress { margin: 0 0 8px; gap: 5px; }
+    .msg-progress-chip { min-height: 18px; padding: 3px 7px; font-size: 7px; border-radius: 5px; }
     #message-overlay #msg-btns #msg-btn-primary,
     #message-overlay #msg-btns #msg-btn-retry { order: -1; padding: 10px 18px; font-size: 11px; }
     #message-overlay #msg-btns #msg-btn-primary {
