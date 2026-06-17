@@ -2077,9 +2077,10 @@ test('world mastery summary counts medals and exposes the next focus', () => {
     eq(data.masteryComplete, false, 'partial world is not flagged complete');
     eq(data.nextGoal.level, 2, 'next focus points at the first incomplete unlocked level');
     const html = ui.worldMasterySummaryHtml(meta, 6);
-    assert(html.includes('Rescue 2/7'), 'row prints rescue progress');
-    assert(html.includes('Mastered 1/7'), 'row prints mastered progress');
-    assert(html.includes('Next: L2'), 'row prints the next focus chip');
+    assert(html.includes('Mastered 1/7'), 'summary line prints mastered progress');
+    assert(html.includes('4/21 medals'), 'summary line compresses every medal into one count');
+    assert(html.includes('Next: L2'), 'a single next-target chip remains');
+    assert(!/Rescue \d|Efficiency \d|Speed \d/.test(html), 'individual rescue/efficiency/speed chips are gone');
 });
 
 test('world mastery summary exposes completion state when every level is mastered', () => {
@@ -2113,6 +2114,16 @@ test('world reward ribbon summarizes world-complete stats and mastery state', ()
     assert(html.includes('World mastered'), 'reward ribbon distinguishes mastery from a plain unlock');
     assert(html.includes('21/21 medals'), 'reward ribbon surfaces aggregate medal totals');
     assert(html.includes('Mastery complete'), 'reward ribbon prints the mastery pill');
+});
+
+test('carousel wheel intent steps horizontally, ignores vertical, and debounces', () => {
+    const menu = ui._ensureMenu();
+    menu._wheelLock = null;
+    eq(menu.wheelNavIntent(40, 4, 1000), 1, 'a rightward flick advances one world');
+    eq(menu.wheelNavIntent(-40, 4, 1400), -1, 'a leftward flick steps back once the cooldown clears');
+    eq(menu.wheelNavIntent(50, 4, 1500), 0, 'a second flick inside the cooldown window is swallowed');
+    eq(menu.wheelNavIntent(4, 60, 3000), 0, 'a dominantly vertical gesture leaves page scroll alone');
+    eq(menu.wheelNavIntent(3, 0, 4000), 0, 'a tiny horizontal jitter is ignored');
 });
 
 test('late-campaign ordering now ramps world 2 and 3 more steadily', () => {
