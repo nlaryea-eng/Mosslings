@@ -207,3 +207,21 @@ test('result overlay renders and copies a PNG share card', async ({ page }) => {
     expect(writes.types).toContain('image/png');
     expect(errors, `console/page errors:\n${errors.join('\n')}`).toEqual([]);
 });
+
+test('editor refuses to save a structurally invalid level', async ({ page }) => {
+    await page.addInitScript(seedProgress);
+    await page.goto('/');
+    await page.locator('#btn-editor').click();   // opens with empty terrain (spawn over a pit)
+    await expect(page.locator('#editor-ui')).toBeVisible();
+
+    const before = await page.evaluate(() => storage.getCustomLevels().length);
+    await page.locator('#btn-edit-save').click();
+
+    // A specific error toast, no save, and the editor stays open (not back at menu).
+    await expect(page.locator('#toast')).toBeVisible();
+    await expect(page.locator('#toast')).toContainText(/can.?t save/i);
+    await expect(page.locator('#editor-ui')).toBeVisible();
+    await expect(page.locator('#start-screen')).toBeHidden();
+    const after = await page.evaluate(() => storage.getCustomLevels().length);
+    expect(after).toBe(before);
+});

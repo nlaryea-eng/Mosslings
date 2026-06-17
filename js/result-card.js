@@ -279,11 +279,18 @@ const ResultView = (() => {
     }
 
     function drawResultCardPreview(canvas, r) {
-        if (!canvas || !canvas.getContext) return null;
+        // Defend against fake/non-canvas stubs (e.g. a test double or a detached
+        // element): require a real 2D context before drawing, and never assume
+        // classList exists. Returns null when it cannot draw, the canvas when it can.
+        if (!canvas || typeof canvas.getContext !== 'function') return null;
+        const ctx = canvas.getContext('2d');
+        if (!ctx || typeof ctx.fillRect !== 'function') return null;
         canvas.width = CARD_W;
         canvas.height = CARD_H;
-        drawResultCard(canvas.getContext('2d'), r);
-        canvas.classList.remove('hidden');
+        drawResultCard(ctx, r);
+        if (canvas.classList && typeof canvas.classList.remove === 'function') {
+            canvas.classList.remove('hidden');
+        }
         return canvas;
     }
 

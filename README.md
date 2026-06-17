@@ -95,11 +95,11 @@ Design principles:
 ## Tests
 
 ```
-node tests/run-tests.js          # 101 unit tests, no framework (stubbed DOM)
+node tests/run-tests.js          # 102 unit tests, no framework (stubbed DOM)
 npm install && npm run test:e2e  # Playwright browser smoke tests (dev-only)
 ```
 
-The unit suite (101 tests, no test framework needed) loads the real game scripts
+The unit suite (102 tests, no test framework needed) loads the real game scripts
 into Node with stubbed canvas/DOM. A separate **Playwright** smoke suite
 (`tests/e2e/`) drives a real Chromium against the static site to catch
 boot/layout regressions (e.g. level-select card overflow) and is gated in CI
@@ -141,7 +141,10 @@ before deploy. The unit suite covers:
 
 Built in: paint dirt/metal/lava, erase, place spawn & exit, save to
 `localStorage`. Custom levels get a full skill loadout. Progress and per-level
-best-save percentages are also stored locally.
+best-save percentages are also stored locally. Saving runs the same structural
+check shared levels pass on import, so the editor can't persist an unsolvable
+level (e.g. spawn over a pit or an exit in mid-air) — it explains what's wrong
+instead.
 
 ## Notable fixes vs. the original prototype
 

@@ -810,6 +810,11 @@ const ui = {
         const game = this.game;
         game.level.name = document.getElementById('edit-name').value || 'Custom Level';
         game.level.commands = this.editCommands;
+        // Validate before persisting — the same structural check shared levels
+        // pass on import — so the editor can't quietly save an unsolvable level
+        // (e.g. spawn over a pit or an exit in mid-air) that fails only later.
+        const err = validateLevelStructure(game.level);
+        if (err) { this.toast(`Can't save: ${err}`, true); return; }
         storage.saveCustomLevel(game.level);
         this.toast(`Level "${game.level.name}" saved to LocalStorage.`);
         this.backToMenu();

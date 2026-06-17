@@ -651,6 +651,30 @@ test('ResultView creates a 1200x630 share-card canvas without throwing', () => {
     eq(canvas.height, 630);
     assert(ResultView.cardFilename(r).startsWith('mosslings-level-1'), 'campaign filename is stable');
 });
+test('drawResultCardPreview ignores fake/non-canvas stubs, draws into a real one', () => {
+    // The preview must never assume the element it is handed is a real canvas.
+    eq(ResultView.drawResultCardPreview(null, {}), null, 'null element → null');
+    eq(ResultView.drawResultCardPreview({}, {}), null, 'no getContext → null');
+    eq(ResultView.drawResultCardPreview({ getContext: () => null }, {}), null, 'null context → null');
+    eq(ResultView.drawResultCardPreview({ getContext: () => ({}) }, {}), null, 'context without fillRect → null');
+
+    // A canvas-shaped element with a real-looking 2D context draws and unhides.
+    const g = new Game();
+    g.loadLevel(0, false, true);
+    g.savedCount = 8; g.skillsUsed = 3; g.time = (g.level.time - 42) * 60;
+    const r = ResultView.buildRunResult(g, true);
+    const removed = [];
+    const fake = {
+        width: 0, height: 0,
+        getContext: () => global.document.createElement('canvas').getContext('2d'),
+        classList: { remove: (c) => removed.push(c) },
+    };
+    const out = ResultView.drawResultCardPreview(fake, r);
+    eq(out, fake, 'returns the canvas when the context is real');
+    eq(fake.width, ResultView.CARD_W, 'sizes the canvas');
+    eq(fake.height, ResultView.CARD_H);
+    assert(removed.includes('hidden'), 'unhides the preview canvas');
+});
 
 // ==============================================================
 console.log('\n— Par medals & skill tracking —');
