@@ -262,22 +262,24 @@ once Level 2 is cleared, and are always present on custom/shared/editor levels.
 The keyboard shortcuts (`N`, `+`/`−`) keep working throughout, so power users
 lose nothing.
 
-**Staged onboarding** (`js/menu-stage.js`, pure + unit-tested) paces *capability*,
-not just detail, so the menu never dumps everything at once. `menuFeatureState`
-maps `{unlocked, daysSinceFirstPlay, customLevelCount}` → which surfaces are live:
+**Staged journey** (`js/player-journey.js`, pure + unit-tested) paces
+*capability*, not just detail, so the menu never dumps everything at once. The
+three-grove promise is deliberately simple:
 
-| Stage | Trigger | Unlocks |
-|---|---|---|
-| Newcomer | brand-new save | one dominant **Start Playing** |
-| Learning | cleared Level 1 | Continue hero + grove carousel + keyboard hints |
-| Explorer | reached Grove 2 | **Daily / Beat-the-Ghost** loop |
-| Veteran | reached Grove 3 **or** ~week three by tenure | **Level Editor** (then **My Levels** once a custom exists) |
+| Stage | Trigger | Player promise | Promoted systems |
+|---|---|---|---|
+| Newcomer | brand-new save | **Start** | one obvious first action |
+| Grove 1: Save | cleared Level 1 | get them home | Continue + grove carousel + keyboard hints |
+| Grove 2: Race | reached Grove 2 | beat your best run | **Race Yourself**, Daily, personal ghost/replays |
+| Grove 3: Create | reached Grove 3 | make a challenge | **Create Levels**, then **My Levels** once a custom exists |
 
-Each freshly-unlocked surface shows a one-time **NEW** badge (`.menu-new`,
-cleared on first use). Visibility is owned by `MenuUI.applyMenuSurfaces`, not a
-binary `.first-run` CSS gate, and on phones the staged surfaces stack as
-full-width modular blocks. Tenure is a wall-clock first-play stamp
-(`storage.firstSeenAt`) and is **menu-only** — it never enters the simulation.
+`menu-stage.js` remains as a compatibility wrapper for older menu calls, but the
+source of truth is the player journey model. Tenure no longer unlocks the editor
+early: creation is a Grove 3 reward, not a calendar surprise. Each freshly
+unlocked surface shows a one-time **NEW** badge (`.menu-new`, cleared on first
+use). Visibility is owned by `MenuUI.applyMenuSurfaces`, not a binary
+`.first-run` CSS gate, and on phones the staged surfaces stack as full-width
+modular blocks. Journey state is **UI-only** — it never enters the simulation.
 
 Within the menu, the Continue hero is the strongest action, the staged
 Daily/Editor surfaces are secondary, and the grove carousel exposes only the

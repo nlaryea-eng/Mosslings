@@ -218,29 +218,55 @@ Object.assign(ui, {
         if (win) ResultView.drawResultCardPreview(preview, result);
         else if (preview && preview.classList) preview.classList.add('hidden');
 
+        const hasNext = win && game.runMode === 'campaign' && game.levelIdx >= 0 && game.levelIdx + 1 < LEVELS.length;
+        const journey = typeof journeyResultModel === 'function'
+            ? journeyResultModel({
+                win,
+                runMode: game.runMode,
+                levelIdx: game.levelIdx,
+                unlocked: storage.getUnlocked(),
+                hasNext,
+                target,
+                allMedals,
+                victory: game.state === 'VICTORY',
+                dailyBestIsNew: !!result.dailyBestIsNew,
+                groveSize: this.groveSize || 7,
+            })
+            : null;
+        this.lastJourneyPrimary = journey && journey.primary ? journey.primary : null;
+        const journeyNode = document.getElementById('msg-journey');
+        if (journeyNode) {
+            if (journey && journey.coaching) {
+                journeyNode.innerHTML = `<b>${journey.primary.label}</b><span>${journey.coaching}</span>`;
+                journeyNode.classList.remove('hidden');
+            } else journeyNode.classList.add('hidden');
+        }
+
         // "Retry for medals" appears on a win that didn't sweep all three.
         const medals = result.medals;
-        const showRetry = win && game.level.par && !allMedals && game.state !== 'VICTORY';
+        const showRetry = journey ? journey.showRetryMedal : (win && game.level.par && !allMedals && game.state !== 'VICTORY');
         const retry = document.getElementById('msg-btn-retry');
-        retry.innerText = target ? `Retry: ${target.short}` : 'Retry for medals';
+        retry.innerText = journey && journey.retryLabel ? journey.retryLabel : (target ? `Retry: ${target.short}` : 'Retry for medals');
         retry.classList.toggle('hidden', !showRetry);
 
-        // The shareable PNG brag card is a win-only flourish; demote it on a loss.
-        document.getElementById('msg-btn-card').classList.toggle('hidden', !win);
-        // Beat-my-run shares the deterministic action log of THIS run. Offer it
-        // for any run the player actually drove (hidden while watching a ghost).
+        const allowShare = journey ? journey.showShare : win;
+        document.getElementById('msg-btn-card').classList.toggle('hidden', !win || !allowShare);
+        const shareTextBtn = document.getElementById('msg-btn-share');
+        if (shareTextBtn) shareTextBtn.classList.toggle('hidden', !win || !allowShare);
+        // Beat-my-run is intentionally a Grove 2+ promise: do not name ghosts
+        // before the player reaches the improvement grove.
         const replayBtn = document.getElementById('msg-btn-replay');
         if (replayBtn) {
             replayBtn.innerText = win ? 'Beat my run' : 'Copy replay';
-            replayBtn.classList.toggle('hidden', !!game.ghostMode);
+            replayBtn.classList.toggle('hidden', !!game.ghostMode || !(journey ? journey.showReplay : true));
         }
 
         // Forward pull: on a campaign win, name the reward you're heading to.
         const primary = document.getElementById('msg-btn-primary');
-        const hasNext = win && game.runMode === 'campaign' && game.levelIdx >= 0 && game.levelIdx + 1 < LEVELS.length;
         let label;
-        if (game.state === 'VICTORY') label = 'The End';
-        else if (!win) label = 'Retry';
+        if (journey && journey.primary && (game.runMode === 'daily' || !win || game.state === 'VICTORY')) label = journey.primary.label;
+        else if (game.state === 'VICTORY') label = 'The End';
+        else if (!win) label = 'Try Again';
         else if (game.runMode === 'daily') label = 'Done';
         else if (hasNext) {
             const nm = LEVELS[game.levelIdx + 1].name;

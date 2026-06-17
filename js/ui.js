@@ -75,7 +75,9 @@ const ui = {
         $('btn-menu-home').onclick = () => this.backToMenu();
         $('msg-btn-primary').onclick = () => {
             this.clearNextLevelCountdown();
-            if (game.state === 'VICTORY') this.backToMenu();
+            const journeyPrimaryId = this.lastJourneyPrimary && this.lastJourneyPrimary.id;
+            if (journeyPrimaryId === 'share') this.shareResult();
+            else if (game.state === 'VICTORY') this.backToMenu();
             else if (game.runMode === 'daily') {
                 if (this.lastWin) this.backToMenu();
                 else this.restartLevel();

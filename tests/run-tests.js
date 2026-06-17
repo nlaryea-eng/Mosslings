@@ -87,6 +87,7 @@ function assertScriptOrder(files) {
     mustPrecede('game-render.js', 'main.js');
     mustPrecede('game-hud.js', 'main.js');
     mustPrecede('game.js', 'ui.js');
+    mustPrecede('player-journey.js', 'menu-stage.js');
     mustPrecede('ui.js', 'share-ui.js');
     mustPrecede('ui.js', 'editor-ui.js');
     mustPrecede('ui.js', 'menu-ui.js');
@@ -2252,12 +2253,57 @@ test('menu feature gating paces unlocks by progression and tenure', () => {
     f = menuFeatureState({ unlocked: 14, daysSinceFirstPlay: 0, groveSize: ws });
     eq(f.stage, 'veteran');
     assert(f.editor, 'deep progression unlocks the editor without tenure');
-    // Veteran by tenure: ~week three on a shallow save → editor unlocks.
-    assert(menuFeatureState({ unlocked: 7, daysSinceFirstPlay: 14, groveSize: ws }).editor,
-        'two weeks of tenure unlocks the editor for a returning player');
+    // Returning players still need Grove 3 before creation unlocks; tenure no longer dumps tools early.
+    assert(!menuFeatureState({ unlocked: 7, daysSinceFirstPlay: 99, groveSize: ws }).editor,
+        'tenure must not unlock the editor before Grove 3');
     // Gallery needs both the editor and an actual custom level.
     assert(!menuFeatureState({ unlocked: 14, customLevelCount: 0, groveSize: ws }).gallery, 'no customs, no gallery');
     assert(menuFeatureState({ unlocked: 14, customLevelCount: 1, groveSize: ws }).gallery, 'editor + a custom shows the gallery');
+});
+
+
+test('player journey stretches save, race, and create across groves', () => {
+    const ws = 7;
+    let j = journeyFeatureFlags({ unlocked: 0, customLevelCount: 5, groveSize: ws });
+    eq(j.stage, 'newcomer');
+    assert(!j.daily && !j.ghost && !j.editor && !j.gallery, 'brand-new player sees no meta systems');
+
+    j = journeyFeatureFlags({ unlocked: 1, customLevelCount: 5, groveSize: ws });
+    eq(j.stage, 'save');
+    assert(j.groveMenu && j.controls, 'Grove 1 opens campaign navigation');
+    assert(!j.daily && !j.ghost && !j.editor && !j.gallery, 'Grove 1 hides race/create systems');
+
+    j = journeyFeatureFlags({ unlocked: 7, customLevelCount: 5, groveSize: ws });
+    eq(j.stage, 'race');
+    assert(j.daily && j.ghost, 'Grove 2 exposes Race Yourself');
+    assert(!j.editor && !j.gallery, 'Grove 2 still hides creation tools');
+
+    j = journeyFeatureFlags({ unlocked: 14, customLevelCount: 0, groveSize: ws });
+    eq(j.stage, 'create');
+    assert(j.editor && !j.gallery, 'Grove 3 exposes creation, gallery waits for a custom');
+    assert(j.daily && j.ghost, 'Grove 3 keeps improvement loops available');
+
+    j = journeyFeatureFlags({ unlocked: 14, customLevelCount: 1, groveSize: ws });
+    assert(j.gallery, 'Grove 3 plus a custom exposes My Levels');
+});
+
+test('player journey result model gives one dominant next action', () => {
+    const fail = journeyResultModel({ win: false, unlocked: 2 });
+    eq(fail.primary.label, 'Try Again');
+    assert(!fail.showShare, 'failed run does not push sharing');
+
+    const firstWin = journeyResultModel({ win: true, unlocked: 1, levelIdx: 0, hasNext: true });
+    eq(firstWin.primary.label, 'Next P2');
+    assert(!firstWin.showReplay, 'ghost language is hidden before Grove 2');
+
+    const medalMiss = journeyResultModel({ win: true, unlocked: 8, levelIdx: 7, hasNext: true, target: { short: 'SAVE 12' }, allMedals: false });
+    assert(medalMiss.showRetryMedal, 'medal miss offers a focused retry');
+    eq(medalMiss.retryLabel, 'Retry: SAVE 12');
+    assert(medalMiss.showReplay, 'Grove 2 can share/compare replays');
+
+    const dailyBest = journeyResultModel({ win: true, runMode: 'daily', unlocked: 8, dailyBestIsNew: true });
+    eq(dailyBest.primary.label, 'Share Run');
+    assert(dailyBest.coaching.includes('Race'), 'daily win names the return loop after Grove 2');
 });
 
 test('carousel window stays bounded as the campaign scales', () => {

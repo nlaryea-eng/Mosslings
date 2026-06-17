@@ -14,25 +14,25 @@ class MenuUI {
         this.groveSize = 7;
         this.groveThemes = [
             {
-                name: 'Foundations',
-                theme: 'Forest on-ramp',
-                unlock: 'Grove 1 is your on-ramp.',
-                flavor: 'Builders, diggers, floaters, and the first lava leap.',
-                badges: ['Core tools', 'Bridge, dig, float', 'Patches 1-7']
+                name: 'Learn to Save',
+                theme: 'Grove 1: Save',
+                unlock: 'Get the moss folk home.',
+                flavor: 'One clear path: rescue, retry, and learn the core tools.',
+                badges: ['Save', 'Retry', 'Patches 1-7']
             },
             {
-                name: 'Trial Hollows',
-                theme: 'Caves and lava routes',
-                unlock: 'The middle stretch tightens route planning.',
-                flavor: 'Bash lines, miner routes, athlete gates, and harsher lava carries.',
-                badges: ['Route control', 'Athlete checks', 'Patches 8-14']
+                name: 'Learn to Race',
+                theme: 'Grove 2: Race Yourself',
+                unlock: 'Beat your best run.',
+                flavor: 'Medals, daily challenge, and your personal ghost become the improvement loop.',
+                badges: ['Race Yourself', 'Daily', 'Patches 8-14']
             },
             {
-                name: 'Machine Reaches',
-                theme: 'Switches and ferries',
-                unlock: 'The endgame region is live.',
-                flavor: 'Switches, ferries, remixed gates, the tower ascent, and the gauntlet.',
-                badges: ['Switch logic', 'Platform timing', 'Patches 15-21']
+                name: 'Learn to Create',
+                theme: 'Grove 3: Create',
+                unlock: 'Make a challenge for someone else.',
+                flavor: 'Switches, ferries, remixes, and the editor/gallery unlock after fluency.',
+                badges: ['Create Levels', 'My Levels', 'Patches 15-21']
             }
         ];
     }
@@ -303,11 +303,9 @@ class MenuUI {
      * Stamps the first-play date on first call so tenure can start counting.
      */
     featureState() {
-        const firstSeen = storage.markFirstSeen();
-        const daysSinceFirstPlay = menuDaysBetween(firstSeen, new Date().toISOString());
+        storage.markFirstSeen();
         return menuFeatureState({
             unlocked: storage.getUnlocked(),
-            daysSinceFirstPlay,
             customLevelCount: storage.getCustomLevels().length,
             groveSize: this.groveSize,
         });
@@ -320,14 +318,28 @@ class MenuUI {
         document.getElementById('start-screen').classList.toggle('first-run', firstRun);
         const start = document.getElementById('btn-start');
         if (start) {
-            start.innerText = firstRun ? 'Start Playing' : 'Play';
+            start.innerText = firstRun ? 'Start' : 'Play';
             start.classList.toggle('hidden', !firstRun);
         }
         this.renderGroveReward(firstRun ? -1 : unlocked);
         this.renderContinueHero();
+        this.renderJourneyHint(features);
         this.renderGroveMenu(features.groveMenu, unlocked);
         this.refreshDailyCard(features.daily);
         this.applyMenuSurfaces(features);
+    }
+
+
+    renderJourneyHint(features) {
+        const hint = document.querySelector('.first-run-hint');
+        if (!hint) return;
+        const stage = features.journeyStage || (features.stage === 'explorer' ? 'race' : features.stage === 'veteran' ? 'create' : features.stage === 'learning' ? 'save' : 'newcomer');
+        const copy = typeof journeyStageCopy === 'function' ? journeyStageCopy(stage) : null;
+        hint.innerText = stage === 'newcomer'
+            ? 'One rule: get them to the portal. First move: build before the gap.'
+            : copy
+                ? `${copy.title} — ${copy.promise}`
+                : 'Guide the moss folk home.';
     }
 
     /**
@@ -339,14 +351,24 @@ class MenuUI {
         const setHidden = (id, hidden) => { const el = document.getElementById(id); if (el) el.classList.toggle('hidden', hidden); };
         setHidden('btn-editor', !features.editor);
         setHidden('btn-gallery', !features.gallery);
+        const editorBtn = document.getElementById('btn-editor');
+        if (editorBtn) editorBtn.innerText = 'Create Levels';
+        const galleryBtn = document.getElementById('btn-gallery');
+        if (galleryBtn) galleryBtn.innerText = 'My Levels';
         const controls = document.querySelector('.controls-disc');
         if (controls) controls.classList.toggle('hidden', !features.controls);
         const secondary = document.getElementById('menu-secondary-actions');
         if (secondary) secondary.classList.toggle('hidden', !(features.daily || features.editor || features.gallery));
         // A freshly-unlocked surface the player hasn't acknowledged yet glows once.
         const badge = (id, on) => { const el = document.getElementById(id); if (el) el.classList.toggle('menu-new', on); };
+        const dailyBtn = document.getElementById('btn-daily');
+        if (dailyBtn && features.daily) dailyBtn.innerText = 'Race Yourself';
         badge('daily-card', features.daily && !storage.hasMenuRevealSeen('daily'));
         badge('btn-editor', features.editor && !storage.hasMenuRevealSeen('editor'));
+        if (features.daily && !features.editor) {
+            const dailyMeta = document.getElementById('daily-meta');
+            if (dailyMeta && dailyMeta.innerText === 'One shared puzzle for everyone.') dailyMeta.innerText = 'Beat today, then race your ghost.';
+        }
     }
 
     renderGroveMenu(show, unlocked) {

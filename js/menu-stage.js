@@ -2,49 +2,63 @@
 /**
  * MOSSLINGS — menu onboarding stage model.
  *
- * A pure, DOM-free source of truth for *which menu surfaces are unlocked* and
- * *how much of the carousel to render*. The old menu revealed everything the
- * instant Level 1 was cleared (a content dump); this paces capability by
- * progression and tenure so each surface arrives as a small reward:
+ * Backward-compatible wrapper around the stretched journey model. Older menu
+ * code/tests call `menuFeatureState`; the newer product language is owned by
+ * `player-journey.js`:
  *
- *   - grove carousel + controls : once Level 1 is cleared
- *   - daily / ghost race        : once the player reaches Grove 2
- *   - level editor              : once they reach Grove 3, OR ~week three by tenure
- *   - my levels (gallery)       : once the editor is unlocked and a custom exists
+ *   Grove 1: Save   — campaign only, one obvious path.
+ *   Grove 2: Race   — daily + personal ghost become the improvement loop.
+ *   Grove 3: Create — editor/gallery/custom level tools arrive after fluency.
  *
- * Keeping this logic pure means the whole progression curve is unit-testable
- * without a clock or a DOM, and the menu just renders the result.
- *
- * IMPORTANT: tenure is wall-clock and MUST stay menu-only. It must never enter
- * the simulation update() path (see the determinism invariant).
+ * Tenure no longer unlocks the editor: creation is a Grove 3 reward, not a
+ * calendar surprise. This keeps returning Grove 2 players focused on improving
+ * before asking them to author levels.
  */
-const EDITOR_TENURE_DAYS = 14; // entering "week three" unlocks the editor by tenure
 const CAROUSEL_WINDOW_RADIUS = 3; // render at most 2*r+1 grove cards regardless of count
+const EDITOR_TENURE_DAYS = Infinity; // legacy export; no longer used for unlocks
 
 function menuFeatureState({
     unlocked = 0,
-    daysSinceFirstPlay = 0,
     customLevelCount = 0,
     groveSize = 7,
-    editorTenureDays = EDITOR_TENURE_DAYS,
 } = {}) {
+    const features = typeof journeyFeatureFlags === 'function'
+        ? journeyFeatureFlags({ unlocked, customLevelCount, groveSize })
+        : fallbackMenuFeatureState({ unlocked, customLevelCount, groveSize });
+    const legacyStage = features.stage === 'newcomer'
+        ? 'newcomer'
+        : features.stage === 'save'
+            ? 'learning'
+            : features.stage === 'race'
+                ? 'explorer'
+                : 'veteran';
+    return {
+        ...features,
+        stage: legacyStage,
+        journeyStage: features.stage,
+        journeyGrove: features.grove,
+    };
+}
+
+function fallbackMenuFeatureState({ unlocked = 0, customLevelCount = 0, groveSize = 7 } = {}) {
     const u = Math.max(0, unlocked | 0);
-    const days = Math.max(0, Number(daysSinceFirstPlay) || 0);
     const customs = Math.max(0, customLevelCount | 0);
     const size = Math.max(1, groveSize | 0);
-
-    const groveMenu = u >= 1;                 // cleared Level 1
-    const controls = u >= 1;
-    const daily = u >= size;                  // reached Grove 2
-    const editor = u >= size * 2 || days >= editorTenureDays; // Grove 3 or tenured
-    const gallery = editor && customs > 0;
-
-    let stage = 'newcomer';
-    if (groveMenu) stage = 'learning';
-    if (daily) stage = 'explorer';
-    if (editor) stage = 'veteran';
-
-    return { stage, groveMenu, controls, daily, editor, gallery };
+    const savePlus = u >= 1;
+    const racePlus = u >= size;
+    const create = u >= size * 2;
+    return {
+        stage: create ? 'create' : racePlus ? 'race' : savePlus ? 'save' : 'newcomer',
+        grove: create ? 3 : racePlus ? 2 : 1,
+        groveMenu: savePlus,
+        controls: savePlus,
+        medals: savePlus,
+        daily: racePlus,
+        ghost: racePlus,
+        editor: create,
+        gallery: create && customs > 0,
+        customLevels: create,
+    };
 }
 
 /**

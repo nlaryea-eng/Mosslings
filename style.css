@@ -417,8 +417,8 @@ button:focus-visible {
 
 /* Surface visibility is now staged in JS (MenuUI.applyMenuSurfaces, driven by
    menu-stage.js) rather than a binary first-run CSS gate: the carousel + controls
-   arrive after Level 1, the daily/ghost at Grove 2, and the editor at Grove 3 or
-   ~week three by tenure. Each surface just toggles `.hidden`. */
+   arrive after Level 1, the daily/ghost at Grove 2, and the editor/gallery at
+   Grove 3. Each surface just toggles `.hidden`. */
 #start-screen:not(.first-run) .first-run-hint { display: none; }
 
 /* One-time "NEW" reveal badge on a freshly-unlocked surface (cleared on use). */
@@ -1142,6 +1142,21 @@ button:focus-visible {
     gap: 8px;
 }
 #msg-progress.hidden { display: none; }
+
+#msg-journey {
+    max-width: min(460px, 86vw);
+    margin: -6px auto 16px;
+    padding: 9px 13px;
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    color: #d8efc5; text-align: center;
+    background: rgba(124, 179, 66, 0.07);
+    border: 1px solid rgba(124, 179, 66, 0.22);
+    border-radius: 8px;
+}
+#msg-journey.hidden { display: none; }
+#msg-journey b { font-size: 10px; color: var(--accent-bright); text-transform: uppercase; letter-spacing: 0.5px; }
+#msg-journey span { font-size: 9px; line-height: 1.45; color: #9bb994; }
+
 #msg-next-teaser {
     max-width: min(420px, 86vw);
     margin: -4px auto 18px; padding: 10px 14px;

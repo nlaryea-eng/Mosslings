@@ -9,10 +9,9 @@
  */
 const { test, expect } = require('@playwright/test');
 
-// Seed a progressed *and tenured* save: into Grove 2 with a full medal stack,
-// plus a first-play date weeks ago — i.e. a returning player for whom every
-// staged surface (carousel, daily, editor, gallery) has unlocked. This is the
-// menu's worst case for layout and the common case for feature visibility.
+// Seed a progressed save into Grove 2 with a full medal stack. This is the
+// main repeat-player menu state: campaign carousel + Daily/Race are visible,
+// while Create/My Levels remain held until Grove 3.
 function seedProgress() {
     localStorage.setItem('mosslings_unlocked', '8');
     localStorage.setItem('mosslings_firstSeenAt', JSON.stringify('2026-01-01T00:00:00.000Z'));
@@ -99,7 +98,7 @@ test('grove navigation surfaces a recommended level and one missing medal target
 
     await page.locator('#grove-carousel').focus();
     await page.keyboard.press('ArrowRight');
-    await expect(page.locator('#grove-carousel .grove-card.is-selected')).toContainText('Trial Hollows');
+    await expect(page.locator('#grove-carousel .grove-card.is-selected')).toContainText('Learn to Race');
 });
 
 test('starting a level shows the board and the full 8-skill toolbar', async ({ page }) => {
@@ -143,7 +142,7 @@ test('portrait phone keeps Daily Ghost card readable without horizontal overflow
     await page.addInitScript(seedProgress);
     await page.goto('/');
     await expect(page.locator('#daily-card')).toBeVisible();
-    await expect(page.locator('#btn-daily')).toHaveText('Play Today\'s Puzzle');
+    await expect(page.locator('#btn-daily')).toHaveText('Race Yourself');
     const overflows = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
     expect(overflows, 'page overflows horizontally on a portrait phone').toBeFalsy();
 });
@@ -152,7 +151,7 @@ test('onboarding paces feature reveals by progression instead of dumping them at
     // Newcomer (unlocked === 0): exactly one obvious thing to do.
     await page.goto('/');
     await expect(page.locator('#start-screen')).toHaveClass(/first-run/);
-    await expect(page.locator('#btn-start')).toHaveText(/start playing/i);
+    await expect(page.locator('#btn-start')).toHaveText(/^start$/i);
     await expect(page.locator('#grove-menu')).toBeHidden();
     await expect(page.locator('#menu-secondary-actions')).toBeHidden();
     await expect(page.locator('#btn-editor')).toBeHidden();
@@ -224,7 +223,7 @@ test('daily card presents first-run ghost setup clearly', async ({ page }) => {
     await page.addInitScript(seedProgress);
     await page.goto('/');
     await expect(page.locator('#daily-card')).toBeVisible();
-    await expect(page.locator('#btn-daily')).toHaveText('Play Today\'s Puzzle');
+    await expect(page.locator('#btn-daily')).toHaveText('Race Yourself');
     await expect(page.locator('#daily-meta')).toHaveText('Your first clear becomes today\'s ghost.');
 });
 
@@ -254,7 +253,7 @@ test('daily card presents returning ghost target clearly', async ({ page }) => {
     // and a short motivator instead of a duplicate stat line.
     await expect(page.locator('#daily-card')).toHaveClass(/is-race/);
     await expect(page.locator('#daily-kicker')).toHaveText('Beat the Ghost');
-    await expect(page.locator('#btn-daily')).toHaveText('Beat Your Ghost');
+    await expect(page.locator('#btn-daily')).toHaveText('Race Yourself');
     await expect(page.locator('#daily-target')).toContainText(/Beat 50%.*1:12.*4 skills/);
     await expect(page.locator('#daily-meta')).toHaveText('Your run is on the clock.');
     // The race must still defer to the Continue hero as the primary CTA.
@@ -446,7 +445,7 @@ test('a loss leads with Retry (no brag card); a win shows the next-level pull', 
     await expect(page.locator('#message-overlay')).toBeVisible();
     await expect(page.locator('#result-card-preview')).toBeHidden();      // no brag card on a loss
     await expect(page.locator('#msg-btn-card')).toBeHidden();
-    await expect(page.locator('#msg-btn-primary')).toHaveText(/^retry$/i);
+    await expect(page.locator('#msg-btn-primary')).toHaveText(/^try again$/i);
     expect(await page.evaluate(() => document.getElementById('message-overlay').classList.contains('has-result-card'))).toBe(false);
 
     // A campaign win names the next level and emphasizes the button.
@@ -509,6 +508,8 @@ test('landscape-phone result makes the primary action visually dominant', async 
 test('editor refuses to save a structurally invalid level', async ({ page }) => {
     await page.addInitScript(seedProgress);
     await page.goto('/');
+    await page.evaluate(() => { storage.setUnlocked(14); ui.buildMenu(); });
+    await expect(page.locator('#btn-editor')).toBeVisible();
     await page.locator('#btn-editor').click();   // opens with empty terrain (spawn over a pit)
     await expect(page.locator('#editor-ui')).toBeVisible();
 
@@ -545,6 +546,7 @@ test('custom gallery shows creator clear trust badge for exact fingerprint', asy
     await page.addInitScript(seedProgress);
     await page.goto('/');
     await page.evaluate(() => {
+        storage.setUnlocked(14);
         const lvl = {
             name: 'Creator Clear',
             totalSpawn: 5,
