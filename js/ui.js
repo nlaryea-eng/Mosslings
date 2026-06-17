@@ -300,16 +300,21 @@ const ui = {
         const code = serializeLevel(game.level);
         if (!code) { this.toast('Level is too large or invalid to share.', true); return; }
 
+        // Generous solvability smoke check (advisory, not a proof). Don't block
+        // the share, but warn so a likely-broken level isn't sent out blind.
+        const solve = analyzeSolvability(game.level);
+        const warn = solve.status === 'fail' ? ` (warning: ${solve.reason})` : '';
+
         // On file:// there is no public origin to hand out, so a "link" would be
         // a dead local path on anyone else's machine. Share the level CODE
         // instead and tell the player to host the game for real links.
         if (location.protocol === 'file:') {
             this.promptCopy(code);
-            this.toast('Copied level code. Host the game to share a clickable link.');
+            this.toast(`Copied level code. Host the game to share a clickable link.${warn}`, !!warn);
             return;
         }
         const url = this.shareUrlFor(code);
-        this.copyText(url, 'Share link copied to clipboard!');
+        this.copyText(url, `Share link copied to clipboard!${warn}`);
     },
     /** Build a clean share URL from the current hosted location or test stub. */
     currentShareUrl() {
@@ -1319,7 +1324,12 @@ const ui = {
         const err = validateLevelStructure(game.level);
         if (err) { this.toast(`Can't save: ${err}`, true); return; }
         storage.saveCustomLevel(game.level);
-        this.toast(`Level "${game.level.name}" saved to LocalStorage.`);
+        // Advisory only — a generous reachability smoke check, not a proof. We
+        // still save (the heuristic must never lock a creator out of a clever
+        // level), but flag a likely dead end so it isn't shared blind.
+        const solve = analyzeSolvability(game.level);
+        if (solve.status === 'fail') this.toast(`Saved "${game.level.name}" — heads up: ${solve.reason}.`, true);
+        else this.toast(`Level "${game.level.name}" saved to LocalStorage.`);
         this.backToMenu();
     },
     openEditorSettings() {

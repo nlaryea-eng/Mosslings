@@ -331,6 +331,66 @@ LEVELS.forEach((lvl, i) => {
 });
 
 // ==============================================================
+console.log('\n— Solvability smoke check (must not false-flag real levels) —');
+// ==============================================================
+// The cardinal rule: the GENEROUS reachability check must never flag a shipped,
+// hand-authored level as broken (a false positive would block legit sharing).
+LEVELS.forEach((lvl, i) => {
+    test(`L${i + 1} "${lvl.name}": solvability smoke check passes`, () => {
+        const r = analyzeSolvability(lvl);
+        eq(r.status, 'ok', `false positive: ${r.reason}`);
+    });
+});
+test('solvability flags a metal wall with no Climber/Builder/carver', () => {
+    const lvl = {
+        name: 'Sealed', totalSpawn: 5, reqSaved: 5, time: 120, spawnRate: 60,
+        spawn: { x: 80, y: 360 }, exit: { x: 880, y: 420 },
+        inventory: { [SKILLS.BLOCK]: 5 }, // no way through/over a full-height steel wall
+        commands: [
+            { type: T_DIRT, x: 0, y: 420, w: 960, h: 120 },
+            { type: T_METAL, x: 460, y: 0, w: 40, h: 420 }, // floor-to-ceiling barrier
+        ],
+    };
+    eq(analyzeSolvability(lvl).status, 'fail');
+});
+test('solvability flags a lava moat with no Builder or platform', () => {
+    const lvl = {
+        name: 'Moat', totalSpawn: 5, reqSaved: 5, time: 120, spawnRate: 60,
+        spawn: { x: 80, y: 360 }, exit: { x: 880, y: 420 },
+        inventory: { [SKILLS.FLOAT]: 9, [SKILLS.CLIMB]: 9 }, // float/climb can't cross a wide lava floor
+        commands: [
+            { type: T_DIRT, x: 0, y: 420, w: 300, h: 120 },
+            { type: T_HAZARD, x: 300, y: 420, w: 360, h: 120 },
+            { type: T_DIRT, x: 660, y: 420, w: 300, h: 120 },
+        ],
+    };
+    eq(analyzeSolvability(lvl).status, 'fail');
+});
+test('solvability flags a gate with no matching switch', () => {
+    const lvl = {
+        name: 'Locked Gate', totalSpawn: 5, reqSaved: 5, time: 120, spawnRate: 60,
+        spawn: { x: 80, y: 360 }, exit: { x: 880, y: 420 },
+        inventory: { [SKILLS.BLOCK]: 5 },
+        commands: [{ type: T_DIRT, x: 0, y: 420, w: 960, h: 120 }],
+        objects: [{ type: OBJ_GATE, x: 470, y: 320, w: 16, h: 100, target: 0 }], // no OBJ_SWITCH targets it
+    };
+    eq(analyzeSolvability(lvl).status, 'fail');
+});
+test('solvability clears the same gate once a matching switch exists', () => {
+    const lvl = {
+        name: 'Open-able Gate', totalSpawn: 5, reqSaved: 5, time: 120, spawnRate: 60,
+        spawn: { x: 80, y: 360 }, exit: { x: 880, y: 420 },
+        inventory: { [SKILLS.BLOCK]: 5 },
+        commands: [{ type: T_DIRT, x: 0, y: 420, w: 960, h: 120 }],
+        objects: [
+            { type: OBJ_SWITCH, x: 235, y: 417, w: 32, h: 8, target: 0 },
+            { type: OBJ_GATE, x: 470, y: 320, w: 16, h: 100, target: 0 },
+        ],
+    };
+    eq(analyzeSolvability(lvl).status, 'ok');
+});
+
+// ==============================================================
 console.log('\n— End-to-end: scripted solve of Level 1 —');
 // ==============================================================
 test('a builder assigned at the gap edge carries a mossling to the exit', () => {

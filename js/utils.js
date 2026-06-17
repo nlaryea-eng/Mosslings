@@ -283,6 +283,141 @@ function validateLevelStructure(lvl) {
 }
 
 /**
+ * Lightweight solvability SMOKE CHECK — NOT a solver and NOT a proof.
+ *
+ * It floods the map from the spawn while granting the colony every capability
+ * its inventory allows (carve through dirt if any Dig/Bash/Mine; bridge over
+ * lava and climb walls if Build/Climber present; treat moving platforms as
+ * floors and switch-targeted gates as openable). If the exit is unreachable
+ * even under those generous powers, the level is almost certainly broken — a
+ * high-confidence FAIL. A clean result only means "no obvious dead end found":
+ * it does NOT model resource *counts*, builder reach, fatal falls, timing, or
+ * whether a gate's switch is itself reachable. Downstream wording must stay
+ * honest about that asymmetry (we catch obvious breakage, we don't certify).
+ *
+ * Deterministic and cheap (coarse 8px grid BFS). Safe to run at editor-save /
+ * share time. @returns {{status:'ok'|'fail', reason:string}}
+ */
+function analyzeSolvability(lvl) {
+    if (!lvl || !lvl.spawn || !lvl.exit) return { status: 'fail', reason: 'level data is damaged.' };
+    const inv = lvl.inventory || {};
+    const has = (s) => (inv[s] || 0) > 0;
+    const canCarve = has(SKILLS.DIG) || has(SKILLS.BASH) || has(SKILLS.MINE);
+    const canBuild = has(SKILLS.BUILD);
+    const canClimb = has(SKILLS.CLIMB);
+
+    const terrain = new Terrain(W, H);
+    terrain.clear();
+    for (const c of (lvl.commands || [])) terrain.drawRect(c.x, c.y, c.w, c.h, c.type);
+    const objects = normalizeLevelObjects(lvl.objects || []);
+    const hasSwitchFor = (target) => objects.some(o => o.type === OBJ_SWITCH && o.target === target);
+    // A moving platform sweeps its whole rail over time, so treat the entire
+    // travel envelope (base → base+d) as carry-able floor — that's how ferry
+    // levels are actually solved, and it keeps the check from false-failing them.
+    const platformSweeps = objects.filter(o => o.type === OBJ_PLATFORM).map(o => ({
+        x: Math.min(o.x, o.x + (o.dx || 0)),
+        y: Math.min(o.y, o.y + (o.dy || 0)),
+        w: o.w + Math.abs(o.dx || 0),
+        h: o.h + Math.abs(o.dy || 0),
+    }));
+
+    const CELL = 8;
+    const cols = Math.ceil(W / CELL), rows = Math.ceil(H / CELL);
+    // Cell classes: OPEN air, SOFT (dirt/bridge — a floor you walk on, and carve
+    // through if equipped), HARD (metal/locked gate — a wall, climbable), LAVA.
+    const OPEN = 0, SOFT = 1, HARD = 2, LAVA = 3;
+    const grid = new Uint8Array(cols * rows);
+    for (let cy = 0; cy < rows; cy++) {
+        for (let cx = 0; cx < cols; cx++) {
+            const x = cx * CELL + (CELL >> 1), y = cy * CELL + (CELL >> 1);
+            let cell = OPEN, decided = false;
+            if (platformSweeps.some(r => pointInRect(x, y, r))) { decided = true; cell = HARD; } // ferry rail
+            for (const o of objects) {
+                if (decided) break;
+                if (o.type !== OBJ_GATE || hasSwitchFor(o.target)) continue; // switch-able gates are passable
+                if (pointInRect(x, y, objectRectAt(o, 0))) { decided = true; cell = HARD; } // permanently-locked gate
+            }
+            if (!decided) {
+                const t = terrain.get(x, y);
+                if (t === T_HAZARD) cell = LAVA;     // lethal; only a Builder's bridge spans it (below)
+                else if (t === T_METAL) cell = HARD;
+                else if (t === T_DIRT || t === T_BRIDGE) cell = SOFT;
+                else cell = OPEN;                    // air / one-way membranes
+            }
+            grid[cy * cols + cx] = cell;
+        }
+    }
+
+    const idx = (cx, cy) => cy * cols + cx;
+    const inb = (cx, cy) => cx >= 0 && cx < cols && cy >= 0 && cy < rows;
+    const at = (cx, cy) => (inb(cx, cy) ? grid[idx(cx, cy)] : HARD); // world edges are walls
+    // A mossling can occupy air, or dirt only if it can carve through it.
+    const enterable = (cx, cy) => { const c = at(cx, cy); return c === OPEN || (c === SOFT && canCarve); };
+    const isWall = (cx, cy) => { const c = at(cx, cy); return c === HARD || (c === SOFT && !canCarve); };
+    const upOK = canClimb || canBuild;  // gaining real height needs a Climber or Builder
+
+    // Where does a creature entering (cx,cy) come to rest? It falls through air
+    // until ground supports it; a fall that ends in lava or off the map is
+    // lethal (no landing). @returns cell index or -1.
+    const land = (cx, cy) => {
+        if (!enterable(cx, cy)) return -1;
+        while (cy + 1 < rows && at(cx, cy + 1) === OPEN) cy++;   // fall through air
+        const below = at(cx, cy + 1);
+        if (below === SOFT || below === HARD) return idx(cx, cy); // landed on ground
+        return -1;                                    // fell into lava / off the world
+    };
+    const BRIDGE_REACH = 24; // generous (~190px) vs a real ~60px builder, to avoid false fails
+
+    const seen = new Uint8Array(cols * rows);
+    const q = [];
+    const visit = (cellIdx) => { if (cellIdx >= 0 && !seen[cellIdx]) { seen[cellIdx] = 1; q.push(cellIdx); } };
+    visit(land(Math.floor(lvl.spawn.x / CELL), Math.floor(lvl.spawn.y / CELL)));
+    for (let qi = 0; qi < q.length; qi++) {
+        const cur = q[qi], cx = cur % cols, cy = (cur / cols) | 0;
+        for (const dir of [-1, 1]) {
+            const nx = cx + dir;
+            if (enterable(nx, cy)) visit(land(nx, cy));          // walk / bash through dirt
+            else if (isWall(nx, cy)) {
+                if (enterable(nx, cy - 1)) visit(land(nx, cy - 1)); // hop a one-cell ledge
+                else if (upOK) {                                    // climb/ramp the wall to its top
+                    let k = cy;
+                    while (k > 0 && isWall(nx, k)) k--;
+                    if (enterable(nx, k)) visit(land(nx, k));
+                }
+            }
+            // Builder: span a horizontal gap or lava, landing on the first
+            // footing within reach (the bridge may rise a cell as it goes).
+            if (canBuild) {
+                for (let k = 1; k <= BRIDGE_REACH; k++) {
+                    const tx = cx + dir * k;
+                    if (isWall(tx, cy)) {
+                        // The bridge meets a rising shore/wall: crest onto its top
+                        // (a builder's bridge climbs as it goes), then stop.
+                        for (let dy = -3; dy <= -1; dy++) visit(land(tx, cy + dy));
+                        break;
+                    }
+                    // Far shore may sit a little higher or lower; a small vertical
+                    // window absorbs coarse-grid row offsets between shores.
+                    for (let dy = -2; dy <= 1; dy++) visit(land(tx, cy + dy));
+                }
+            }
+        }
+        if (canCarve && at(cx, cy + 1) === SOFT) visit(land(cx, cy + 1)); // dig/mine straight down
+    }
+
+    // Reached if the exit cell or its immediate vertical neighbours are flooded
+    // (the exit sits on a surface, so allow a little slack around the marker).
+    const gx = Math.floor(lvl.exit.x / CELL), gy = Math.floor(lvl.exit.y / CELL);
+    for (let dy = -1; dy <= 1; dy++) {
+        if (inb(gx, gy + dy) && seen[idx(gx, gy + dy)]) return { status: 'ok', reason: 'a route to the exit exists' };
+    }
+    const why = !canBuild
+        ? 'no route to the exit (lava with no Builder, or the way up needs a Builder/Climber)'
+        : 'no route to the exit (the colony cannot reach the portal with these skills)';
+    return { status: 'fail', reason: why };
+}
+
+/**
  * Pure medal evaluation — kept out of the DOM so it is unit-testable.
  * Gold/Rescue = saved target met; Silver/Efficiency = skills at or under par;
  * Bronze/Speed = finished at or under the par time. Each is independent.
@@ -305,6 +440,8 @@ if (typeof module !== 'undefined' && module.exports) {
         serializeLevel,
         deserializeLevel,
         computeMedals,
+        analyzeSolvability,
+        validateLevelStructure,
         normalizeLevelObjects,
         objectRectAt,
         objectSolidAt,
