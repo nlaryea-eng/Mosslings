@@ -116,7 +116,9 @@ class Mossling {
         if (!silentPuff) audio.sfxDie();
     }
     isSolid(g, dx, dy) {
-        const t = g.terrain.get(this.x + dx, this.y + dy);
+        const px = this.x + dx, py = this.y + dy;
+        if (g.solidObjectAt && g.solidObjectAt(px, py)) return true;
+        const t = g.terrain.get(px, py);
         if (t === T_DIRT || t === T_METAL || t === T_BRIDGE) return true;
         // One-way membranes block only the probe direction they forbid, and are
         // intangible to vertical probes (dx === 0) so mosslings fall through them.

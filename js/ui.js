@@ -9,6 +9,7 @@ const ui = {
     lastWin: false,
     editTool: 'T_DIRT',
     editCommands: [],
+    editObjects: [],
     editHistory: [], // command array snapshots
     brushSize: { w: 40, h: 40 },
     snapToGrid: false,
@@ -16,6 +17,7 @@ const ui = {
     init(game) {
         this.game = game;
         const $ = (id) => document.getElementById(id);
+        this.setMenuMode(true);
         this.installIcons();
         this.refreshMuteButton();
         this.applyCrt(this._crtOn());
@@ -189,6 +191,10 @@ const ui = {
         b.innerText = 'Vibrate: ' + (on ? 'On' : 'Off');
         if (b.setAttribute) b.setAttribute('aria-pressed', on ? 'true' : 'false');
     },
+    setMenuMode(on) {
+        const c = document.getElementById('game-container');
+        if (c) c.classList.toggle('menu-mode', !!on);
+    },
     toggleHaptics() {
         if (typeof haptics === 'undefined') return;
         const on = !haptics.enabled();
@@ -263,6 +269,7 @@ const ui = {
             const nameInput = document.getElementById('edit-name');
             game.level.name = (nameInput.value || '').trim() || 'Custom Level';
             game.level.commands = this.editCommands;
+            game.level.objects = this.editObjects;
         }
         const code = serializeLevel(game.level);
         if (!code) { this.toast('Level is too large or invalid to share.', true); return; }
@@ -488,6 +495,7 @@ const ui = {
     },
 
     openGallery() {
+        this.setMenuMode(true);
         document.getElementById('start-screen').classList.add('hidden');
         document.getElementById('gallery-screen').classList.remove('hidden');
         this.buildGallery();
@@ -583,14 +591,18 @@ const ui = {
         this.startEditor();
         this.game.level = { ...lvl };
         this.editCommands = [...lvl.commands.map(c => ({ ...c }))];
+        this.editObjects = normalizeLevelObjects(lvl.objects || []).map(o => ({ ...o }));
         document.getElementById('edit-name').value = lvl.name;
         this.game.terrain.clear(lvl.theme || 'FOREST');
         for (const c of this.editCommands) this.game.terrain.drawRect(c.x, c.y, c.w, c.h, c.type);
         this.game.terrain.finalize();
+        this.game.objects = this.game.buildRuntimeObjects(this.editObjects);
+        this.game.updateObjects(true);
     },
 
     backToMenu() {
         if (typeof music !== 'undefined' && music) music.stop();
+        this.setMenuMode(true);
         const returningFromDaily = this.game.runMode === 'daily';
         this.game.state = 'MENU';
         if (this.game.levelIdx < 0) this.game.levelIdx = 0;
@@ -615,6 +627,7 @@ const ui = {
     },
 
     onLevelStart(game, isCustom) {
+        this.setMenuMode(false);
         document.getElementById('start-screen').classList.add('hidden');
         document.getElementById('message-overlay').classList.add('hidden');
         document.getElementById('message-overlay').classList.remove('has-result-card');
@@ -896,15 +909,18 @@ const ui = {
     startEditor() {
         const game = this.game;
         if (typeof music !== 'undefined' && music) music.stop();
+        this.setMenuMode(false);
         game.state = 'EDITOR';
         game.levelIdx = -1;
         game.level = {
             name: 'Custom Level', reqSaved: 5, totalSpawn: 10, time: 180, spawnRate: 60,
             spawn: { x: 100, y: 100 }, exit: { x: 800, y: 400 },
             inventory: { [SKILLS.BLOCK]: 5, [SKILLS.BUILD]: 10, [SKILLS.BASH]: 5, [SKILLS.MINE]: 5, [SKILLS.DIG]: 5, [SKILLS.FLOAT]: 5, [SKILLS.CLIMB]: 5, [SKILLS.EXPLODE]: 5 },
-            commands: [],
+            commands: [], objects: [],
         };
         this.editCommands = [];
+        this.editObjects = [];
+        game.objects = [];
         game.terrain.clear();
         document.getElementById('start-screen').classList.add('hidden');
         document.getElementById('message-overlay').classList.add('hidden');
@@ -928,6 +944,17 @@ const ui = {
 
         if (this.editTool === 'SPAWN') { game.level.spawn = { x, y }; return; }
         if (this.editTool === 'EXIT') { game.level.exit = { x, y, athlete: game.level.exit.athlete }; return; }
+        if (this.editTool === 'OBJ_PLATFORM' || this.editTool === 'OBJ_SWITCH' || this.editTool === 'OBJ_GATE') {
+            const obj = this.makeEditorObject(this.editTool, x, y);
+            const last = this.editObjects[this.editObjects.length - 1];
+            if (last && last.type === obj.type && last.x === obj.x && last.y === obj.y && last.w === obj.w && last.h === obj.h) return;
+            this.pushEditHistory();
+            this.editObjects.push(obj);
+            game.level.objects = this.editObjects;
+            game.objects = game.buildRuntimeObjects(this.editObjects);
+            game.updateObjects(true);
+            return;
+        }
         
         const type = { T_AIR, T_DIRT, T_METAL, T_HAZARD, T_ONEWAY_R, T_ONEWAY_L }[this.editTool];
         const { w, h } = this.brushSize;
@@ -941,13 +968,30 @@ const ui = {
         this.editCommands.push(cmd);
         game.terrain.drawRect(cmd.x, cmd.y, cmd.w, cmd.h, type);
     },
+    makeEditorObject(tool, x, y) {
+        if (tool === 'OBJ_PLATFORM') {
+            return { type: OBJ_PLATFORM, x: x - 55, y: y - 5, w: 110, h: 10, dx: 220, dy: 0, period: 300, phase: 0, target: 0, flags: 0 };
+        }
+        if (tool === 'OBJ_SWITCH') {
+            return { type: OBJ_SWITCH, x: x - 14, y: y - 4, w: 28, h: 8, dx: 0, dy: 0, period: 240, phase: 0, target: 0, flags: 0 };
+        }
+        return { type: OBJ_GATE, x: x - 7, y: y - 80, w: 14, h: 80, dx: 0, dy: 0, period: 240, phase: 0, target: 0, flags: 0 };
+    },
     pushEditHistory() {
-        this.editHistory.push([...this.editCommands.map(c => ({ ...c }))]);
+        this.editHistory.push({
+            commands: [...this.editCommands.map(c => ({ ...c }))],
+            objects: [...this.editObjects.map(o => ({ ...o }))],
+        });
         if (this.editHistory.length > 50) this.editHistory.shift();
     },
     undoEdit() {
         if (!this.editHistory.length) return;
-        this.editCommands = this.editHistory.pop();
+        const snap = this.editHistory.pop();
+        this.editCommands = Array.isArray(snap) ? snap : snap.commands;
+        this.editObjects = Array.isArray(snap) ? [] : snap.objects;
+        this.game.level.objects = this.editObjects;
+        this.game.objects = this.game.buildRuntimeObjects(this.editObjects);
+        this.game.updateObjects(true);
         this.game.terrain.clear(this.game.level.theme || 'FOREST');
         for (const c of this.editCommands) this.game.terrain.drawRect(c.x, c.y, c.w, c.h, c.type);
         this.game.terrain.finalize();
@@ -956,6 +1000,7 @@ const ui = {
         const game = this.game;
         game.level.name = document.getElementById('edit-name').value || 'Custom Level';
         game.level.commands = this.editCommands;
+        game.level.objects = this.editObjects;
         // Validate before persisting — the same structural check shared levels
         // pass on import — so the editor can't quietly save an unsolvable level
         // (e.g. spawn over a pit or an exit in mid-air) that fails only later.
@@ -1017,8 +1062,28 @@ const ui = {
         ctx.strokeStyle = 'rgba(255,255,255,0.35)';
         ctx.lineWidth = 1;
         ctx.strokeRect(x - w / 2, y - h / 2, w, h);
+        if (this.editTool === 'OBJ_PLATFORM' || this.editTool === 'OBJ_SWITCH' || this.editTool === 'OBJ_GATE') {
+            this.drawEditorObjectPreview(ctx, this.makeEditorObject(this.editTool, x, y));
+        }
         game.drawHatch(ctx);
         game.drawExit(ctx);
+    },
+    drawEditorObjectPreview(ctx, o) {
+        ctx.save();
+        ctx.globalAlpha = 0.7;
+        ctx.strokeStyle = o.type === OBJ_PLATFORM ? '#4dd0e1' : (o.type === OBJ_SWITCH ? '#ffd54f' : '#90a4ae');
+        ctx.fillStyle = o.type === OBJ_PLATFORM ? 'rgba(77,208,225,0.18)' : (o.type === OBJ_SWITCH ? 'rgba(255,213,79,0.18)' : 'rgba(144,164,174,0.2)');
+        ctx.fillRect(o.x, o.y, o.w, o.h);
+        ctx.strokeRect(o.x + 0.5, o.y + 0.5, o.w - 1, o.h - 1);
+        if (o.type === OBJ_PLATFORM) {
+            ctx.setLineDash([6, 4]);
+            ctx.beginPath();
+            ctx.moveTo(o.x + o.w / 2, o.y + o.h + 10);
+            ctx.lineTo(o.x + o.dx + o.w / 2, o.y + o.h + 10);
+            ctx.stroke();
+            ctx.setLineDash([]);
+        }
+        ctx.restore();
     },
 };
 

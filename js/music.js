@@ -9,16 +9,19 @@
 const MUSIC_THEMES = {
     FOREST: {
         bpm: 124, root: 57, scale: [0, 2, 4, 5, 7, 9, 11], prog: [0, 3, 4, 5],
+        pattern: 'FOREST',
         cutoff: 1950, chordWave: 'triangle', bassWave: 'sawtooth', motifWave: 'sine',
         padVol: 0.022, chordVol: 0.04, bassVol: 0.068, motifVol: 0.032,
     },
     CAVE: {
         bpm: 122, root: 53, scale: [0, 2, 4, 5, 7, 9, 10], prog: [0, 4, 5, 3],
+        pattern: 'CAVE',
         cutoff: 1500, chordWave: 'sine', bassWave: 'triangle', motifWave: 'triangle',
         padVol: 0.024, chordVol: 0.034, bassVol: 0.062, motifVol: 0.024,
     },
     VOLCANO: {
         bpm: 126, root: 55, scale: [0, 2, 3, 5, 7, 9, 10], prog: [0, 4, 5, 3],
+        pattern: 'VOLCANO',
         cutoff: 1700, chordWave: 'triangle', bassWave: 'sawtooth', motifWave: 'square',
         padVol: 0.02, chordVol: 0.033, bassVol: 0.07, motifVol: 0.022,
     },
@@ -34,6 +37,27 @@ const MUSIC_LOOP = {
     bass:   [0,null,0,null, 4,null,0,null, 5,null,4,null, 2,null,5,null],
     chords: [0,null,null,null, null,2,null,null, null,null,4,null, null,5,null,null],
     motif:  [null,null,7,null, 9,null,null,10, null,null,11,null, 9,null,7,null],
+};
+const MUSIC_PATTERNS = {
+    FOREST: MUSIC_LOOP,
+    CAVE: {
+        kick:   [1,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,0,0],
+        clap:   [0,0,0,0, 0,0,0,0.45, 0,0,0,0, 0,0,0,0.55],
+        hats:   [0,0.35,0,0, 0.5,0,0.24,0, 0,0.42,0,0, 0.55,0,0.28,0],
+        perc:   [0,0,0.22,0, 0,0,0,0.34, 0,0,0.26,0, 0.2,0,0,0.38],
+        bass:   [0,null,null,null, 3,null,null,null, 5,null,null,null, 4,null,2,null],
+        chords: [0,null,null,null, null,null,3,null, null,null,null,null, 4,null,null,null],
+        motif:  [null,null,null,7, null,5,null,null, null,null,3,null, null,7,null,10],
+    },
+    VOLCANO: {
+        kick:   [1,0,0,0.6, 1,0,0,0, 1,0,0.45,0, 1,0,0,0],
+        clap:   [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0],
+        hats:   [0.25,0.72,0.2,0.62, 0.3,0.78,0.22,0.55, 0.28,0.68,0.22,0.58, 0.35,0.86,0.24,0.64],
+        perc:   [0,0.35,0,0.25, 0,0.22,0.4,0, 0,0.3,0,0.24, 0.42,0,0.35,0.26],
+        bass:   [0,null,0,null, 5,null,3,null, 0,null,7,null, 5,null,3,null],
+        chords: [0,null,null,2, null,4,null,null, 0,null,null,5, null,4,null,null],
+        motif:  [7,null,10,null, 12,null,10,7, null,9,null,12, 14,null,12,10],
+    },
 };
 
 class MusicEngine {
@@ -51,6 +75,10 @@ class MusicEngine {
         this.nextStepTime = 0;
         this.step = 0;
         this.loopSteps = 64;
+    }
+
+    _pattern() {
+        return MUSIC_PATTERNS[this.cfg.pattern] || MUSIC_LOOP;
     }
 
     _hz(note) { return 440 * Math.pow(2, (note - 69) / 12); }
@@ -135,23 +163,24 @@ class MusicEngine {
     }
 
     _scheduleStep(step, when, stepDur) {
+        const loop = this._pattern();
         const inBar = step % 16;
         const bar = Math.floor(step / 16);
         const root = this._chordRootForBar(bar);
 
-        if (MUSIC_LOOP.kick[inBar]) this._kick(when);
-        if (MUSIC_LOOP.clap[inBar]) this._noiseHit(when, 0.08, 0.034, 1800, 0.012);
-        if (MUSIC_LOOP.hats[inBar]) this._noiseHit(when, 0.028, 0.018 * MUSIC_LOOP.hats[inBar], 6500, 0.004);
-        if (MUSIC_LOOP.perc[inBar]) this._noiseHit(when, 0.045, 0.014 * MUSIC_LOOP.perc[inBar], 3200, 0.006);
+        if (loop.kick[inBar]) this._kick(when);
+        if (loop.clap[inBar]) this._noiseHit(when, 0.08, 0.034 * loop.clap[inBar], 1800, 0.012);
+        if (loop.hats[inBar]) this._noiseHit(when, 0.028, 0.018 * loop.hats[inBar], 6500, 0.004);
+        if (loop.perc[inBar]) this._noiseHit(when, 0.045, 0.014 * loop.perc[inBar], 3200, 0.006);
 
-        const bass = MUSIC_LOOP.bass[inBar];
+        const bass = loop.bass[inBar];
         if (bass !== null) this._note(this._scaleNote(root + bass, -2), when, stepDur * 1.7, this.cfg.bassVol, this.cfg.bassWave, 0.01, 0.07);
 
-        const chord = MUSIC_LOOP.chords[inBar];
+        const chord = loop.chords[inBar];
         if (chord !== null) this._chord(root + chord, when, stepDur * 2.6);
         if (inBar === 0) this._pad(root, when, stepDur * 14);
 
-        const motif = MUSIC_LOOP.motif[inBar];
+        const motif = loop.motif[inBar];
         if (motif !== null && (bar % 2 === 0 || inBar >= 8)) {
             this._note(this._scaleNote(root + motif, 0), when, stepDur * 1.4, this.cfg.motifVol, this.cfg.motifWave, 0.012, 0.08);
         }
@@ -225,5 +254,5 @@ if (music && typeof audio !== 'undefined' && audio) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { MusicEngine, MUSIC_THEMES, MUSIC_LOOP };
+    module.exports = { MusicEngine, MUSIC_THEMES, MUSIC_LOOP, MUSIC_PATTERNS };
 }

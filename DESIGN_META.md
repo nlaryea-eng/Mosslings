@@ -1,11 +1,12 @@
 # MOSSLINGS — Meta-Game Architecture
 
-Design for three meta-game features: level serialization, URL importing, and par medals.
+Design for meta-game features: level serialization, URL importing, par medals, and advanced editor objects.
 
-**Status:** All three features are **implemented** and covered by tests.
+**Status:** All listed features are **implemented** and covered by tests.
 
-- **§1 Level Serialization / §2 URL Importing** live in `js/utils.js` and `js/ui.js`. The shipped binary format is **version `0x02`** (this doc's §1 sketch describes the original `0x01`). Refinements made during implementation: base64 is URL-*safe* (`+/=` → `-_`, padding stripped) so it survives a query string intact; the metadata byte carries flags (bit 0 = athlete portal, bit 1 = par data present); command types span the full tile range incl. one-way membranes (0–6); and `0x02` appends optional par data. The deserializer accepts both `0x01` and `0x02`.
+- **§1 Level Serialization / §2 URL Importing** live in `js/utils.js` and `js/ui.js`. The shipped binary format is **version `0x03`** (this doc's §1 sketch describes the original `0x01`). Refinements made during implementation: base64 is URL-*safe* (`+/=` → `-_`, padding stripped) so it survives a query string intact; the metadata byte carries flags (bit 0 = athlete portal, bit 1 = par data present, bit 2 = object data present); command types span the full tile range incl. one-way membranes (0–6); `0x02` appended optional par data; and `0x03` appends fixed-width editor objects for moving platforms, pressure switches, and switch gates. The deserializer accepts `0x01`, `0x02`, and `0x03`.
 - **§3 Par Medals** is implemented, but with a different (simpler) data model than the `parTime`/`parSavedPct`/`parSkills` sketch below. Levels carry a `par: { time, skills, saved }` object (`js/levels.js`); `computeMedals(par, stats)` in `js/utils.js` awards three **independent** medals — Rescue/Gold (saved ≥ target), Efficiency/Silver (skills ≤ par), Speed/Bronze (time ≤ par) — and `StorageManager.getMedals/setMedals` (`js/game.js`) persists the best of each tier per level. The §3 pseudocode below is the original sketch, retained for context only; treat the code as source of truth.
+- **Advanced editor objects** are implemented as optional `level.objects` entries. `OBJ_PLATFORM` moves deterministically on the simulation step and carries riders; `OBJ_SWITCH` is a pressure trigger; `OBJ_GATE` is solid until a matching switch target is held. The editor exposes Platform, Switch, and Gate tools, and v03 sharing preserves those objects without breaking older terrain-only links.
 
 ---
 

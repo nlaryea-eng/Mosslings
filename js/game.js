@@ -86,6 +86,8 @@ class Game {
         this.canvas = document.getElementById('gameCanvas');
         this.ctx = this.canvas.getContext('2d');
         this.terrain = new Terrain(W, H);
+        this.objects = [];
+        this.switchState = {};
         this.particles = new Particles();
         this.spores = new Spores();
         this.levelIdx = 0; this.level = null; this.state = 'MENU';
@@ -320,6 +322,9 @@ class Game {
         this.terrain.clear(this.level.theme || 'FOREST');
         for (const c of (this.level.commands || [])) this.terrain.drawRect(c.x, c.y, c.w, c.h, c.type);
         this.terrain.finalize();
+        this.objects = this.buildRuntimeObjects(this.level.objects || []);
+        this.switchState = {};
+        this.updateObjects(true);
         // Always PLAY: `silent` only suppresses the DOM/overlay refresh. The
         // rewind catch-up loop re-simulates via update(), which no-ops unless
         // the state is PLAY — a PAUSE here would dead-loop the rewind.
@@ -337,6 +342,65 @@ class Game {
                 music.start(this.level.theme || 'FOREST');
             }
             ui.onLevelStart(this, isCustom);
+        }
+    }
+    buildRuntimeObjects(objects) {
+        return normalizeLevelObjects(objects).map((o, idx) => {
+            const base = { ...o, baseX: o.x, baseY: o.y };
+            const r = objectRectAt(base, this.simStep);
+            return { ...base, id: idx, x: r.x, y: r.y, prevX: r.x, prevY: r.y, active: false, open: false };
+        });
+    }
+    solidObjectAt(x, y) {
+        for (const o of this.objects) {
+            if (o.type === OBJ_SWITCH) continue;
+            if (o.type === OBJ_GATE && o.open) continue;
+            if (x >= o.x && x < o.x + o.w && y >= o.y && y < o.y + o.h) return T_METAL;
+        }
+        return T_AIR;
+    }
+    mosslingPressesSwitch(m, o) {
+        if (!m.alive()) return false;
+        return m.x >= o.x - 3 && m.x < o.x + o.w + 3 && m.y >= o.y - 3 && m.y < o.y + o.h + 6;
+    }
+    updateObjects(initial = false) {
+        if (!this.objects.length) return;
+        const nextSwitchState = {};
+        for (const o of this.objects) {
+            o.prevX = initial ? o.x : (o.x ?? o.prevX ?? o.x);
+            o.prevY = initial ? o.y : (o.y ?? o.prevY ?? o.y);
+            if (o.type === OBJ_PLATFORM) {
+                const r = objectRectAt(o, this.simStep);
+                o.x = r.x; o.y = r.y; o.w = r.w; o.h = r.h;
+            } else {
+                o.x = o.x ?? o.prevX;
+                o.y = o.y ?? o.prevY;
+            }
+        }
+        if (!initial) this.carryPlatformRiders();
+        for (const o of this.objects) {
+            if (o.type !== OBJ_SWITCH) continue;
+            o.active = this.mosslings.some(m => this.mosslingPressesSwitch(m, o));
+            if (o.active) nextSwitchState[o.target] = true;
+        }
+        this.switchState = nextSwitchState;
+        for (const o of this.objects) {
+            if (o.type === OBJ_GATE) o.open = !!this.switchState[o.target];
+        }
+    }
+    carryPlatformRiders() {
+        for (const o of this.objects) {
+            if (o.type !== OBJ_PLATFORM) continue;
+            const dx = o.x - o.prevX, dy = o.y - o.prevY;
+            if (!dx && !dy) continue;
+            for (const m of this.mosslings) {
+                if (!m.alive()) continue;
+                const onPrevTop = m.x >= o.prevX - 2 && m.x < o.prevX + o.w + 2 &&
+                    m.y >= o.prevY - 2 && m.y <= o.prevY + 3;
+                if (!onPrevTop) continue;
+                m.x += dx;
+                m.y += dy;
+            }
         }
     }
     endLevel() {
@@ -552,6 +616,7 @@ class Game {
     // --- Simulation ----------------------------------------------------------
     update() {
         if (this.state !== 'PLAY') return;
+        this.updateObjects();
         this.time--;
         if (!this.nuked && this.spawnCounter < this.level.totalSpawn) {
             if (--this.spawnTimer <= 0) {
@@ -586,6 +651,7 @@ class Game {
         this.spores.draw(ctx);
         ctx.drawImage(this.terrain.dirtC.c, 0, 0);
         ctx.drawImage(this.terrain.fixedC.c, 0, 0);
+        this.drawObjects(ctx);
 
         if (this.level && this.state !== 'MENU') {
             this.drawLavaGlow(ctx);
@@ -614,6 +680,52 @@ class Game {
             ctx.fillRect(0, 0, W, H);
             ctx.restore();
         }
+    }
+    drawObjects(ctx) {
+        if (!this.objects || !this.objects.length) return;
+        ctx.save();
+        for (const o of this.objects) {
+            if (o.type === OBJ_PLATFORM) {
+                const bx = o.baseX ?? o.x, by = o.baseY ?? o.y;
+                const railX0 = Math.min(bx, bx + (o.dx || 0));
+                const railX1 = Math.max(bx + o.w, bx + o.w + (o.dx || 0));
+                const railY0 = Math.min(by, by + (o.dy || 0));
+                const railY1 = Math.max(by + o.h, by + o.h + (o.dy || 0));
+                ctx.globalAlpha = 0.28;
+                ctx.strokeStyle = '#80deea';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(railX0, railY0 + o.h / 2 - 1, Math.max(2, railX1 - railX0), Math.max(2, railY1 - railY0 || 2));
+                ctx.globalAlpha = 1;
+                ctx.fillStyle = '#16323a';
+                ctx.fillRect(o.x, o.y, o.w, o.h);
+                ctx.fillStyle = '#4dd0e1';
+                ctx.fillRect(o.x, o.y, o.w, 2);
+                ctx.fillStyle = '#0d2025';
+                ctx.fillRect(o.x, o.y + o.h - 2, o.w, 2);
+                for (let x = o.x + 8; x < o.x + o.w - 6; x += 18) {
+                    ctx.fillStyle = '#b2ebf2';
+                    ctx.fillRect(x, o.y + 3, 4, 3);
+                }
+            } else if (o.type === OBJ_SWITCH) {
+                ctx.fillStyle = o.active ? '#ffd54f' : '#6d4c41';
+                ctx.fillRect(o.x, o.y, o.w, o.h);
+                ctx.fillStyle = o.active ? '#fff59d' : '#a1887f';
+                ctx.fillRect(o.x + 2, o.y - (o.active ? 1 : 3), o.w - 4, 3);
+                ctx.fillStyle = '#3e2723';
+                ctx.fillRect(o.x, o.y + o.h - 2, o.w, 2);
+            } else if (o.type === OBJ_GATE) {
+                ctx.globalAlpha = o.open ? 0.28 : 1;
+                ctx.fillStyle = o.open ? '#24464d' : '#546e7a';
+                ctx.fillRect(o.x, o.y, o.w, o.h);
+                ctx.fillStyle = o.open ? '#80deea' : '#90a4ae';
+                for (let y = o.y + 4; y < o.y + o.h; y += 12) ctx.fillRect(o.x + 2, y, o.w - 4, 2);
+                ctx.fillStyle = o.open ? '#4dd0e1' : '#263238';
+                ctx.fillRect(o.x, o.y, 2, o.h);
+                ctx.fillRect(o.x + o.w - 2, o.y, 2, o.h);
+                ctx.globalAlpha = 1;
+            }
+        }
+        ctx.restore();
     }
     /**
      * Lava embers & bubbles — purely decorative, emitted on the render clock

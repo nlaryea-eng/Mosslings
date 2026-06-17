@@ -306,6 +306,12 @@ test('lava kills on contact', () => {
 // ==============================================================
 console.log('\n— Level integrity (all campaign maps) —');
 // ==============================================================
+test('campaign now ships a 20+ level hard-mode arc', () => {
+    assert(LEVELS.length >= 20, `expected at least 20 campaign levels, got ${LEVELS.length}`);
+    assert(LEVELS.some(l => (l.objects || []).some(o => o.type === OBJ_PLATFORM)), 'campaign demonstrates moving platforms');
+    assert(LEVELS.some(l => (l.objects || []).some(o => o.type === OBJ_SWITCH)), 'campaign demonstrates pressure switches');
+    assert(LEVELS.some(l => (l.objects || []).some(o => o.type === OBJ_GATE)), 'campaign demonstrates switch gates');
+});
 LEVELS.forEach((lvl, i) => {
     test(`L${i + 1} "${lvl.name}": geometry invariants hold`, () => {
         const terrain = new Terrain(W, H);
@@ -488,10 +494,18 @@ function validateLevelStructure(lvl) {
     const terrain = new Terrain(W, H);
     terrain.clear();
     for (const c of lvl.commands) terrain.drawRect(c.x, c.y, c.w, c.h, c.type);
+    const objects = normalizeLevelObjects(lvl.objects || []);
     
     const drop = dropBelow(terrain, lvl.spawn.x, lvl.spawn.y);
-    if (drop === Infinity) return 'Nothing under the spawn';
-    if (drop >= PHYS.FATAL_FALL) return 'Spawn drop is too high';
+    const objectDrop = (() => {
+        for (let yy = Math.floor(lvl.spawn.y); yy < H; yy++) {
+            if (objectSolidAt(objects, lvl.spawn.x, yy + 1)) return yy - lvl.spawn.y;
+        }
+        return Infinity;
+    })();
+    const bestDrop = Math.min(drop, objectDrop);
+    if (bestDrop === Infinity) return 'Nothing under the spawn';
+    if (bestDrop >= PHYS.FATAL_FALL) return 'Spawn drop is too high';
     
     const exitDrop = dropBelow(terrain, lvl.exit.x, lvl.exit.y - 4);
     if (exitDrop > 6) return 'Exit must be placed on solid ground';
@@ -715,6 +729,55 @@ test('v02 serialization with par data survives round-trip', () => {
     eq(dec.par.skills, 3);
     eq(dec.par.saved, 10);
 });
+test('v03 serialization with editor objects survives round-trip', () => {
+    const lvl = {
+        name: 'Object Test', totalSpawn: 10, reqSaved: 5, time: 120, spawnRate: 60,
+        spawn: { x: 100, y: 100 }, exit: { x: 800, y: 400 },
+        inventory: { [SKILLS.BLOCK]: 2, [SKILLS.BUILD]: 5 },
+        commands: [{ type: T_DIRT, x: 0, y: 400, w: 960, h: 40 }],
+        objects: [
+            { type: OBJ_PLATFORM, x: 160, y: 360, w: 96, h: 10, dx: 220, dy: 0, period: 300, phase: 12 },
+            { type: OBJ_SWITCH, x: 320, y: 397, w: 28, h: 8, target: 2 },
+            { type: OBJ_GATE, x: 620, y: 310, w: 14, h: 90, target: 2 },
+        ],
+    };
+    const dec = deserializeLevel(serializeLevel(lvl));
+    assert(dec && dec.objects, 'decodes with objects');
+    eq(dec.objects.length, 3);
+    eq(dec.objects[0].type, OBJ_PLATFORM);
+    eq(dec.objects[0].dx, 220);
+    eq(dec.objects[1].target, 2);
+    eq(dec.objects[2].h, 90);
+});
+test('moving platform objects are solid and carry riders deterministically', () => {
+    const g = new Game();
+    g.objects = g.buildRuntimeObjects([{ type: OBJ_PLATFORM, x: 100, y: 300, w: 80, h: 10, dx: 60, dy: 0, period: 120, phase: 0 }]);
+    const m = new Mossling(120, 300, 0);
+    m.state = STATE.WALK;
+    g.mosslings = [m];
+    g.updateObjects(true);
+    g.simStep = 30;
+    g.updateObjects();
+    assert(g.solidObjectAt(g.objects[0].x + 4, g.objects[0].y + 1), 'platform is solid');
+    assert(m.x > 140, `rider should have been carried horizontally, x=${m.x}`);
+    eq(m.y, 300, 'horizontal ferry keeps rider on the same height');
+});
+test('pressure switches open matching gates only while held', () => {
+    const g = new Game();
+    g.objects = g.buildRuntimeObjects([
+        { type: OBJ_SWITCH, x: 100, y: 297, w: 30, h: 8, target: 4 },
+        { type: OBJ_GATE, x: 200, y: 220, w: 14, h: 80, target: 4 },
+    ]);
+    const m = new Mossling(112, 300, 0);
+    m.state = STATE.BLOCK;
+    g.mosslings = [m];
+    g.updateObjects(true);
+    const gate = g.objects.find(o => o.type === OBJ_GATE);
+    assert(gate.open, 'gate opens while switch is held');
+    m.x = 20;
+    g.updateObjects();
+    assert(!gate.open, 'gate closes when the switch is released');
+});
 test('editor undo history snapshots work', () => {
     const game = new Game();
     ui.init(game);
@@ -737,6 +800,13 @@ test('editor undo history snapshots work', () => {
     eq(ui.editCommands.length, 1, 'one command remains after undo');
     eq(ui.editHistory.length, 1, 'one history snapshot remains');
     eq(ui.editCommands[0].x, 100 - 20, 'original command preserved');
+
+    ui.editTool = 'OBJ_PLATFORM';
+    game.mouseX = 250; game.mouseY = 250;
+    ui.applyEdit();
+    eq(ui.editObjects.length, 1, 'one object added');
+    ui.undoEdit();
+    eq(ui.editObjects.length, 0, 'object placement also undoes');
 });
 
 // ==============================================================
@@ -1190,6 +1260,13 @@ test('every theme maps a chord root to an in-tune frequency', () => {
         const f = m._scaleNote(m._chordRootForBar(0), 0);
         assert(f > 20 && f < 4000, `${name}: ${f}Hz out of audible musical range`);
     }
+});
+test('theme music uses distinct arrangement profiles', () => {
+    eq(MUSIC_THEMES.FOREST.pattern, 'FOREST');
+    eq(MUSIC_THEMES.CAVE.pattern, 'CAVE');
+    eq(MUSIC_THEMES.VOLCANO.pattern, 'VOLCANO');
+    assert(MUSIC_PATTERNS.CAVE.bass.join('|') !== MUSIC_PATTERNS.FOREST.bass.join('|'), 'cave bass pattern differs from forest');
+    assert(MUSIC_PATTERNS.VOLCANO.kick.join('|') !== MUSIC_PATTERNS.FOREST.kick.join('|'), 'volcano drum pattern differs from forest');
 });
 test('mute preference persists through AudioEngine instances', () => {
     localStorage.removeItem('mosslings.audioMuted');

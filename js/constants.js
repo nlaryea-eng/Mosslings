@@ -13,6 +13,11 @@ const W = 960, H = 540;
 const T_AIR = 0, T_DIRT = 1, T_METAL = 2, T_HAZARD = 3, T_BRIDGE = 4, T_ONEWAY_R = 5, T_ONEWAY_L = 6;
 const TILE_NAMES = ['Air', 'Dirt', 'Metal', 'Lava', 'Bridge', 'One-way →', 'One-way ←'];
 
+// Editor/gameplay objects. These sit above terrain: moving platforms are solid,
+// pressure switches are triggers, and gates are solid until a matching switch is held.
+const OBJ_PLATFORM = 0, OBJ_SWITCH = 1, OBJ_GATE = 2;
+const OBJECT_NAMES = ['Moving Platform', 'Pressure Switch', 'Switch Gate'];
+
 // Skills the player can assign (index = toolbar slot & hotkey-1)
 const SKILLS = { BLOCK: 0, BUILD: 1, BASH: 2, MINE: 3, DIG: 4, FLOAT: 5, CLIMB: 6, EXPLODE: 7 };
 const SKILL_NAMES = ['Blocker', 'Builder', 'Basher', 'Miner', 'Digger', 'Floater', 'Climber', 'Exploder'];
